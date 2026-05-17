@@ -10,6 +10,7 @@ import type { ToolExecutionRouter } from '@server/ToolExecutionRouter';
 import type { ToolHandlerDeps } from '@server/registry/contracts';
 import type { ExtensionReloadResult, ExtensionListResult } from '@server/extensions/types';
 import type { ToolResponse } from '@server/types';
+import type { McpLogTransport } from '@server/transport/McpLogTransport';
 
 import type {
   ActivationState,
@@ -40,6 +41,16 @@ describe('MCPServer.context', () => {
         isElicitationSupported: () => false,
         requestFormInput: async () => null,
       } as any,
+      mcpLog: {
+        log: vi.fn(),
+        debug: vi.fn(),
+        info: vi.fn(),
+        warning: vi.fn(),
+        error: vi.fn(),
+        attach: vi.fn(),
+        setEnabled: vi.fn(),
+        setLevel: vi.fn(),
+      } as unknown as McpLogTransport,
     } satisfies ServerCore;
 
     const registryState = {

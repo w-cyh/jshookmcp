@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   engine: {
     search: vi.fn(),
+    getSearchQualityTracker: vi.fn(() => ({
+      getEnhancementSuggestions: vi.fn(() => null),
+    })),
   },
   activeNames: new Set<string>(),
   getSearchEngine: vi.fn(),
@@ -66,6 +69,7 @@ function createCtx(overrides: Record<string, unknown> = {}) {
     server: {
       sendToolListChanged: vi.fn(async () => undefined),
     },
+    mcpLog: { info: vi.fn(), debug: vi.fn(), warning: vi.fn(), error: vi.fn() },
     ...overrides,
   } as any;
 }

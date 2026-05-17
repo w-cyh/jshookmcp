@@ -157,6 +157,10 @@ vi.mock('@server/ToolSearch', () => ({
         },
       ];
     }
+
+    getSearchQualityTracker() {
+      return { getEnhancementSuggestions: () => null };
+    }
   },
 }));
 
@@ -228,6 +232,7 @@ function createCtx(overrides: DeepPartial<MCPServerContext> = {}): MockContext {
     registerSingleTool: vi.fn(() => ({ remove: vi.fn() })),
     reloadExtensions: vi.fn(async () => ({ success: true })),
     listExtensions: vi.fn(() => ({ success: true })),
+    mcpLog: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     registeredToolsForTest: registered,
     ...overrides,
   } as unknown as MockContext;

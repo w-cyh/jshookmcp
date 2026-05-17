@@ -94,6 +94,11 @@ export async function handleActivateDomain(
   logger.info(
     `activate_domain: domain="${domain}", activated ${activated.length} tools, ttl=${ttlMinutes}min`,
   );
+  ctx.mcpLog.info('jshookmcp', {
+    event: 'domain_activated',
+    domain,
+    toolCount: activated.length,
+  });
 
   return asTextResponse(
     JSON.stringify({

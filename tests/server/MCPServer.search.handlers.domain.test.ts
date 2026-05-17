@@ -84,6 +84,7 @@ function createCtx(overrides: Record<string, unknown> = {}) {
       sendToolListChanged: vi.fn(async () => undefined),
     },
     ...overrides,
+    mcpLog: { info: vi.fn(), debug: vi.fn(), warning: vi.fn(), error: vi.fn() },
   } as any;
 }
 

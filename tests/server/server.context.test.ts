@@ -37,6 +37,16 @@ describe('MCPServer.context — interface coverage', () => {
         isElicitationSupported: () => false,
         requestFormInput: async () => null,
       } as any,
+      mcpLog: {
+        log: vi.fn(),
+        debug: vi.fn(),
+        info: vi.fn(),
+        warning: vi.fn(),
+        error: vi.fn(),
+        attach: vi.fn(),
+        setEnabled: vi.fn(),
+        setLevel: vi.fn(),
+      } as any,
       // ToolRegistryState
       selectedTools: [],
       enabledDomains: new Set(),
@@ -90,9 +100,10 @@ describe('MCPServer.context — interface coverage', () => {
       eventBus: ctx.eventBus,
       samplingBridge: ctx.samplingBridge,
       elicitationBridge: ctx.elicitationBridge,
+      mcpLog: ctx.mcpLog,
     };
     expect(core).toBeDefined();
-    expect(Object.keys(core)).toHaveLength(8);
+    expect(Object.keys(core)).toHaveLength(9);
   });
 
   it('ToolRegistryState holds tools and routing', () => {

@@ -26,10 +26,19 @@ export async function handleSearchTools(
   // Allow opt-out via top_k=0 or explicit flag
   const autoActivate = (args.auto_activate as boolean | undefined) ?? true;
 
+  const searchStart = performance.now();
   const engine = await getSearchEngine(ctx);
   const activeNames = getActiveToolNames(ctx);
   const visibleDomains = getVisibleDomainsForTier(ctx);
   const results = await engine.search(query, topK, activeNames, visibleDomains, getBaseTier(ctx));
+  const latencyMs = Math.round(performance.now() - searchStart);
+
+  ctx.mcpLog.info('jshookmcp', {
+    event: 'search_executed',
+    query,
+    resultCount: results.length,
+    latencyMs,
+  });
 
   // Auto-activate top inactive results so they are immediately usable.
   if (autoActivate && topK > 0) {
@@ -139,5 +148,14 @@ export async function handleSearchTools(
       autoActivate && results.some((r) => !r.isActive && postActivationActiveNames.has(r.name)),
   };
 
-  return asTextResponse(JSON.stringify(response, null, 2));
+  let responseText = JSON.stringify(response, null, 2);
+
+  const suggestions = engine
+    .getSearchQualityTracker()
+    .getEnhancementSuggestions(query, results.length, results[0]?.score ?? 0);
+  if (suggestions && suggestions.length > 0) {
+    responseText += `\n\n---\n**Search Enhancement Suggestions:**\n${suggestions.map((s) => `- ${s}`).join('\n')}`;
+  }
+
+  return asTextResponse(responseText);
 }
