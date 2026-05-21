@@ -54,11 +54,11 @@ function normalizeType(request: NetworkRequestPayload): string {
 }
 
 function buildFingerprint(request: NetworkRequestPayload): string {
-  return `${request.method.toUpperCase()}|${request.url}|${normalizeType(request)}`;
+  return `${request.targetId ?? ''}|${request.sessionId ?? ''}|${request.method.toUpperCase()}|${request.url}|${normalizeType(request)}`;
 }
 
 function buildLooseFingerprint(request: NetworkRequestPayload): string {
-  return `${request.method.toUpperCase()}|${request.url}`;
+  return `${request.targetId ?? ''}|${request.sessionId ?? ''}|${request.method.toUpperCase()}|${request.url}`;
 }
 
 function hasCloseTimestamp(left: NetworkRequestPayload, right: NetworkRequestPayload): boolean {

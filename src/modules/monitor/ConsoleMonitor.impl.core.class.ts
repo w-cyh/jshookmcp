@@ -3,6 +3,7 @@ import type { CDPSessionLike } from '@modules/browser/CDPSessionLike';
 import { logger } from '@utils/logger';
 import { NetworkMonitor } from '@modules/monitor/NetworkMonitor';
 import { PlaywrightNetworkMonitor } from '@modules/monitor/PlaywrightNetworkMonitor';
+import type { NetworkMonitorLike } from '@modules/monitor/NetworkMonitor.types';
 import { FetchInterceptor } from '@modules/monitor/FetchInterceptor';
 import type {
   FetchInterceptRule,
@@ -69,7 +70,7 @@ type PlaywrightNetworkMonitorPage = ConstructorParameters<typeof PlaywrightNetwo
 
 export class ConsoleMonitor {
   private cdpSession: CDPSessionLike | null = null;
-  private networkMonitor: NetworkMonitor | null = null;
+  private networkMonitor: NetworkMonitorLike | null = null;
   private fetchInterceptor: FetchInterceptor | null = null;
   private playwrightNetworkMonitor: PlaywrightNetworkMonitor | null = null;
   private playwrightPage: unknown = null;
@@ -121,6 +122,12 @@ export class ConsoleMonitor {
     };
     return collectorWithTargets.getAttachedTargetSession?.() ?? null;
   }
+  private getManagedTargetNetworkMonitor(): NetworkMonitorLike | null {
+    const collectorWithTargets = this.collector as CodeCollector & {
+      getBrowserTargetSessionManager?: () => NetworkMonitorLike | null;
+    };
+    return collectorWithTargets.getBrowserTargetSessionManager?.() ?? null;
+  }
   private async createCdpSession(): Promise<{ session: CDPSessionLike; managed: boolean }> {
     const managedSession = this.getManagedTargetSession();
     if (managedSession) {
@@ -154,7 +161,9 @@ export class ConsoleMonitor {
     this.contextSwitchPending = true;
     this.clearLogs();
     this.clearExceptions();
-    this.clearNetworkRecords();
+    if (!this.networkMonitor?.persistsAcrossContextSwitches?.()) {
+      this.clearNetworkRecords();
+    }
     this.clearObjectCache();
     logger.info('ConsoleMonitor marked stale after active context switch');
   }
@@ -184,7 +193,8 @@ export class ConsoleMonitor {
     }
     if (this.cdpSession) {
       if (options?.enableNetwork && !this.networkMonitor) {
-        this.networkMonitor = new NetworkMonitor(this.cdpSession);
+        this.networkMonitor =
+          this.getManagedTargetNetworkMonitor() ?? new NetworkMonitor(this.cdpSession);
         await this.networkMonitor.enable();
         logger.info('Network monitoring added to existing ConsoleMonitor session');
       }
@@ -206,7 +216,8 @@ export class ConsoleMonitor {
       return;
     }
     if (this.cdpSession && !this.networkMonitor) {
-      this.networkMonitor = new NetworkMonitor(this.cdpSession);
+      this.networkMonitor =
+        this.getManagedTargetNetworkMonitor() ?? new NetworkMonitor(this.cdpSession);
       await this.networkMonitor.enable();
       logger.info('Network monitoring added to existing ConsoleMonitor session');
     }

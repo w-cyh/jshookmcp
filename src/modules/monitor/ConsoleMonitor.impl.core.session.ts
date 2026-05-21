@@ -2,6 +2,7 @@ import { logger } from '@utils/logger';
 import { NetworkMonitor } from '@modules/monitor/NetworkMonitor';
 import { PlaywrightNetworkMonitor } from '@modules/monitor/PlaywrightNetworkMonitor';
 import type { CDPSessionLike } from '@modules/browser/CDPSessionLike';
+import type { NetworkMonitorLike } from '@modules/monitor/NetworkMonitor.types';
 import type {
   ConsoleMessage,
   ConsoleMessageAddedEvent,
@@ -18,7 +19,7 @@ type PlaywrightNetworkMonitorPage = ConstructorParameters<typeof PlaywrightNetwo
 
 interface SessionCoreContext {
   cdpSession: CDPSessionLike | null;
-  networkMonitor: NetworkMonitor | null;
+  networkMonitor: NetworkMonitorLike | null;
   playwrightNetworkMonitor: PlaywrightNetworkMonitor | null;
   playwrightPage: unknown;
   playwrightConsoleHandler: ((msg: PlaywrightConsoleMessageLike) => void) | null;
@@ -131,7 +132,12 @@ export async function doEnableCdpCore(
   }
 
   if (options?.enableNetwork) {
-    state.networkMonitor = new NetworkMonitor(state.cdpSession);
+    const collectorWithTargets = state as SessionCoreContext & {
+      getManagedTargetNetworkMonitor?: () => NetworkMonitorLike | null;
+    };
+    state.networkMonitor =
+      collectorWithTargets.getManagedTargetNetworkMonitor?.() ??
+      new NetworkMonitor(state.cdpSession);
     await state.networkMonitor.enable();
   }
 

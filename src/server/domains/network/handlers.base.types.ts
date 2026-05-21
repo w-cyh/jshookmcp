@@ -31,6 +31,11 @@ export const DEFAULT_SORT_PRIORITY = 6;
 
 export interface NetworkRequestPayload {
   requestId?: string;
+  rawRequestId?: string;
+  sessionId?: string;
+  targetId?: string;
+  targetType?: string;
+  frameId?: string;
   url: string;
   method: string;
   type?: string;

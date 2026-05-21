@@ -1,63 +1,18 @@
 import { logger } from '@utils/logger';
 import { PrerequisiteError } from '@errors/PrerequisiteError';
-import type { NetworkRequest, NetworkResponse } from '@modules/monitor/NetworkMonitor';
+import type {
+  NetworkActivity,
+  NetworkMonitorLike,
+  NetworkRequest,
+  NetworkResponse,
+  NetworkResponseBody,
+  NetworkStats,
+  NetworkStatus,
+} from '@modules/monitor/NetworkMonitor.types';
 
 type NetworkRequestFilter = { url?: string; method?: string; limit?: number };
 type NetworkResponseFilter = { url?: string; status?: number; limit?: number };
-type NetworkActivity = {
-  request?: NetworkRequest;
-  response?: NetworkResponse;
-};
 type NetworkRecord = Record<string, unknown>;
-
-interface NetworkStatus {
-  enabled: boolean;
-  requestCount: number;
-  responseCount: number;
-  listenerCount: number;
-  cdpSessionActive: boolean;
-}
-
-export interface NetworkStats extends Record<string, unknown> {
-  totalRequests: number;
-  totalResponses: number;
-  byMethod: Record<string, number>;
-  byStatus: Record<string, number>;
-  byType: Record<string, number>;
-}
-
-interface InjectedBufferResult {
-  xhrCleared: number;
-  fetchCleared: number;
-}
-
-interface ResetInjectedInterceptorsResult {
-  xhrReset: boolean;
-  fetchReset: boolean;
-}
-
-interface NetworkResponseBody {
-  body: string;
-  base64Encoded: boolean;
-}
-
-interface NetworkMonitorLike {
-  isEnabled(): boolean;
-  getStatus(): NetworkStatus;
-  getRequests(filter?: NetworkRequestFilter): NetworkRequest[];
-  getResponses(filter?: NetworkResponseFilter): NetworkResponse[];
-  getActivity(requestId: string): NetworkActivity;
-  getResponseBody(requestId: string): Promise<NetworkResponseBody | null>;
-  getAllJavaScriptResponses(): Promise<NetworkRecord[]>;
-  clearRecords(): void;
-  clearInjectedBuffers(): Promise<InjectedBufferResult>;
-  resetInjectedInterceptors(): Promise<ResetInjectedInterceptorsResult>;
-  getStats(): NetworkStats;
-  injectXHRInterceptor(options?: { persistent?: boolean }): Promise<void>;
-  injectFetchInterceptor(options?: { persistent?: boolean }): Promise<void>;
-  getXHRRequests(): Promise<NetworkRecord[]>;
-  getFetchRequests(): Promise<NetworkRecord[]>;
-}
 
 interface NetworkCoreContext {
   contextSwitchPending?: boolean;

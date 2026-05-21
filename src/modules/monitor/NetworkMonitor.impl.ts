@@ -1,6 +1,11 @@
 import type { CDPSessionLike } from '@modules/browser/CDPSessionLike';
 import { logger } from '@utils/logger';
-import type { NetworkRequest, NetworkResponse } from '@modules/monitor/NetworkMonitor.types';
+import type {
+  NetworkMonitorLike,
+  NetworkRequest,
+  NetworkResponse,
+  NetworkStatus,
+} from '@modules/monitor/NetworkMonitor.types';
 import {
   buildFetchInterceptorCode,
   buildXHRInterceptorCode,
@@ -14,6 +19,7 @@ type UnknownRecord = Record<string, unknown>;
 
 interface CDPRequestWillBeSentPayload {
   requestId: string;
+  frameId?: string;
   request: {
     url: string;
     method: string;
@@ -28,6 +34,7 @@ interface CDPRequestWillBeSentPayload {
 
 interface CDPResponseReceivedPayload {
   requestId: string;
+  frameId?: string;
   response: {
     url: string;
     status: number;
@@ -115,7 +122,7 @@ const toFiniteNumber = (value: unknown, fallback = 0): number =>
 const toBoolean = (value: unknown, fallback: boolean): boolean =>
   typeof value === 'boolean' ? value : fallback;
 
-export class NetworkMonitor {
+export class NetworkMonitor implements NetworkMonitorLike {
   private networkEnabled = false;
   private requests: Map<string, NetworkRequest> = new Map();
   private responses: Map<string, NetworkResponse> = new Map();
@@ -133,7 +140,15 @@ export class NetworkMonitor {
     loadingFinished?: (params: unknown) => void;
   } = {};
 
-  constructor(private cdpSession: CDPSessionLike) {
+  constructor(
+    private cdpSession: CDPSessionLike,
+    private readonly identity: {
+      sessionId?: string;
+      targetId?: string;
+      targetType?: string;
+      requestIdPrefix?: string;
+    } = {},
+  ) {
     // Mark as disabled on session drop — ConsoleMonitor will recreate us on reconnect
     this.cdpSession.on('disconnected', () => {
       logger.warn('NetworkMonitor: CDP session disconnected');
@@ -167,8 +182,15 @@ export class NetworkMonitor {
           return;
         }
 
+        const scopedRequestId = this.toScopedRequestId(params.requestId);
+
         const request: NetworkRequest = {
-          requestId: params.requestId,
+          requestId: scopedRequestId,
+          rawRequestId: params.requestId,
+          sessionId: this.identity.sessionId,
+          targetId: this.identity.targetId,
+          targetType: this.identity.targetType,
+          frameId: params.frameId,
           url: params.request.url,
           method: params.request.method,
           headers: asStringRecord(params.request.headers),
@@ -179,7 +201,7 @@ export class NetworkMonitor {
           initiator: params.initiator,
         };
 
-        this.requests.set(params.requestId, request);
+        this.requests.set(scopedRequestId, request);
 
         if (this.requests.size > this.MAX_NETWORK_RECORDS) {
           const firstKey = this.requests.keys().next().value;
@@ -188,7 +210,9 @@ export class NetworkMonitor {
           }
         }
 
-        logger.debug(`Network request captured: ${params.request.method} ${params.request.url}`);
+        logger.debug(
+          `Network request captured: ${params.request.method} ${params.request.url} [${scopedRequestId}]`,
+        );
       };
 
       this.networkListeners.responseReceived = (params: unknown) => {
@@ -197,8 +221,15 @@ export class NetworkMonitor {
           return;
         }
 
+        const scopedRequestId = this.toScopedRequestId(params.requestId);
+
         const response: NetworkResponse = {
-          requestId: params.requestId,
+          requestId: scopedRequestId,
+          rawRequestId: params.requestId,
+          sessionId: this.identity.sessionId,
+          targetId: this.identity.targetId,
+          targetType: this.identity.targetType,
+          frameId: params.frameId,
           url: params.response.url,
           status: params.response.status,
           statusText: params.response.statusText,
@@ -209,7 +240,7 @@ export class NetworkMonitor {
           timing: params.response.timing,
         };
 
-        this.responses.set(params.requestId, response);
+        this.responses.set(scopedRequestId, response);
 
         if (this.responses.size > this.MAX_NETWORK_RECORDS) {
           const firstKey = this.responses.keys().next().value;
@@ -218,7 +249,9 @@ export class NetworkMonitor {
           }
         }
 
-        logger.debug(`Network response captured: ${params.response.status} ${params.response.url}`);
+        logger.debug(
+          `Network response captured: ${params.response.status} ${params.response.url} [${scopedRequestId}]`,
+        );
       };
 
       this.networkListeners.loadingFinished = (params: unknown) => {
@@ -226,12 +259,13 @@ export class NetworkMonitor {
           logger.debug('Skipping malformed Network.loadingFinished payload');
           return;
         }
-        logger.debug(`Network loading finished: ${params.requestId}`);
+        const scopedRequestId = this.toScopedRequestId(params.requestId);
+        logger.debug(`Network loading finished: ${scopedRequestId}`);
 
         // Auto-capture response body into LRU cache (fire-and-forget)
-        this.captureResponseBody(params.requestId).catch((err) => {
+        this.captureResponseBody(scopedRequestId).catch((err) => {
           logger.debug(
-            `[BodyCache] Auto-capture failed for ${params.requestId}: ` +
+            `[BodyCache] Auto-capture failed for ${scopedRequestId}: ` +
               `${err instanceof Error ? err.message : String(err)}`,
           );
         });
@@ -273,7 +307,7 @@ export class NetworkMonitor {
 
     try {
       const rawResult = (await this.cdpSession.send('Network.getResponseBody', {
-        requestId,
+        requestId: this.toRawRequestId(requestId),
       })) as unknown;
 
       if (!isResponseBodyPayload(rawResult)) return;
@@ -341,13 +375,7 @@ export class NetworkMonitor {
     return this.networkEnabled;
   }
 
-  getStatus(): {
-    enabled: boolean;
-    requestCount: number;
-    responseCount: number;
-    listenerCount: number;
-    cdpSessionActive: boolean;
-  } {
+  getStatus(): NetworkStatus {
     return {
       enabled: this.networkEnabled,
       requestCount: this.requests.size,
@@ -449,7 +477,7 @@ export class NetworkMonitor {
 
     try {
       const rawResult = (await this.cdpSession.send('Network.getResponseBody', {
-        requestId,
+        requestId: this.toRawRequestId(requestId),
       })) as unknown;
 
       if (!isResponseBodyPayload(rawResult)) {
@@ -727,5 +755,43 @@ export class NetworkMonitor {
         fetchReset: false,
       };
     }
+  }
+
+  persistsAcrossContextSwitches(): boolean {
+    return false;
+  }
+
+  private toScopedRequestId(rawRequestId: string): string {
+    if (this.identity.requestIdPrefix && this.identity.requestIdPrefix.length > 0) {
+      return `${this.identity.requestIdPrefix}:${rawRequestId}`;
+    }
+    if (this.identity.sessionId && this.identity.sessionId.length > 0) {
+      return `${this.identity.sessionId}:${rawRequestId}`;
+    }
+    return rawRequestId;
+  }
+
+  private toRawRequestId(requestId: string): string {
+    const prefixed = this.identity.requestIdPrefix;
+    if (prefixed && requestId.startsWith(`${prefixed}:`)) {
+      return requestId.slice(prefixed.length + 1);
+    }
+
+    const sessionId = this.identity.sessionId;
+    if (sessionId && requestId.startsWith(`${sessionId}:`)) {
+      return requestId.slice(sessionId.length + 1);
+    }
+
+    const request = this.requests.get(requestId);
+    if (request?.rawRequestId) {
+      return request.rawRequestId;
+    }
+
+    const response = this.responses.get(requestId);
+    if (response?.rawRequestId) {
+      return response.rawRequestId;
+    }
+
+    return requestId;
   }
 }
