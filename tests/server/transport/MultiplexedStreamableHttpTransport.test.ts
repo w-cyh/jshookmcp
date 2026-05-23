@@ -58,6 +58,15 @@ describe('MultiplexedStreamableHttpTransport', () => {
     mocks.innerTransports.length = 0;
   });
 
+  it('rejects repeated start calls', async () => {
+    const transport = new MultiplexedStreamableHttpTransport();
+    await transport.start();
+
+    await expect(transport.start()).rejects.toThrow(
+      'MultiplexedStreamableHttpTransport already started',
+    );
+  });
+
   it('creates a new inner transport for new HTTP sessions and reuses existing ones by header', async () => {
     const transport = new MultiplexedStreamableHttpTransport();
     await transport.start();
@@ -135,5 +144,136 @@ describe('MultiplexedStreamableHttpTransport', () => {
       },
       undefined,
     );
+  });
+
+  it('rewrites cancellation notifications back onto internal request ids', async () => {
+    const transport = new MultiplexedStreamableHttpTransport();
+    await transport.start();
+    const seenMessages: any[] = [];
+
+    // eslint-disable-next-line unicorn/prefer-add-event-listener
+    transport.onmessage = (message) => {
+      seenMessages.push(message);
+    };
+
+    await transport.handleRequest(createReq('POST'), createRes(), {});
+    const session = mocks.innerTransports[0];
+    session.onmessage?.({
+      jsonrpc: '2.0',
+      id: 9,
+      method: 'tools/call',
+    } satisfies JSONRPCRequest);
+
+    session.onmessage?.({
+      jsonrpc: '2.0',
+      method: 'notifications/cancelled',
+      params: {
+        requestId: 9,
+      },
+    });
+
+    expect(seenMessages).toHaveLength(2);
+    expect(seenMessages[0]!.id).toBeTypeOf('string');
+    expect(seenMessages[1]).toEqual({
+      jsonrpc: '2.0',
+      method: 'notifications/cancelled',
+      params: {
+        requestId: seenMessages[0]!.id,
+      },
+    });
+  });
+
+  it('returns a json-rpc 404 for unknown session headers', async () => {
+    const transport = new MultiplexedStreamableHttpTransport();
+    await transport.start();
+    const res = createRes();
+
+    await transport.handleRequest(createReq('POST', 'missing-session'), res, {});
+
+    expect(res.writeHead).toHaveBeenCalledWith(404, { 'Content-Type': 'application/json' });
+    expect(res.end).toHaveBeenCalledWith(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        error: {
+          code: -32000,
+          message: 'Unknown MCP session: missing-session',
+        },
+        id: null,
+      }),
+    );
+  });
+
+  it('broadcasts notifications and rejects ambiguous outbound requests', async () => {
+    const transport = new MultiplexedStreamableHttpTransport();
+    await transport.start();
+
+    await transport.handleRequest(createReq('POST'), createRes(), {});
+    await transport.handleRequest(createReq('POST'), createRes(), {});
+    const [sessionA, sessionB] = mocks.innerTransports;
+
+    await transport.send({
+      jsonrpc: '2.0',
+      method: 'notifications/message',
+    });
+
+    expect(sessionA.send).toHaveBeenCalledWith(
+      {
+        jsonrpc: '2.0',
+        method: 'notifications/message',
+      },
+      undefined,
+    );
+    expect(sessionB.send).toHaveBeenCalledWith(
+      {
+        jsonrpc: '2.0',
+        method: 'notifications/message',
+      },
+      undefined,
+    );
+
+    await expect(
+      transport.send({
+        jsonrpc: '2.0',
+        id: 'server-request',
+        method: 'tools/list',
+      }),
+    ).rejects.toThrow('Ambiguous HTTP session for outbound request/response routing.');
+  });
+
+  it('routes by relatedRequestId and clears session state on close', async () => {
+    const transport = new MultiplexedStreamableHttpTransport();
+    const onclose = vi.fn();
+    // eslint-disable-next-line unicorn/prefer-add-event-listener
+    transport.onclose = onclose;
+    await transport.start();
+
+    await transport.handleRequest(createReq('POST'), createRes(), {});
+    const session = mocks.innerTransports[0];
+    session.onmessage?.({
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'tools/call',
+    } satisfies JSONRPCRequest);
+
+    const internalId = `http:${session.sessionId}:1`;
+    await transport.send(
+      {
+        jsonrpc: '2.0',
+        method: 'notifications/progress',
+      },
+      { relatedRequestId: internalId },
+    );
+
+    expect(session.send).toHaveBeenCalledWith(
+      {
+        jsonrpc: '2.0',
+        method: 'notifications/progress',
+      },
+      { relatedRequestId: 5 },
+    );
+
+    session.onclose?.();
+    await transport.close();
+    expect(onclose).toHaveBeenCalledOnce();
   });
 });

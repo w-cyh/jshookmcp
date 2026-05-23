@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildTestUrl } from '@tests/shared/test-urls';
 
 import {
   ServerRuntimeState,
@@ -8,6 +9,7 @@ import {
 const state = vi.hoisted(() => ({
   ensureDomainLoaded: vi.fn(async () => null),
   getAllKnownDomains: vi.fn(() => new Set(['browser', 'network'])),
+  allTools: [{ name: 'called_tool' }, { name: 'catalog_tool' }],
   getToolsByDomains: vi.fn((domains: string[]) => {
     if (domains.includes('browser')) {
       return [
@@ -40,6 +42,7 @@ vi.mock('@server/registry/index', () => ({
 }));
 
 vi.mock('@server/ToolCatalog', () => ({
+  allTools: state.allTools,
   getToolsByDomains: state.getToolsByDomains,
 }));
 
@@ -121,5 +124,109 @@ describe('ServerRuntimeState', () => {
     );
     expect(state.startDomainTtl).toHaveBeenCalledWith(ctx, 'browser', 30, ['page_navigate']);
     expect(ctx.server.sendToolListChanged).toHaveBeenCalledOnce();
+  });
+
+  it('restores malformed snapshot data defensively', () => {
+    const runtimeState = new ServerRuntimeState();
+    runtimeState.restoreSnapshot({
+      schemaVersion: 1,
+      savedAt: '2026-05-23T00:00:00.000Z',
+      activatedDomains: ['browser', 42],
+      domainTtls: {
+        browser: {
+          ttlMinutes: '15',
+          toolNames: ['page_navigate', 7],
+        },
+        invalid: {
+          ttlMinutes: 'nope',
+          toolNames: ['ignored'],
+        },
+      },
+      browserAttach: {
+        endpoint: buildTestUrl('devtools', { scheme: 'ws', suffix: 'test' }),
+        selectedIndex: 1.5,
+        selectedUrl: buildTestUrl('page', { suffix: 'test' }),
+        selectedTitle: 123,
+        selectedTargetId: 'page-target',
+        browserPid: 2001,
+        rendererPid: 2002.5,
+        attachedAt: 999,
+      },
+      toolCoverage: {
+        called_tool: {
+          count: 2.8,
+          lastCalledAt: 123,
+          lastArgsKeys: ['zeta', 9, 'alpha'],
+        },
+      },
+    } as any);
+
+    expect(runtimeState.getPendingActivatedDomains()).toEqual(['browser']);
+    expect(runtimeState.getPendingDomainTtl('browser')).toEqual({
+      ttlMinutes: 15,
+      toolNames: ['page_navigate'],
+    });
+    expect(runtimeState.getPendingDomainTtl('invalid')).toBeNull();
+    expect(runtimeState.getBrowserAttach()).toEqual({
+      endpoint: buildTestUrl('devtools', { scheme: 'ws', suffix: 'test' }),
+      selectedIndex: null,
+      selectedUrl: buildTestUrl('page', { suffix: 'test' }),
+      selectedTitle: null,
+      selectedTargetId: 'page-target',
+      browserPid: 2001,
+      rendererPid: null,
+      attachedAt: null,
+    });
+
+    const snapshot = runtimeState.exportSnapshot();
+    expect(snapshot.toolCoverage.called_tool).toEqual({
+      count: 2,
+      lastCalledAt: null,
+      lastArgsKeys: ['zeta', 'alpha'],
+    });
+    expect(runtimeState.isPersistDirty()).toBe(false);
+  });
+
+  it('tracks coverage summaries across catalogued and uncatalogued tools', () => {
+    const runtimeState = new ServerRuntimeState();
+    const ctx = createCtx(runtimeState);
+    ctx.selectedTools = [{ name: 'selected_tool' }];
+    ctx.activatedToolNames.add('activated_tool');
+    ctx.extensionToolsByName.set('extension_tool', {});
+    ctx.metaToolsByName.set('meta_tool', {});
+
+    runtimeState.recordToolCall('called_tool', { beta: 2, alpha: 1, _meta: { sessionId: 's1' } });
+    runtimeState.recordToolCall('uncatalogued_tool', {});
+
+    const summary = runtimeState.getCoverageSummary(ctx);
+    expect(summary.calledCount).toBe(2);
+    expect(summary.called.called_tool?.lastArgsKeys).toEqual(['alpha', 'beta']);
+    expect(summary.uncataloguedCalls).toEqual(['uncatalogued_tool']);
+    expect(summary.uncataloguedCallCount).toBe(1);
+    expect(summary.totalKnownTools).toBe(6);
+    expect(summary.uncalled).toEqual([
+      'activated_tool',
+      'catalog_tool',
+      'extension_tool',
+      'meta_tool',
+      'selected_tool',
+    ]);
+    expect(summary.uncalledCount).toBe(5);
+  });
+
+  it('only marks pending activation cleanup dirty when something was removed', () => {
+    const runtimeState = new ServerRuntimeState();
+    runtimeState.markPersisted();
+
+    runtimeState.clearPendingDomainActivation('missing');
+    expect(runtimeState.isPersistDirty()).toBe(false);
+
+    runtimeState.setPendingDomainActivation('browser', 30, ['page_navigate']);
+    runtimeState.markPersisted();
+    runtimeState.clearPendingDomainActivation('browser');
+
+    expect(runtimeState.getPendingActivatedDomains()).toEqual([]);
+    expect(runtimeState.getPendingDomainTtl('browser')).toBeNull();
+    expect(runtimeState.isPersistDirty()).toBe(true);
   });
 });
