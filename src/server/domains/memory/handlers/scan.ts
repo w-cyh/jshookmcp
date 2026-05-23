@@ -9,6 +9,9 @@ import type {
 } from '@native/NativeMemoryManager.types';
 import type { EventBus, ServerEventMap } from '@server/EventBus';
 import { MEMORY_SCAN_MAX_RESULTS } from '@src/constants';
+import type { UnifiedProcessManager } from '@server/domains/shared/modules/native';
+import type { MCPServerContext } from '@server/MCPServer.context';
+import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 
 /** SECURITY: Cap user-supplied maxResults to prevent OOM */
 function capMaxResults(value: number | undefined): number {
@@ -34,10 +37,20 @@ export class ScanHandlers {
   constructor(
     private readonly scanner: MemoryScanner,
     private readonly eventBus?: EventBus<ServerEventMap>,
+    private readonly processManager?: UnifiedProcessManager,
+    private readonly ctx?: MCPServerContext,
   ) {}
+
+  private async resolvePid(value: unknown): Promise<number> {
+    if (!this.processManager) {
+      return value as number;
+    }
+    return await resolveMemoryDomainPid(value, this.processManager, this.ctx);
+  }
 
   async handleFirstScan(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const options: ScanOptions = {
         valueType: args.valueType as ScanValueType,
         alignment: args.alignment as number | undefined,
@@ -45,11 +58,7 @@ export class ScanHandlers {
         regionFilter: args.regionFilter as ScanOptions['regionFilter'],
         onProgress: args.onProgress as ((p: number, t?: number) => void) | undefined,
       };
-      const result = await this.scanner.firstScan(
-        args.pid as number,
-        args.value as string,
-        options,
-      );
+      const result = await this.scanner.firstScan(pid, args.value as string, options);
       void this.eventBus?.emit('memory:scan_completed', {
         scanType: 'first',
         resultCount: result.totalMatches ?? 0,
@@ -92,6 +101,7 @@ export class ScanHandlers {
 
   async handleUnknownScan(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const options: ScanOptions = {
         valueType: args.valueType as ScanValueType,
         alignment: args.alignment as number | undefined,
@@ -99,7 +109,7 @@ export class ScanHandlers {
         regionFilter: args.regionFilter as ScanOptions['regionFilter'],
         onProgress: args.onProgress as ((p: number, t?: number) => void) | undefined,
       };
-      const result = await this.scanner.unknownInitialScan(args.pid as number, options);
+      const result = await this.scanner.unknownInitialScan(pid, options);
       return toTextResponse({
         success: true,
         ...result,
@@ -115,14 +125,11 @@ export class ScanHandlers {
 
   async handlePointerScan(args: Record<string, unknown>) {
     try {
-      const result = await this.scanner.pointerScan(
-        args.pid as number,
-        args.targetAddress as string,
-        {
-          maxResults: capMaxResults(args.maxResults as number | undefined),
-          moduleOnly: args.moduleOnly as boolean | undefined,
-        },
-      );
+      const pid = await this.resolvePid(args.pid);
+      const result = await this.scanner.pointerScan(pid, args.targetAddress as string, {
+        maxResults: capMaxResults(args.maxResults as number | undefined),
+        moduleOnly: args.moduleOnly as boolean | undefined,
+      });
       return toTextResponse({ success: true, ...result });
     } catch (error) {
       return toErrorResponse('memory_pointer_scan', error);
@@ -131,8 +138,9 @@ export class ScanHandlers {
 
   async handleGroupScan(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const result = await this.scanner.groupScan(
-        args.pid as number,
+        pid,
         args.pattern as Array<{ offset: number; value: string; type: ScanValueType }>,
         {
           alignment: args.alignment as number | undefined,

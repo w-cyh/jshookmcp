@@ -4,6 +4,9 @@
 import type { HardwareBreakpointEngine } from '@native/HardwareBreakpoint';
 import type { BreakpointAccess, BreakpointSize } from '@native/HardwareBreakpoint.types';
 import type { CodeInjector } from '@native/CodeInjector';
+import type { UnifiedProcessManager } from '@server/domains/shared/modules/native';
+import type { MCPServerContext } from '@server/MCPServer.context';
+import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 
 function toTextResponse(payload: Record<string, unknown>) {
   return {
@@ -23,14 +26,24 @@ export class HookHandlers {
   constructor(
     private readonly bpEngine: HardwareBreakpointEngine | null,
     private readonly injector: CodeInjector,
+    private readonly processManager?: UnifiedProcessManager,
+    private readonly ctx?: MCPServerContext,
   ) {}
+
+  private async resolvePid(value: unknown): Promise<number> {
+    if (!this.processManager) {
+      return value as number;
+    }
+    return await resolveMemoryDomainPid(value, this.processManager, this.ctx);
+  }
 
   // ── Breakpoint (hardware debug register) ──
 
   async handleBreakpointSet(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const config = await this.bpEngine!.setBreakpoint(
-        args.pid as number,
+        pid,
         args.address as string,
         args.access as BreakpointAccess,
         (args.size as BreakpointSize) ?? 4,
@@ -67,8 +80,9 @@ export class HookHandlers {
 
   async handleBreakpointTrace(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const hits = await this.bpEngine!.traceAccess(
-        args.pid as number,
+        pid,
         args.address as string,
         args.access as BreakpointAccess,
         args.maxHits as number | undefined,
@@ -92,8 +106,9 @@ export class HookHandlers {
 
   async handlePatchBytes(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const patch = await this.injector.patchBytes(
-        args.pid as number,
+        pid,
         args.address as string,
         args.bytes as number[],
       );
@@ -109,11 +124,8 @@ export class HookHandlers {
 
   async handlePatchNop(args: Record<string, unknown>) {
     try {
-      const patch = await this.injector.nopBytes(
-        args.pid as number,
-        args.address as string,
-        args.count as number,
-      );
+      const pid = await this.resolvePid(args.pid);
+      const patch = await this.injector.nopBytes(pid, args.address as string, args.count as number);
       return toTextResponse({
         success: true,
         ...patch,
@@ -137,10 +149,8 @@ export class HookHandlers {
 
   async handleCodeCaves(args: Record<string, unknown>) {
     try {
-      const caves = await this.injector.findCodeCaves(
-        args.pid as number,
-        args.minSize as number | undefined,
-      );
+      const pid = await this.resolvePid(args.pid);
+      const caves = await this.injector.findCodeCaves(pid, args.minSize as number | undefined);
       return toTextResponse({ success: true, caves, count: caves.length });
     } catch (error) {
       return toErrorResponse('memory_code_caves', error);

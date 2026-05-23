@@ -3,6 +3,9 @@
  */
 import type { PointerChainEngine } from '@native/PointerChainEngine';
 import type { PointerChain } from '@native/PointerChainEngine.types';
+import type { UnifiedProcessManager } from '@server/domains/shared/modules/native';
+import type { MCPServerContext } from '@server/MCPServer.context';
+import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 
 function toTextResponse(payload: Record<string, unknown>) {
   return {
@@ -19,11 +22,23 @@ function toErrorResponse(tool: string, error: unknown) {
 }
 
 export class PointerChainHandlers {
-  constructor(private readonly ptrEngine: PointerChainEngine) {}
+  constructor(
+    private readonly ptrEngine: PointerChainEngine,
+    private readonly processManager?: UnifiedProcessManager,
+    private readonly ctx?: MCPServerContext,
+  ) {}
+
+  private async resolvePid(value: unknown): Promise<number> {
+    if (!this.processManager) {
+      return value as number;
+    }
+    return await resolveMemoryDomainPid(value, this.processManager, this.ctx);
+  }
 
   async handlePointerChainScan(args: Record<string, unknown>) {
     try {
-      const result = await this.ptrEngine.scan(args.pid as number, args.targetAddress as string, {
+      const pid = await this.resolvePid(args.pid);
+      const result = await this.ptrEngine.scan(pid, args.targetAddress as string, {
         maxDepth: args.maxDepth as number | undefined,
         maxOffset: args.maxOffset as number | undefined,
         staticOnly: args.staticOnly as boolean | undefined,
@@ -45,8 +60,9 @@ export class PointerChainHandlers {
 
   async handlePointerChainValidate(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const chains = JSON.parse(args.chains as string) as PointerChain[];
-      const results = await this.ptrEngine.validateChains(args.pid as number, chains);
+      const results = await this.ptrEngine.validateChains(pid, chains);
       return toTextResponse({
         success: true,
         results,
@@ -60,8 +76,9 @@ export class PointerChainHandlers {
 
   async handlePointerChainResolve(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const chain = JSON.parse(args.chain as string) as PointerChain;
-      const resolved = await this.ptrEngine.resolveChain(args.pid as number, chain);
+      const resolved = await this.ptrEngine.resolveChain(pid, chain);
       return toTextResponse({
         success: true,
         chainId: chain.id,

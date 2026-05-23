@@ -122,6 +122,9 @@ async function tryExternalUnpack(
       args: attempt,
       timeoutMs: 180_000,
       cwd: dirname(inputPath),
+      expectedOutputPaths: [outputDir],
+      allowDirectoryOutputs: true,
+      outputLabel: 'miniapp unpack output',
     });
 
     if (result.ok) {

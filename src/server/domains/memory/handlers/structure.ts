@@ -3,6 +3,9 @@
  */
 import type { StructureAnalyzer } from '@native/StructureAnalyzer';
 import type { FieldType, InferredStruct } from '@native/StructureAnalyzer.types';
+import type { UnifiedProcessManager } from '@server/domains/shared/modules/native';
+import type { MCPServerContext } from '@server/MCPServer.context';
+import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 
 function toTextResponse(payload: Record<string, unknown>) {
   return {
@@ -81,19 +84,27 @@ function normalizeStructureForExport(raw: unknown): InferredStruct {
 }
 
 export class StructureHandlers {
-  constructor(private readonly structAnalyzer: StructureAnalyzer) {}
+  constructor(
+    private readonly structAnalyzer: StructureAnalyzer,
+    private readonly processManager?: UnifiedProcessManager,
+    private readonly ctx?: MCPServerContext,
+  ) {}
+
+  private async resolvePid(value: unknown): Promise<number> {
+    if (!this.processManager) {
+      return value as number;
+    }
+    return await resolveMemoryDomainPid(value, this.processManager, this.ctx);
+  }
 
   async handleStructureAnalyze(args: Record<string, unknown>) {
     try {
-      const result = await this.structAnalyzer.analyzeStructure(
-        args.pid as number,
-        args.address as string,
-        {
-          size: args.size as number | undefined,
-          otherInstances: args.otherInstances as string[] | undefined,
-          parseRtti: args.parseRtti as boolean | undefined,
-        },
-      );
+      const pid = await this.resolvePid(args.pid);
+      const result = await this.structAnalyzer.analyzeStructure(pid, args.address as string, {
+        size: args.size as number | undefined,
+        otherInstances: args.otherInstances as string[] | undefined,
+        parseRtti: args.parseRtti as boolean | undefined,
+      });
       return toTextResponse({
         success: true,
         ...result,
@@ -109,12 +120,10 @@ export class StructureHandlers {
 
   async handleVtableParse(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       return toTextResponse({
         success: true,
-        ...(await this.structAnalyzer.parseVtable(
-          args.pid as number,
-          args.vtableAddress as string,
-        )),
+        ...(await this.structAnalyzer.parseVtable(pid, args.vtableAddress as string)),
       });
     } catch (error) {
       return toErrorResponse('memory_vtable_parse', error);
@@ -136,8 +145,9 @@ export class StructureHandlers {
 
   async handleStructureCompare(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const result = await this.structAnalyzer.compareInstances(
-        args.pid as number,
+        pid,
         args.address1 as string,
         args.address2 as string,
         args.size as number | undefined,

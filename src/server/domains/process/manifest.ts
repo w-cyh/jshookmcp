@@ -17,7 +17,7 @@ const EFFECTIVE_PLATFORM =
 async function ensure(ctx: MCPServerContext): Promise<H> {
   const { ProcessToolHandlers } = await import('@server/domains/process/index');
 
-  if (!ctx.processHandlers) ctx.processHandlers = new ProcessToolHandlers();
+  if (!ctx.processHandlers) ctx.processHandlers = new ProcessToolHandlers(ctx);
   return ctx.processHandlers;
 }
 

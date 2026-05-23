@@ -5,6 +5,9 @@ import type { HeapAnalyzer } from '@native/HeapAnalyzer';
 import type { PEAnalyzer } from '@native/PEAnalyzer';
 import type { AntiCheatDetector } from '@native/AntiCheatDetector';
 import type { Speedhack } from '@native/Speedhack';
+import type { UnifiedProcessManager } from '@server/domains/shared/modules/native';
+import type { MCPServerContext } from '@server/MCPServer.context';
+import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 
 function toTextResponse(payload: Record<string, unknown>) {
   return {
@@ -26,13 +29,23 @@ export class IntegrityHandlers {
     private readonly heapAnalyzer: HeapAnalyzer | null,
     private readonly peAnalyzer: PEAnalyzer | null,
     private readonly antiCheatDetector: AntiCheatDetector | null,
+    private readonly processManager?: UnifiedProcessManager,
+    private readonly ctx?: MCPServerContext,
   ) {}
+
+  private async resolvePid(value: unknown): Promise<number> {
+    if (!this.processManager) {
+      return value as number;
+    }
+    return await resolveMemoryDomainPid(value, this.processManager, this.ctx);
+  }
 
   // ── Speedhack (Win32 timer hooking) ──
 
   async handleSpeedhackApply(args: Record<string, unknown>) {
     try {
-      const result = await this.speedhackEngine!.apply(args.pid as number, args.speed as number);
+      const pid = await this.resolvePid(args.pid);
+      const result = await this.speedhackEngine!.apply(pid, args.speed as number);
       return toTextResponse({
         ...result,
         success: true,
@@ -45,9 +58,10 @@ export class IntegrityHandlers {
 
   async handleSpeedhackSet(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       return toTextResponse({
         success: true,
-        updated: await this.speedhackEngine!.setSpeed(args.pid as number, args.speed as number),
+        updated: await this.speedhackEngine!.setSpeed(pid, args.speed as number),
         newSpeed: args.speed,
       });
     } catch (error) {
@@ -59,7 +73,8 @@ export class IntegrityHandlers {
 
   async handleHeapEnumerate(args: Record<string, unknown>) {
     try {
-      const result = await this.heapAnalyzer!.enumerateHeaps(args.pid as number);
+      const pid = await this.resolvePid(args.pid);
+      const result = await this.heapAnalyzer!.enumerateHeaps(pid);
       return toTextResponse({
         success: true,
         ...result,
@@ -75,7 +90,8 @@ export class IntegrityHandlers {
 
   async handleHeapStats(args: Record<string, unknown>) {
     try {
-      const stats = await this.heapAnalyzer!.getStats(args.pid as number);
+      const pid = await this.resolvePid(args.pid);
+      const stats = await this.heapAnalyzer!.getStats(pid);
       return toTextResponse({ success: true, ...stats });
     } catch (error) {
       return toErrorResponse('memory_heap_stats', error);
@@ -84,7 +100,8 @@ export class IntegrityHandlers {
 
   async handleHeapAnomalies(args: Record<string, unknown>) {
     try {
-      const anomalies = await this.heapAnalyzer!.detectAnomalies(args.pid as number);
+      const pid = await this.resolvePid(args.pid);
+      const anomalies = await this.heapAnalyzer!.detectAnomalies(pid);
       return toTextResponse({
         success: true,
         anomalies,
@@ -103,10 +120,8 @@ export class IntegrityHandlers {
 
   async handlePEHeaders(args: Record<string, unknown>) {
     try {
-      const headers = await this.peAnalyzer!.parseHeaders(
-        args.pid as number,
-        args.moduleBase as string,
-      );
+      const pid = await this.resolvePid(args.pid);
+      const headers = await this.peAnalyzer!.parseHeaders(pid, args.moduleBase as string);
       return toTextResponse({ success: true, ...headers });
     } catch (error) {
       return toErrorResponse('memory_pe_headers', error);
@@ -117,7 +132,7 @@ export class IntegrityHandlers {
     try {
       const table = (args.table as string) || 'both';
       const base = args.moduleBase as string;
-      const pid = args.pid as number;
+      const pid = await this.resolvePid(args.pid);
       const result: Record<string, unknown> = { success: true };
       if (table === 'imports' || table === 'both') {
         result.imports = await this.peAnalyzer!.parseImports(pid, base);
@@ -133,8 +148,9 @@ export class IntegrityHandlers {
 
   async handleInlineHookDetect(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const hooks = await this.peAnalyzer!.detectInlineHooks(
-        args.pid as number,
+        pid,
         args.moduleName as string | undefined,
       );
       return toTextResponse({
@@ -155,7 +171,8 @@ export class IntegrityHandlers {
 
   async handleAntiCheatDetect(args: Record<string, unknown>) {
     try {
-      const detections = await this.antiCheatDetector!.detect(args.pid as number);
+      const pid = await this.resolvePid(args.pid);
+      const detections = await this.antiCheatDetector!.detect(pid);
       return toTextResponse({
         success: true,
         detections,
@@ -172,7 +189,8 @@ export class IntegrityHandlers {
 
   async handleGuardPages(args: Record<string, unknown>) {
     try {
-      const result = await this.antiCheatDetector!.scanGuardPages(args.pid as number);
+      const pid = await this.resolvePid(args.pid);
+      const result = await this.antiCheatDetector!.scanGuardPages(pid);
       const { guardPages, stats } = result;
       return toTextResponse({
         success: true,
@@ -193,8 +211,9 @@ export class IntegrityHandlers {
 
   async handleIntegrityCheck(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const result = await this.antiCheatDetector!.scanIntegrity(
-        args.pid as number,
+        pid,
         args.moduleName as string | undefined,
       );
       const { sections, stats } = result;

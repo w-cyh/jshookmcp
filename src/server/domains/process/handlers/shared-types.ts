@@ -8,12 +8,14 @@
 import type { AuditEntry } from '@modules/process/memory/AuditTrail';
 import type { UnifiedProcessManager, MemoryManager } from '@server/domains/shared/modules/native';
 import type { MemoryAuditTrail } from '@modules/process/memory/AuditTrail';
+import type { MCPServerContext } from '@server/MCPServer.context';
 
 export interface ProcessHandlerDeps {
   processManager: UnifiedProcessManager;
   memoryManager: MemoryManager;
   auditTrail: MemoryAuditTrail;
   platform: string;
+  ctx?: MCPServerContext;
 }
 
 export type MemoryDiagnosticsRequest = {

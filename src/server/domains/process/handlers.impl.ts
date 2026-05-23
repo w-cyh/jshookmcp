@@ -28,12 +28,14 @@ export { ProcessManagementHandlers, MemoryOperationHandlers, InjectionHandlers }
 
 // ── Shared deps factory ──
 
-function createDeps(): ProcessHandlerDeps {
+function createDeps(
+  ctx?: import('@server/MCPServer.context').MCPServerContext,
+): ProcessHandlerDeps {
   const processManager = new UnifiedProcessManager();
   const memoryManager = new MemoryManager();
   const platform = processManager.getPlatform();
   const auditTrail = new MemoryAuditTrail();
-  return { processManager, memoryManager, auditTrail, platform };
+  return { processManager, memoryManager, auditTrail, platform, ctx };
 }
 
 /**
@@ -58,8 +60,8 @@ export class ProcessHandlersBase {
   }) => Promise<unknown>;
   protected recordMemoryAudit!: (entry: Omit<AuditEntry, 'timestamp' | 'user'>) => void;
 
-  constructor() {
-    this.deps = createDeps();
+  constructor(ctx?: import('@server/MCPServer.context').MCPServerContext) {
+    this.deps = createDeps(ctx);
     logger.info(`ProcessToolHandlers initialized for platform: ${this.deps.platform}`);
     this.processMgmt = new ProcessManagementHandlers(this.deps);
     this.memoryOps = new MemoryOperationHandlers(this.deps, this.processMgmt);
@@ -132,8 +134,8 @@ export class ProcessHandlersBase {
 export class ProcessToolHandlers extends ProcessHandlersBase {
   private injection: InjectionHandlers;
 
-  constructor() {
-    super();
+  constructor(ctx?: import('@server/MCPServer.context').MCPServerContext) {
+    super(ctx);
     // Re-use the same deps and processMgmt from the base class
     this.injection = new InjectionHandlers(this.deps, this.processMgmt);
   }

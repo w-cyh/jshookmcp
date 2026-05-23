@@ -24,6 +24,8 @@ import type { HeapAnalyzer } from '@native/HeapAnalyzer';
 import type { PEAnalyzer } from '@native/PEAnalyzer';
 import type { AntiCheatDetector } from '@native/AntiCheatDetector';
 import type { EventBus, ServerEventMap } from '@server/EventBus';
+import type { UnifiedProcessManager } from '@server/domains/shared/modules/native';
+import type { MCPServerContext } from '@server/MCPServer.context';
 
 import { SessionHandlers } from './handlers/session';
 import { ScanHandlers } from './handlers/scan';
@@ -55,18 +57,22 @@ export class MemoryScanHandlers {
     peAnalyzer: PEAnalyzer | null,
     antiCheatDetector: AntiCheatDetector | null,
     eventBus?: EventBus<ServerEventMap>,
+    processManager?: UnifiedProcessManager,
+    ctx?: MCPServerContext,
   ) {
     this.sessions = new SessionHandlers(sessionManager);
-    this.scans = new ScanHandlers(scanner, eventBus);
-    this.ptrChains = new PointerChainHandlers(ptrEngine);
-    this.structures = new StructureHandlers(structAnalyzer);
-    this.hooks = new HookHandlers(bpEngine, injector);
-    this.readwrite = new ReadWriteHandlers(memCtrl);
+    this.scans = new ScanHandlers(scanner, eventBus, processManager, ctx);
+    this.ptrChains = new PointerChainHandlers(ptrEngine, processManager, ctx);
+    this.structures = new StructureHandlers(structAnalyzer, processManager, ctx);
+    this.hooks = new HookHandlers(bpEngine, injector, processManager, ctx);
+    this.readwrite = new ReadWriteHandlers(memCtrl, processManager, ctx);
     this.integrity = new IntegrityHandlers(
       speedhackEngine,
       heapAnalyzer,
       peAnalyzer,
       antiCheatDetector,
+      processManager,
+      ctx,
     );
   }
 

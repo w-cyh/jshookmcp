@@ -38,6 +38,8 @@ export class ExternalRuntimeHandlers extends ExternalToolHandlersBase {
       tool: toolName,
       args: runArgs,
       timeoutMs,
+      requireNonEmptyOutput: true,
+      outputLabel: 'runtime output',
     });
 
     return this.ok({
@@ -70,6 +72,8 @@ export class ExternalRuntimeHandlers extends ExternalToolHandlersBase {
       tool: 'binaryen.wasm-opt',
       args: [`-${level}`, inputPath, '-o', destPath],
       timeoutMs: WASM_OPTIMIZE_TIMEOUT_MS,
+      expectedOutputPaths: [destPath],
+      outputLabel: 'optimized wasm',
     });
 
     if (!result.ok) {

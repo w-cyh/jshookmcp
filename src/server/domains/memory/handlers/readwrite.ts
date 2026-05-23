@@ -2,6 +2,9 @@
  * ReadWriteHandlers — memory reads, writes, freeze, undo/redo.
  */
 import type { MemoryController } from '@native/MemoryController';
+import type { UnifiedProcessManager } from '@server/domains/shared/modules/native';
+import type { MCPServerContext } from '@server/MCPServer.context';
+import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 
 function toTextResponse(payload: Record<string, unknown>) {
   return {
@@ -18,12 +21,24 @@ function toErrorResponse(tool: string, error: unknown) {
 }
 
 export class ReadWriteHandlers {
-  constructor(private readonly memCtrl: MemoryController) {}
+  constructor(
+    private readonly memCtrl: MemoryController,
+    private readonly processManager?: UnifiedProcessManager,
+    private readonly ctx?: MCPServerContext,
+  ) {}
+
+  private async resolvePid(value: unknown): Promise<number> {
+    if (!this.processManager) {
+      return value as number;
+    }
+    return await resolveMemoryDomainPid(value, this.processManager, this.ctx);
+  }
 
   async handleWriteValue(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const entry = await this.memCtrl.writeValue(
-        args.pid as number,
+        pid,
         args.address as string,
         args.value as string,
         args.valueType as string,
@@ -40,8 +55,9 @@ export class ReadWriteHandlers {
 
   async handleFreeze(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const entry = await this.memCtrl.freeze(
-        args.pid as number,
+        pid,
         args.address as string,
         args.value as string,
         args.valueType as string,
@@ -70,8 +86,9 @@ export class ReadWriteHandlers {
 
   async handleDump(args: Record<string, unknown>) {
     try {
+      const pid = await this.resolvePid(args.pid);
       const hexDump = await this.memCtrl.dumpMemoryHex(
-        args.pid as number,
+        pid,
         args.address as string,
         (args.size as number) ?? 256,
       );

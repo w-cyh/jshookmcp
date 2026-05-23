@@ -9,6 +9,7 @@ import type { DomainManifest } from '@server/registry/contracts';
 import type { MCPServerContext } from '@server/MCPServer.context';
 import { memoryScanToolDefinitions } from './definitions';
 import type { MemoryScanHandlers } from './handlers.impl';
+import { UnifiedProcessManager } from '@server/domains/shared/modules/native';
 
 const DOMAIN = 'memory' as const;
 const DEP_KEY = 'memoryScanHandlers' as const;
@@ -22,6 +23,7 @@ const IS_WIN32 = EFFECTIVE_PLATFORM === 'win32';
 type H = MemoryScanHandlers;
 
 let globalContext: MCPServerContext | null = null;
+let globalProcessManager: UnifiedProcessManager | null = null;
 
 async function ensure(ctx: MCPServerContext): Promise<H> {
   const { MemoryScanHandlers } = await import('./handlers.impl');
@@ -46,6 +48,9 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
     import('@native/CodeInjector'),
     import('@native/MemoryController'),
   ]);
+  if (!globalProcessManager) {
+    globalProcessManager = new UnifiedProcessManager();
+  }
 
   if (IS_WIN32) {
     // Lazy-load Win32-only engines — only load on Windows
@@ -71,6 +76,8 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
       peAnalyzer.peAnalyzer,
       antiCheatDetector.antiCheatDetector,
       ctx.eventBus,
+      globalProcessManager,
+      ctx,
     );
   } else {
     // macOS/Linux: Win32-only engines not available — pass null
@@ -87,6 +94,8 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
       null, // peAnalyzer
       null, // antiCheatDetector
       ctx.eventBus,
+      globalProcessManager,
+      ctx,
     );
   }
   return ctxAny[DEP_KEY] as H;

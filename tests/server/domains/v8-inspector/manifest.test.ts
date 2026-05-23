@@ -113,12 +113,12 @@ describe('v8-inspector manifest', () => {
     });
   });
 
-  it('should throw if pageController is missing', async () => {
+  it('should still construct handlers if pageController is missing', async () => {
     const mockCtx = {} as import('@server/MCPServer.context').MCPServerContext;
 
-    await expect(manifest.ensure(mockCtx)).rejects.toThrow(
-      'v8-inspector: PageController not available',
-    );
+    const handler = await manifest.ensure(mockCtx);
+    expect(handler).toBeDefined();
+    expect(typeof handler.v8_version_detect).toBe('function');
   });
 });
 

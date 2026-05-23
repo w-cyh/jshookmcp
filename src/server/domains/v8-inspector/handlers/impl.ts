@@ -43,8 +43,22 @@ function requirePageController(
   return pageController;
 }
 
+function missingPageControllerResult(tool: string): {
+  success: false;
+  error: string;
+  capability: string;
+  fix: string;
+} {
+  return {
+    success: false,
+    error: `${tool}: PageController not available`,
+    capability: 'page-controller',
+    fix: 'Call browser_launch or browser_attach first, and select a tab that exposes a stable Page handle.',
+  };
+}
+
 function createV8InspectorClient(ctx: MCPServerContext): V8InspectorClient {
-  return new V8InspectorClient(createPageGetter(ctx));
+  return new V8InspectorClient(ctx.pageController ? createPageGetter(ctx) : undefined);
 }
 
 function createPageGetter(ctx: MCPServerContext): () => Promise<unknown> {
@@ -212,7 +226,7 @@ export class V8InspectorHandlers {
 
   async v8_version_detect(_args: ToolArgs): Promise<unknown> {
     if (!this.deps.ctx.pageController) {
-      return { success: false, error: 'PageController not available' };
+      return missingPageControllerResult('v8_version_detect');
     }
     const { VersionDetector } = await import('@modules/v8-inspector/VersionDetector');
     const detector = new VersionDetector(createPageGetter(this.deps.ctx));
@@ -257,10 +271,6 @@ const registrations: ToolRegistration[] = v8InspectorTools.map((toolDef: Tool) =
 }));
 
 async function ensure(ctx: MCPServerContext): Promise<V8InspectorHandlers> {
-  if (!ctx.pageController) {
-    throw new Error('v8-inspector: PageController not available');
-  }
-
   const client = createV8InspectorClient(ctx);
   const handlers = new V8InspectorHandlers({ ctx, client });
   ctx.v8InspectorHandlers = handlers;

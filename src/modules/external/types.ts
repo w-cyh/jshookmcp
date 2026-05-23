@@ -50,6 +50,14 @@ export interface ToolRunRequest {
   maxStderrBytes?: number;
   /** Optional stdin data to pipe */
   stdin?: Buffer | string;
+  /** Require the process to produce some output signal when it exits successfully. */
+  requireNonEmptyOutput?: boolean;
+  /** Expected artifact files that must exist and be non-empty on success. */
+  expectedOutputPaths?: string[];
+  /** When true, allow expected output directories and only require them to exist. */
+  allowDirectoryOutputs?: boolean;
+  /** Human-readable output label used in diagnostics. */
+  outputLabel?: string;
   /** Progress callback for long-running operations */
   onProgress?: (event: ProgressEvent) => void;
 }
@@ -69,6 +77,8 @@ export interface ToolRunResult {
   stderr: string;
   durationMs: number;
   truncated: boolean;
+  diagnosticCode?: 'EMPTY_OUTPUT' | 'EMPTY_OUTPUT_ARTIFACT';
+  diagnostics?: string[];
 }
 
 export interface ToolProbeResult {

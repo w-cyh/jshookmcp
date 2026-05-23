@@ -5,7 +5,6 @@
 import { logger } from '@utils/logger';
 import type { MemoryOperationHost, ProcessHandlerDeps } from './shared-types';
 import {
-  validatePid,
   requireString,
   requirePositiveNumber,
   normalizePatternType,
@@ -14,6 +13,7 @@ import {
   getOptionalPositiveNumber,
   getWriteSize,
 } from '../handlers.base.types';
+import { resolvePidOrAttachedRenderer } from '@server/runtime/renderer-pid';
 
 type AuditedMemoryOperation = 'memory_read' | 'memory_write' | 'memory_scan';
 type MemoryToolResponse = {
@@ -30,19 +30,23 @@ type MemoryPatch = {
 
 export class MemoryOperationHandlers {
   private readonly memoryManager: ProcessHandlerDeps['memoryManager'];
+  private readonly processManager: ProcessHandlerDeps['processManager'];
   private readonly platform: string;
   private readonly host: MemoryOperationHost;
+  private readonly ctx?: ProcessHandlerDeps['ctx'];
 
   constructor(deps: ProcessHandlerDeps, host: MemoryOperationHost) {
     this.memoryManager = deps.memoryManager;
+    this.processManager = deps.processManager;
     this.platform = deps.platform;
     this.host = host;
+    this.ctx = deps.ctx;
   }
 
   async handleMemoryRead(args: Record<string, unknown>): Promise<MemoryToolResponse> {
     const startedAt = Date.now();
     try {
-      const pid = validatePid(args.pid);
+      const pid = await this.resolvePid(args.pid);
       const address = requireString(args.address, 'address');
       const size = requirePositiveNumber(args.size, 'size');
 
@@ -96,7 +100,7 @@ export class MemoryOperationHandlers {
   async handleMemoryWrite(args: Record<string, unknown>): Promise<MemoryToolResponse> {
     const startedAt = Date.now();
     try {
-      const pid = validatePid(args.pid);
+      const pid = await this.resolvePid(args.pid);
       const address = requireString(args.address, 'address');
       const data = requireString(args.data, 'data');
       const encoding = this.normalizeEncoding(args.encoding, 'encoding') ?? 'hex';
@@ -156,7 +160,7 @@ export class MemoryOperationHandlers {
   async handleMemoryScan(args: Record<string, unknown>): Promise<MemoryToolResponse> {
     const startedAt = Date.now();
     try {
-      const pid = validatePid(args.pid);
+      const pid = await this.resolvePid(args.pid);
       const pattern = requireString(args.pattern, 'pattern');
       const patternType = normalizePatternType(args.patternType);
       const suspendTarget = args.suspendTarget === true;
@@ -232,7 +236,7 @@ export class MemoryOperationHandlers {
 
   async handleMemoryCheckProtection(args: Record<string, unknown>): Promise<MemoryToolResponse> {
     try {
-      const pid = validatePid(args.pid);
+      const pid = await this.resolvePid(args.pid);
       const address = requireString(args.address, 'address');
       const result = await this.memoryManager.checkMemoryProtection(pid, address);
       return this.jsonResponse(result);
@@ -244,7 +248,7 @@ export class MemoryOperationHandlers {
 
   async handleMemoryScanFiltered(args: Record<string, unknown>): Promise<MemoryToolResponse> {
     try {
-      const pid = validatePid(args.pid);
+      const pid = await this.resolvePid(args.pid);
       const pattern = requireString(args.pattern, 'pattern');
       const addresses = this.requireStringArray(args.addresses, 'addresses');
       const patternType = normalizePatternType(args.patternType);
@@ -269,7 +273,7 @@ export class MemoryOperationHandlers {
 
   async handleMemoryBatchWrite(args: Record<string, unknown>): Promise<MemoryToolResponse> {
     try {
-      const pid = validatePid(args.pid);
+      const pid = await this.resolvePid(args.pid);
       const patches = this.requirePatches(args.patches);
 
       const availability = await this.memoryManager.checkAvailability();
@@ -287,7 +291,7 @@ export class MemoryOperationHandlers {
 
   async handleMemoryDumpRegion(args: Record<string, unknown>): Promise<MemoryToolResponse> {
     try {
-      const pid = validatePid(args.pid);
+      const pid = await this.resolvePid(args.pid);
       const address = requireString(args.address, 'address');
       const size = requirePositiveNumber(args.size, 'size');
       const outputPath = requireString(args.outputPath, 'outputPath');
@@ -304,7 +308,7 @@ export class MemoryOperationHandlers {
 
   async handleMemoryListRegions(args: Record<string, unknown>): Promise<MemoryToolResponse> {
     try {
-      const pid = validatePid(args.pid);
+      const pid = await this.resolvePid(args.pid);
       const result = await this.memoryManager.enumerateRegions(pid);
       return this.jsonResponse(result);
     } catch (error) {
@@ -333,6 +337,10 @@ export class MemoryOperationHandlers {
 
   private errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+  }
+
+  private async resolvePid(value: unknown): Promise<number> {
+    return await resolvePidOrAttachedRenderer(value, this.processManager, this.ctx);
   }
 
   private async auditedUnavailableResponse(params: {

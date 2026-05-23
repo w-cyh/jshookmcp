@@ -11,6 +11,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, relative, sep, isAbsolute } from 'node:path';
 import { ProcessRegistry } from '@utils/ProcessRegistry';
@@ -102,6 +103,7 @@ export class ExternalToolRunner {
     const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const maxStdout = request.maxStdoutBytes ?? DEFAULT_MAX_STDOUT;
     const maxStderr = request.maxStderrBytes ?? DEFAULT_MAX_STDERR;
+    const outputLabel = request.outputLabel?.trim() || 'output';
 
     logger.debug(`[ExternalToolRunner] Running: ${spec.command} ${args.join(' ')}`);
     const startTime = Date.now();
@@ -138,7 +140,7 @@ export class ExternalToolRunner {
         }
       }, timeoutMs);
 
-      const finish = (exitCode: number | null, signal: NodeJS.Signals | null) => {
+      const finish = async (exitCode: number | null, signal: NodeJS.Signals | null) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeoutHandle);
@@ -167,6 +169,22 @@ export class ExternalToolRunner {
           durationMs,
           truncated: stdoutTruncated || stderrTruncated,
         };
+
+        if (result.ok) {
+          const diagnostics = await this.collectSuccessDiagnostics(request, {
+            stdout,
+            stderr,
+            outputLabel,
+          });
+          if (diagnostics.length > 0) {
+            result.ok = false;
+            result.diagnostics = diagnostics;
+            result.diagnosticCode = diagnostics.some((item) => item.includes('0 bytes'))
+              ? 'EMPTY_OUTPUT_ARTIFACT'
+              : 'EMPTY_OUTPUT';
+            result.stderr = [stderr.trim(), ...diagnostics].filter(Boolean).join('\n');
+          }
+        }
 
         if (result.ok) {
           logger.debug(`[ExternalToolRunner] ${spec.command} completed in ${durationMs}ms`);
@@ -218,14 +236,14 @@ export class ExternalToolRunner {
       });
 
       child.on('close', (code, signal) => {
-        finish(code, signal as NodeJS.Signals | null);
+        void finish(code, signal as NodeJS.Signals | null);
       });
 
       child.on('error', (err) => {
         const errBuf = Buffer.from(`\nSpawn error: ${err.message}`, 'utf-8');
         stderrBufs.push(errBuf);
         stderrLen += errBuf.length;
-        finish(1, null);
+        void finish(1, null);
       });
 
       request.onProgress?.({ phase: 'spawn', ts: Date.now() });
@@ -264,5 +282,65 @@ export class ExternalToolRunner {
       `[ExternalToolRunner] CWD '${requestedCwd}' outside allowed boundaries, using project root`,
     );
     return projectRoot;
+  }
+
+  private async collectSuccessDiagnostics(
+    request: ToolRunRequest,
+    output: {
+      stdout: string;
+      stderr: string;
+      outputLabel: string;
+    },
+  ): Promise<string[]> {
+    const diagnostics: string[] = [];
+
+    if (Array.isArray(request.expectedOutputPaths) && request.expectedOutputPaths.length > 0) {
+      const emptyArtifacts: string[] = [];
+      const missingArtifacts: string[] = [];
+
+      for (const outputPath of request.expectedOutputPaths) {
+        try {
+          const outputStats = await stat(outputPath);
+          if (outputStats.isDirectory()) {
+            if (!request.allowDirectoryOutputs) {
+              missingArtifacts.push(outputPath);
+            }
+            continue;
+          }
+          const size = outputStats.size;
+          if (size <= 0) {
+            emptyArtifacts.push(outputPath);
+          }
+        } catch {
+          missingArtifacts.push(outputPath);
+        }
+      }
+
+      if (missingArtifacts.length > 0) {
+        diagnostics.push(
+          `Expected ${output.outputLabel} artifact was not created: ${missingArtifacts.join(', ')}`,
+        );
+      }
+      if (emptyArtifacts.length > 0) {
+        diagnostics.push(
+          `Expected ${output.outputLabel} artifact is 0 bytes: ${emptyArtifacts.join(', ')}`,
+        );
+      }
+    }
+
+    if (request.requireNonEmptyOutput) {
+      const hasStdout = output.stdout.trim().length > 0;
+      const hasStderr = output.stderr.trim().length > 0;
+      const hasArtifactSignal = !diagnostics.some(
+        (item) => item.includes('not created') || item.includes('0 bytes'),
+      );
+      if (!hasStdout && !hasStderr && (!request.expectedOutputPaths || !hasArtifactSignal)) {
+        diagnostics.push(
+          `Process exited successfully but produced no stdout, stderr, or usable ${output.outputLabel}.`,
+        );
+      }
+    }
+
+    return diagnostics;
   }
 }

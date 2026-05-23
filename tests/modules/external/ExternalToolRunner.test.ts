@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { resolve as resolvePath } from 'node:path';
 
 const state = vi.hoisted(() => {
@@ -851,5 +854,93 @@ describe('ExternalToolRunner', () => {
     expect(result.exitCode).toBe(0);
     // Stdout should be empty since the data arrived after close
     expect(result.stdout).toBe('');
+  });
+
+  it('fails successful runs that produce no stdout, stderr, or expected artifact', async () => {
+    const child = createChildProcessMock();
+    state.spawn.mockReturnValue(child);
+    const registry = {
+      probeAll: vi.fn(),
+      getSpec: vi.fn().mockReturnValue({ command: 'tool-bin' }),
+      getCachedProbe: vi.fn().mockReturnValue({ available: true }),
+    } as any;
+    const runner = new ExternalToolRunner(registry);
+
+    const runPromise = runner.run({
+      tool: 'tmp',
+      args: [],
+      requireNonEmptyOutput: true,
+      outputLabel: 'test artifact',
+    } as any);
+
+    child.emit('close', 0, null);
+    const result = await runPromise;
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnosticCode).toBe('EMPTY_OUTPUT');
+    expect(result.stderr).toContain('produced no stdout, stderr, or usable test artifact');
+  });
+
+  it('fails successful runs when expected artifact file is 0 bytes', async () => {
+    const child = createChildProcessMock();
+    state.spawn.mockReturnValue(child);
+    const registry = {
+      probeAll: vi.fn(),
+      getSpec: vi.fn().mockReturnValue({ command: 'tool-bin' }),
+      getCachedProbe: vi.fn().mockReturnValue({ available: true }),
+    } as any;
+    const runner = new ExternalToolRunner(registry);
+    const dir = await mkdtemp(join(tmpdir(), 'external-runner-test-'));
+    const outputPath = join(dir, 'artifact.txt');
+    await writeFile(outputPath, '');
+
+    try {
+      const runPromise = runner.run({
+        tool: 'tmp',
+        args: [],
+        expectedOutputPaths: [outputPath],
+        outputLabel: 'artifact file',
+      } as any);
+
+      child.emit('close', 0, null);
+      const result = await runPromise;
+
+      expect(result.ok).toBe(false);
+      expect(result.diagnosticCode).toBe('EMPTY_OUTPUT_ARTIFACT');
+      expect(result.stderr).toContain('artifact is 0 bytes');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts expected output directories when allowDirectoryOutputs is true', async () => {
+    const child = createChildProcessMock();
+    state.spawn.mockReturnValue(child);
+    const registry = {
+      probeAll: vi.fn(),
+      getSpec: vi.fn().mockReturnValue({ command: 'tool-bin' }),
+      getCachedProbe: vi.fn().mockReturnValue({ available: true }),
+    } as any;
+    const runner = new ExternalToolRunner(registry);
+    const dir = await mkdtemp(join(tmpdir(), 'external-runner-dir-test-'));
+    const outputDir = join(dir, 'out');
+    await mkdir(outputDir, { recursive: true });
+
+    try {
+      const runPromise = runner.run({
+        tool: 'tmp',
+        args: [],
+        expectedOutputPaths: [outputDir],
+        allowDirectoryOutputs: true,
+        outputLabel: 'output directory',
+      } as any);
+
+      child.emit('close', 0, null);
+      const result = await runPromise;
+
+      expect(result.ok).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

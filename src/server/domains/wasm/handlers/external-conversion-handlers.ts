@@ -19,6 +19,8 @@ export class ExternalConversionHandlers extends ExternalToolHandlersBase {
       tool: 'wabt.wasm2wat',
       args: toolArgs,
       timeoutMs: WASM_TOOL_TIMEOUT_MS,
+      requireNonEmptyOutput: true,
+      outputLabel: 'wasm text output',
     });
 
     if (!result.ok) {
@@ -52,6 +54,8 @@ export class ExternalConversionHandlers extends ExternalToolHandlersBase {
       tool: 'wabt.wasm-decompile',
       args: [inputPath, '-o', '/dev/stdout'],
       timeoutMs: WASM_TOOL_TIMEOUT_MS,
+      requireNonEmptyOutput: true,
+      outputLabel: 'wasm decompile output',
     });
 
     if (!result.ok) {
@@ -92,6 +96,8 @@ export class ExternalConversionHandlers extends ExternalToolHandlersBase {
       tool: 'wabt.wasm-objdump',
       args: [...flags, inputPath],
       timeoutMs: WASM_TOOL_TIMEOUT_MS,
+      requireNonEmptyOutput: true,
+      outputLabel: 'wasm section dump',
     });
 
     if (!result.ok) {
@@ -129,6 +135,8 @@ export class ExternalConversionHandlers extends ExternalToolHandlersBase {
       tool: 'wabt.wasm2c',
       args: [inputPath, '-o', cFile],
       timeoutMs: WASM_TOOL_TIMEOUT_MS,
+      expectedOutputPaths: [cFile, hFile],
+      outputLabel: 'wasm2c output',
     });
 
     if (!result.ok) {

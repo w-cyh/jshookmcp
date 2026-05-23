@@ -1021,7 +1021,12 @@ describe('v8-inspector handler coverage', () => {
 
         const result = await handlers.v8_version_detect({});
 
-        expect(result).toEqual({ success: false, error: 'PageController not available' });
+        expect(result).toEqual({
+          success: false,
+          error: 'v8_version_detect: PageController not available',
+          capability: 'page-controller',
+          fix: 'Call browser_launch or browser_attach first, and select a tab that exposes a stable Page handle.',
+        });
       });
 
       it('should detect version with pageController', async () => {
