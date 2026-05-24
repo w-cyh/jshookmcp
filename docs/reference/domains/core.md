@@ -20,7 +20,7 @@
 - browser + network + core
 - core + sourcemap + transform
 
-## 工具清单（20）
+## 工具清单（22）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -44,3 +44,5 @@
 | `analysis_ast_match` | 按 AST 节点类型和属性过滤器匹配代码中的节点，如查找所有 CallExpression。 |
 | `analysis_deflat_control_flow` | 将 switch-dispatcher 控制流平坦化还原为顺序执行的代码。 |
 | `analysis_decode_string_array` | 解码字面量字符串数组访问模式，将间接引用替换回内联字符串。 |
+| `js_symbolic_execute` | 待补充中文：Symbolic execution of JavaScript: explore all feasible execution paths, collect path constraints, and solve them. Best for control-flow-flattened code with complex branching. |
+| `js_symbolic_execute_jsvmp` | 待补充中文：Symbolic execution of JSVMP bytecode: step through instructions symbolically to infer original logic, constraints, and confidence score. Use after js_analyze_vm to get instructions. |

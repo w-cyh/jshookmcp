@@ -20,7 +20,7 @@ Core static and semi-static analysis domain for script collection, deobfuscation
 - browser + network + core
 - core + sourcemap + transform
 
-## Full tool list (20)
+## Full tool list (22)
 
 | Tool | Description |
 | --- | --- |
@@ -44,3 +44,5 @@ Core static and semi-static analysis domain for script collection, deobfuscation
 | `analysis_ast_match` | Match AST nodes by type and optional property filter. |
 | `analysis_deflat_control_flow` | Flatten switch-dispatch control flow back to straight-line code. |
 | `analysis_decode_string_array` | Decode literal string-array access back to strings. |
+| `js_symbolic_execute` | Symbolic execution of JavaScript: explore all feasible execution paths, collect path constraints, and solve them. Best for control-flow-flattened code with complex branching. |
+| `js_symbolic_execute_jsvmp` | Symbolic execution of JSVMP bytecode: step through instructions symbolically to infer original logic, constraints, and confidence score. Use after js_analyze_vm to get instructions. |

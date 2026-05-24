@@ -407,5 +407,7 @@
   "dns_cname_chain": "追踪主机名的完整 CNAME 解析链，支持配置最大追踪深度。",
   "dns_bulk_resolve": "并发解析大量主机名，返回每个主机的独立解析状态。",
   "sourcemap_coverage": "汇总 source map 的已映射与未映射源码覆盖范围。",
-  "sourcemap_lookup": "将生成代码的位置（行号:列号）反向映射到原始源码位置。"
+  "sourcemap_lookup": "将生成代码的位置（行号:列号）反向映射到原始源码位置。",
+  "js_symbolic_execute": "待补充中文：Symbolic execution of JavaScript: explore all feasible execution paths, collect path constraints, and solve them. Best for control-flow-flattened code with complex branching.",
+  "js_symbolic_execute_jsvmp": "待补充中文：Symbolic execution of JSVMP bytecode: step through instructions symbolically to infer original logic, constraints, and confidence score. Use after js_analyze_vm to get instructions."
 }
