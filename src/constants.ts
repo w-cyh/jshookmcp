@@ -888,7 +888,7 @@ export const DART_MIN_LENGTH_CEILING = int('DART_MIN_LENGTH_CEILING', 64);
  * string so that strings straddling a chunk boundary are still detected.
  */
 export const DART_MAX_CHUNK_BYTES = int('DART_MAX_CHUNK_BYTES', 16 * 1024 * 1024);
-export const DART_CHUNK_OVERLAP_BYTES = int('DART_CHUNK_OVERLAP_BYTES', 64);
+export const DART_CHUNK_OVERLAP_BYTES = int('DART_CHUNK_OVERLAP_BYTES', 128);
 
 /** Printable ASCII range used when scanning ASCII strings. */
 export const DART_PRINTABLE_ASCII_MIN = int('DART_PRINTABLE_ASCII_MIN', 0x20);
