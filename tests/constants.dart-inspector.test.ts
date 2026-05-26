@@ -63,10 +63,10 @@ describe('dart-inspector constants', () => {
   });
 
   describe('DART_CHUNK_OVERLAP_BYTES (cross-chunk safety margin)', () => {
-    it('defaults to 64', async () => {
+    it('defaults to 128 (covers UTF-16LE strings up to DART_MIN_LENGTH_CEILING chars)', async () => {
       expect(
         (await loadConstants({ DART_CHUNK_OVERLAP_BYTES: undefined })).DART_CHUNK_OVERLAP_BYTES,
-      ).toBe(64);
+      ).toBe(128);
     });
   });
 
