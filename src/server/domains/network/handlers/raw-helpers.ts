@@ -5,6 +5,7 @@
  */
 
 import type { LookupAddress } from 'node:dns';
+import * as dns from 'node:dns/promises';
 import * as http2 from 'node:http2';
 import * as net from 'node:net';
 import * as tls from 'node:tls';
@@ -412,6 +413,63 @@ export function normalizeHttp2Headers(
     }
   }
   return normalized;
+}
+
+export async function resolveAuthorizedHostTarget(
+  rawHost: string,
+  authorization: NetworkAuthorizationInput | undefined,
+  operationLabel: string,
+): Promise<string> {
+  const authorizationPolicy = createNetworkAuthorizationPolicy(authorization);
+  const allowLegacyLocalSsrf = !authorizationPolicy && isLocalSsrfBypassEnabled();
+
+  if (
+    authorizationPolicy &&
+    authorizationPolicy.allowPrivateNetwork &&
+    !hasAuthorizedTargets(authorizationPolicy)
+  ) {
+    throw new Error(
+      'authorization must include at least one allowed host or CIDR when enabling private network access.',
+    );
+  }
+
+  if (isNetworkAuthorizationExpired(authorizationPolicy)) {
+    throw new Error('authorization expired before the request was executed.');
+  }
+
+  let resolvedAddress: string;
+  if (net.isIPv4(rawHost)) {
+    resolvedAddress = rawHost;
+  } else {
+    try {
+      const result = await dns.resolve(rawHost, 'A');
+      resolvedAddress = result[0]!;
+    } catch {
+      throw new Error(`${operationLabel} blocked: DNS resolution failed for "${rawHost}"`);
+    }
+  }
+
+  const hostnameIsPrivate = isPrivateHost(rawHost);
+  const addressIsPrivate = isPrivateHost(resolvedAddress);
+  const isLoopback = isLoopbackHost(rawHost) || isLoopbackHost(resolvedAddress);
+
+  if ((hostnameIsPrivate || addressIsPrivate) && !isLoopback && !allowLegacyLocalSsrf) {
+    const isPrivateTargetAllowed =
+      authorizationPolicy?.allowPrivateNetwork === true &&
+      isAuthorizedNetworkTarget(authorizationPolicy, { hostname: rawHost, resolvedAddress });
+    if (!isPrivateTargetAllowed) {
+      if (!hostnameIsPrivate && addressIsPrivate) {
+        throw new Error(
+          `${operationLabel} blocked: "${rawHost}" resolved to private IP ${resolvedAddress}`,
+        );
+      }
+      throw new Error(
+        `${operationLabel} blocked: target "${rawHost}" resolves to a private or reserved address.`,
+      );
+    }
+  }
+
+  return resolvedAddress;
 }
 
 export function normalizeAlpnProtocol(protocol: string | false | null | undefined): string | null {

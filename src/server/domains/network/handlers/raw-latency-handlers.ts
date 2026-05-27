@@ -1,4 +1,3 @@
-import * as dns from 'node:dns/promises';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import * as net from 'node:net';
@@ -12,6 +11,7 @@ import {
   roundMs,
   computeRttStats,
   resolveAuthorizedTransportTarget,
+  resolveAuthorizedHostTarget,
 } from './raw-helpers';
 import { emitEvent, parseNumberArg } from './shared';
 import { icmpProbe, traceroute, isIcmpAvailable } from '@native/IcmpProbe';
@@ -124,9 +124,13 @@ export class RawLatencyHandlers {
       if (!target) {
         return R.text('target is required', true);
       }
-      const resolvedTarget = await resolveHostname(target);
-      if (!resolvedTarget) {
-        return R.fail(`Could not resolve hostname: ${target}`).json();
+      const authorization = parseNetworkAuthorization(args.authorization);
+      let resolvedTarget: string;
+      try {
+        resolvedTarget = await resolveAuthorizedHostTarget(target, authorization, 'Traceroute');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return R.fail(message).json();
       }
       const maxHops = clamp(args.maxHops !== undefined ? Number(args.maxHops) : 30, 1, 64);
       const timeout = clamp(args.timeout !== undefined ? Number(args.timeout) : 5000, 100, 30000);
@@ -241,9 +245,13 @@ export class RawLatencyHandlers {
       if (!target) {
         return R.text('target is required', true);
       }
-      const resolvedTarget = await resolveHostname(target);
-      if (!resolvedTarget) {
-        return R.fail(`Could not resolve hostname: ${target}`).json();
+      const authorization = parseNetworkAuthorization(args.authorization);
+      let resolvedTarget: string;
+      try {
+        resolvedTarget = await resolveAuthorizedHostTarget(target, authorization, 'ICMP probe');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return R.fail(message).json();
       }
       const ttl = clamp(args.ttl !== undefined ? Number(args.ttl) : 128, 1, 255);
       const timeout = clamp(args.timeout !== undefined ? Number(args.timeout) : 5000, 100, 30000);
@@ -402,15 +410,5 @@ export class RawLatencyHandlers {
       });
       request.end();
     });
-  }
-}
-
-async function resolveHostname(target: string): Promise<string | null> {
-  if (net.isIPv4(target)) return target;
-  try {
-    const result = await dns.resolve(target, 'A');
-    return result[0] ?? null;
-  } catch {
-    return null;
   }
 }

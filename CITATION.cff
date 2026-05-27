@@ -4,8 +4,8 @@ type: software
 authors:
   - name: "vmoranv"
 title: "jshookmcp"
-version: "0.3.1"
-date-released: "2026-05-02"
+version: "0.3.2"
+date-released: "2026-05-27"
 repository-code: "https://github.com/vmoranv/jshookmcp"
 url: "https://vmoranv.github.io/jshookmcp/"
 license: AGPL-3.0-only
