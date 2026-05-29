@@ -12,9 +12,11 @@
  * with the raw opcode so the gap is obvious and testable. Registers are stored
  * as 64-bit BigInt (true fidelity — no unicorn.js i64-via-number precision loss).
  *
- * M0 scope: linear execution of data-processing-immediate and
- * data-processing-register instructions. No branches, loads/stores, or syscalls
- * yet — those arrive with the milestones that need them.
+ * Decode is structured as a top-level dispatch on the AArch64 main encoding
+ * group (bits[28:25]) into four families — DP-immediate, branch/system,
+ * load/store, DP-register — each a focused method. This keeps the hot fetch loop
+ * branching on a single discriminant first (V8-friendly) and the instruction
+ * set extensible without growing one linear if-chain.
  *
  * L1 adds `loadElf`: parse an ELF64 AArch64 shared object and map its PT_LOAD
  * segments at their virtual addresses, ready to execute from the ELF entry.
@@ -314,51 +316,56 @@ export class CpuEngine {
 
   // ── Decode + execute ──
 
+  /**
+   * Top-level decode: dispatch on the AArch64 main encoding group (bits[28:25])
+   * to the family method that owns it, then fall through to a loud throw with
+   * the raw opcode for anything not yet implemented.
+   *
+   * Group map (bits[28:25]):
+   *   100x (8,9)         → Data Processing -- Immediate
+   *   101x (10,11)       → Branches, Exception Generating, System
+   *   x1x0 (4,6,12,14)   → Loads and Stores
+   *   x101 (5,13)        → Data Processing -- Register
+   *   x111 (7,15)        → FP / Advanced SIMD (not yet emulated)
+   */
   private execute(insn: number): void {
-    // Decode the opcode discriminants via direct inline bit extraction
-    // (hot path: avoids per-field helper calls and lets V8 keep it monomorphic).
+    const op0 = (insn >>> 25) & 0b1111;
+    if (op0 === 0b1000 || op0 === 0b1001) {
+      if (this.execDataProcessingImmediate(insn)) return;
+    } else if (op0 === 0b1010 || op0 === 0b1011) {
+      if (this.execBranchSystem(insn)) return;
+    } else if ((op0 & 0b0111) === 0b0101) {
+      // x101 (5, 13) → Data Processing -- Register. Checked before load/store
+      // because the load/store mask (x1x0) would otherwise be reached first.
+      if (this.execDataProcessingRegister(insn)) return;
+    } else if ((op0 & 0b0101) === 0b0100) {
+      if (this.execLoadStore(insn)) return;
+    }
+
+    throw new Error(
+      `Unsupported ARM64 opcode 0x${(insn >>> 0).toString(16).padStart(8, '0')} at pc=0x${this.pc.toString(16)}`,
+    );
+  }
+
+  /**
+   * Data Processing -- Immediate (bits[28:25] = 100x): ADD/SUB/SUBS immediate
+   * and MOVZ. Returns true when handled, false to fall through to the throw.
+   */
+  private execDataProcessingImmediate(insn: number): boolean {
     const op2829 = (insn >>> 29) & 0b11;
-    const op3126 = insn >>> 26;
 
-    // B (unconditional branch): 000101 | imm26   → PC += SignExtend(imm26 << 2)
-    if (op3126 === 0b000101) {
-      this.pc += this.branchOffset(insn);
-      this.branched = true;
-      return;
-    }
-
-    // BL (branch with link): 100101 | imm26   → LR = PC+4; PC += offset
-    if (op3126 === 0b100101) {
-      this.gpr[30] = BigInt(this.pc + 4);
-      this.pc += this.branchOffset(insn);
-      this.branched = true;
-      return;
-    }
-
-    // RET: 1101011 0 0 10 11111 000000 Rn 00000   → PC = X[Rn] (default LR)
-    if ((insn & 0xfffffc1f) >>> 0 === 0xd65f0000) {
-      const rn = (insn >>> 5) & 0b11111;
-      this.pc = Number(this.readGpr(rn));
-      this.branched = true;
-      return;
-    }
-
-    // BR Rn: 1101011 0 0 00 11111 000000 Rn 00000  → PC = X[Rn] (indirect branch)
-    if ((insn & 0xfffffc1f) >>> 0 === 0xd61f0000) {
-      const rn = (insn >>> 5) & 0b11111;
-      this.pc = Number(this.readGpr(rn));
-      this.branched = true;
-      return;
-    }
-
-    // BLR Rn: 1101011 0 0 01 11111 000000 Rn 00000  → LR = PC+4; PC = X[Rn]
-    if ((insn & 0xfffffc1f) >>> 0 === 0xd63f0000) {
-      const rn = (insn >>> 5) & 0b11111;
-      const target = Number(this.readGpr(rn));
-      this.gpr[30] = BigInt(this.pc + 4);
-      this.pc = target;
-      this.branched = true;
-      return;
+    // ADR / ADRP: op | immlo(2) | 10000 | immhi(19) | Rd
+    //   ADR (op=0): Rd = PC + SignExtend(immhi:immlo). ADRP (op=1): Rd = (PC &
+    //   ~0xfff) + SignExtend(immhi:immlo) << 12. The workhorse of PIC addressing.
+    if (((insn >>> 24) & 0b11111) === 0b10000) {
+      const op = insn >>> 31;
+      const immlo = (insn >>> 29) & 0b11;
+      const immhi = (insn >>> 5) & 0x7ffff;
+      const rd = insn & 0b11111;
+      const imm = this.signExtend(BigInt((immhi << 2) | immlo), 21);
+      const value = op === 1 ? BigInt(this.pc & ~0xfff) + (imm << 12n) : BigInt(this.pc) + imm;
+      this.writeGpr(rd, BigInt.asUintN(64, value));
+      return true;
     }
 
     // ADD (immediate): sf | 0 | 0 | 100010 | sh | imm12 | Rn | Rd  (Rn/Rd use SP semantics)
@@ -371,8 +378,309 @@ export class CpuEngine {
       const rd = insn & 0b11111;
       const sum = this.readGprSp(rn) + BigInt(imm12);
       this.writeGprSp(rd, sf === 1 ? BigInt.asUintN(64, sum) : BigInt.asUintN(32, sum));
-      return;
+      return true;
     }
+
+    // ADDS (immediate): sf | 0 | 1 | 100010 | sh | imm12 | Rn | Rd  (S=1 sets flags)
+    //   CMN is ADDS with Rd=XZR. Rn uses SP semantics.
+    if (op2829 === 0b01 && ((insn >>> 23) & 0b111111) === 0b100010) {
+      const sf = insn >>> 31;
+      const sh = (insn >>> 22) & 1;
+      let imm12 = (insn >>> 10) & 0xfff;
+      if (sh === 1) imm12 <<= 12;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      const result = this.addWithFlags(this.readGprSp(rn), BigInt(imm12), sf);
+      this.writeGpr(rd, result);
+      return true;
+    }
+
+    // SUB (immediate): sf | 1 | 0 | 100010 | sh | imm12 | Rn | Rd
+    if (op2829 === 0b10 && ((insn >>> 23) & 0b111111) === 0b100010) {
+      const sf = insn >>> 31;
+      const sh = (insn >>> 22) & 1; // shift imm12 left by 12 when set
+      let imm12 = (insn >>> 10) & 0xfff;
+      if (sh === 1) imm12 <<= 12;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      // SUB uses SP semantics for Rn/Rd (encoding 31 = SP, not XZR).
+      const diff = this.readGprSp(rn) - BigInt(imm12);
+      this.writeGprSp(rd, sf === 1 ? BigInt.asUintN(64, diff) : BigInt.asUintN(32, diff));
+      return true;
+    }
+
+    // MOVN (move wide immediate, inverted): sf | 00 | 100101 | hw | imm16 | Rd
+    if (op2829 === 0b00 && ((insn >>> 23) & 0b111111) === 0b100101) {
+      const sf = insn >>> 31;
+      const hw = (insn >>> 21) & 0b11;
+      const imm16 = (insn >>> 5) & 0xffff;
+      const rd = insn & 0b11111;
+      const value = ~(BigInt(imm16) << BigInt(hw * 16));
+      this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, value) : BigInt.asUintN(32, value));
+      return true;
+    }
+
+    // MOVZ (move wide immediate): sf | 10 | 100101 | hw | imm16 | Rd
+    if (op2829 === 0b10 && ((insn >>> 23) & 0b111111) === 0b100101) {
+      const sf = insn >>> 31;
+      const hw = (insn >>> 21) & 0b11;
+      const imm16 = (insn >>> 5) & 0xffff;
+      const rd = insn & 0b11111;
+      const value = BigInt(imm16) << BigInt(hw * 16);
+      this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, value) : BigInt.asUintN(32, value));
+      return true;
+    }
+
+    // MOVK (move wide immediate, keep): sf | 11 | 100101 | hw | imm16 | Rd
+    //   Insert imm16 into the hw-th 16-bit lane, preserving the other bits.
+    if (op2829 === 0b11 && ((insn >>> 23) & 0b111111) === 0b100101) {
+      const sf = insn >>> 31;
+      const hw = (insn >>> 21) & 0b11;
+      const imm16 = (insn >>> 5) & 0xffff;
+      const rd = insn & 0b11111;
+      const shift = BigInt(hw * 16);
+      const current = this.readGpr(rd);
+      const cleared = current & ~(0xffffn << shift);
+      const value = cleared | (BigInt(imm16) << shift);
+      this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, value) : BigInt.asUintN(32, value));
+      return true;
+    }
+
+    // SUBS/CMP (immediate): sf | 1 | 1 | 100010 | sh | imm12 | Rn | Rd  (S=1 sets flags)
+    //   CMP is SUBS with Rd=XZR. Rn uses SP semantics.
+    if (op2829 === 0b11 && ((insn >>> 23) & 0b111111) === 0b100010) {
+      const sf = insn >>> 31;
+      const sh = (insn >>> 22) & 1;
+      let imm12 = (insn >>> 10) & 0xfff;
+      if (sh === 1) imm12 <<= 12;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      const result = this.subWithFlags(this.readGprSp(rn), BigInt(imm12), sf);
+      this.writeGpr(rd, result); // Rd=31 → XZR, write discarded
+      return true;
+    }
+
+    // Logical (immediate): sf | opc(2) | 100100 | N | immr(6) | imms(6) | Rn | Rd
+    //   opc: 00 AND, 01 ORR, 10 EOR, 11 ANDS. AND/ORR/EOR write Rd with SP
+    //   semantics (enc 31 = SP); ANDS uses XZR and sets NZCV (C=V=0).
+    if (((insn >>> 23) & 0b111111) === 0b100100) {
+      const sf = insn >>> 31;
+      const opc = (insn >>> 29) & 0b11;
+      const nBit = (insn >>> 22) & 1;
+      const immr = (insn >>> 16) & 0x3f;
+      const imms = (insn >>> 10) & 0x3f;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      if (sf === 0 && nBit === 1) return false; // reserved for 32-bit
+      const imm = this.decodeBitMask(nBit, immr, imms, sf);
+      const a = this.readGpr(rn);
+      let value: bigint;
+      switch (opc) {
+        case 0b00:
+        case 0b11:
+          value = a & imm;
+          break;
+        case 0b01:
+          value = a | imm;
+          break;
+        default:
+          value = a ^ imm;
+          break;
+      }
+      value = sf === 1 ? BigInt.asUintN(64, value) : BigInt.asUintN(32, value);
+      if (opc === 0b11) {
+        // ANDS / TST: set NZ from the result, clear C and V.
+        const width = sf === 1 ? 64n : 32n;
+        this.flagN = value >> (width - 1n) === 1n;
+        this.flagZ = value === 0n;
+        this.flagC = false;
+        this.flagV = false;
+        this.writeGpr(rd, value);
+      } else {
+        this.writeGprSp(rd, value);
+      }
+      return true;
+    }
+
+    // Bitfield: sf | opc(2) | 100110 | N | immr(6) | imms(6) | Rn | Rd
+    //   opc: 00 SBFM, 01 BFM, 10 UBFM. Covers LSL/LSR/ASR imm, [SU]XT[BHW],
+    //   [SU]BFX, BFI/BFXIL via the standard immr/imms field algorithm.
+    if (((insn >>> 23) & 0b111111) === 0b100110) {
+      const sf = insn >>> 31;
+      const opc = (insn >>> 29) & 0b11;
+      if (opc === 0b11) return false; // reserved
+      const immr = (insn >>> 16) & 0x3f;
+      const imms = (insn >>> 10) & 0x3f;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      const width = sf === 1 ? 64 : 32;
+      const src = this.readGpr(rn) & (sf === 1 ? MASK64 : MASK32);
+      const r = immr % width;
+      const sBits = imms;
+      // Rotate src right by R, take the low (S+1) bits as the extracted field.
+      const wB = BigInt(width);
+      const rotated =
+        ((src >> BigInt(r)) | (src << (wB - BigInt(r)))) & (sf === 1 ? MASK64 : MASK32);
+      const fieldLen = sBits + 1;
+      const fieldMask =
+        fieldLen >= width ? (sf === 1 ? MASK64 : MASK32) : (1n << BigInt(fieldLen)) - 1n;
+      const bottom = rotated & fieldMask;
+      let result: bigint;
+      if (opc === 0b01) {
+        // BFM: merge bottom into the existing Rd, preserving bits outside the field.
+        const dstOld = this.readGpr(rd) & (sf === 1 ? MASK64 : MASK32);
+        result = (dstOld & ~fieldMask) | bottom;
+      } else if (opc === 0b10) {
+        // UBFM: zero-extend the extracted field.
+        result = bottom;
+      } else {
+        // SBFM: sign-extend from bit S of the extracted field.
+        result = this.signExtend(bottom, fieldLen);
+        result = BigInt.asUintN(64, result);
+      }
+      this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, result) : BigInt.asUintN(32, result));
+      return true;
+    }
+
+    // EXTR: sf | 00 | 100111 | N | 0 | Rm | imms(6) | Rn | Rd  (ROR alias when Rn==Rm)
+    if (((insn >>> 23) & 0b111111) === 0b100111) {
+      const sf = insn >>> 31;
+      const rm = (insn >>> 16) & 0b11111;
+      const imms = (insn >>> 10) & 0x3f;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      const width = sf === 1 ? 64 : 32;
+      const hi = this.readGpr(rn) & (sf === 1 ? MASK64 : MASK32);
+      const lo = this.readGpr(rm) & (sf === 1 ? MASK64 : MASK32);
+      const concat = (hi << BigInt(width)) | lo;
+      const result = (concat >> BigInt(imms)) & (sf === 1 ? MASK64 : MASK32);
+      this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, result) : BigInt.asUintN(32, result));
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Branches, Exception Generating and System (bits[28:25] = 101x): B, BL, RET,
+   * BR, BLR, CBZ/CBNZ, B.cond, SVC. Returns true when handled.
+   */
+  private execBranchSystem(insn: number): boolean {
+    // B (unconditional branch): 000101 | imm26   → PC += SignExtend(imm26 << 2)
+    if (insn >>> 26 === 0b000101) {
+      this.pc += this.branchOffset(insn);
+      this.branched = true;
+      return true;
+    }
+
+    // BL (branch with link): 100101 | imm26   → LR = PC+4; PC += offset
+    if (insn >>> 26 === 0b100101) {
+      this.gpr[30] = BigInt(this.pc + 4);
+      this.pc += this.branchOffset(insn);
+      this.branched = true;
+      return true;
+    }
+
+    // RET: 1101011 0 0 10 11111 000000 Rn 00000   → PC = X[Rn] (default LR)
+    if ((insn & 0xfffffc1f) >>> 0 === 0xd65f0000) {
+      const rn = (insn >>> 5) & 0b11111;
+      this.pc = Number(this.readGpr(rn));
+      this.branched = true;
+      return true;
+    }
+
+    // BR Rn: 1101011 0 0 00 11111 000000 Rn 00000  → PC = X[Rn] (indirect branch)
+    if ((insn & 0xfffffc1f) >>> 0 === 0xd61f0000) {
+      const rn = (insn >>> 5) & 0b11111;
+      this.pc = Number(this.readGpr(rn));
+      this.branched = true;
+      return true;
+    }
+
+    // BLR Rn: 1101011 0 0 01 11111 000000 Rn 00000  → LR = PC+4; PC = X[Rn]
+    if ((insn & 0xfffffc1f) >>> 0 === 0xd63f0000) {
+      const rn = (insn >>> 5) & 0b11111;
+      const target = Number(this.readGpr(rn));
+      this.gpr[30] = BigInt(this.pc + 4);
+      this.pc = target;
+      this.branched = true;
+      return true;
+    }
+
+    // CBZ/CBNZ: sf | 011010 | op | imm19 | Rt   (op: 0=CBZ 1=CBNZ)
+    if (((insn >>> 25) & 0b111111) === 0b011010) {
+      const sf = insn >>> 31;
+      const op = (insn >>> 24) & 1;
+      const rt = insn & 0b11111;
+      const value = sf === 1 ? this.readGpr(rt) : BigInt.asUintN(32, this.readGpr(rt));
+      const isZero = value === 0n;
+      if (op === 0 ? isZero : !isZero) {
+        this.pc += this.imm19Offset(insn);
+        this.branched = true;
+      }
+      return true;
+    }
+
+    // B.cond: 0101010 0 | imm19 | 0 | cond
+    if (insn >>> 24 === 0b01010100 && ((insn >>> 4) & 1) === 0) {
+      const cond = insn & 0b1111;
+      if (this.conditionHolds(cond)) {
+        this.pc += this.imm19Offset(insn);
+        this.branched = true;
+      }
+      return true;
+    }
+
+    // TBZ/TBNZ: b5 | 011011 | op | b40(5) | imm14 | Rt   (op: 0=TBZ 1=TBNZ)
+    //   Tests bit (b5:b40) of Rt; branches by SignExtend(imm14 << 2) when the
+    //   condition holds. b5 is the high bit of the 6-bit position (so 0..63).
+    if (((insn >>> 25) & 0b111111) === 0b011011) {
+      const op = (insn >>> 24) & 1;
+      const b5 = insn >>> 31;
+      const b40 = (insn >>> 19) & 0b11111;
+      const bitPos = (b5 << 5) | b40;
+      const rt = insn & 0b11111;
+      const imm14 = (insn >>> 5) & 0x3fff;
+      const offset = Number(this.signExtend(BigInt(imm14), 14)) * 4;
+      const bitSet = ((this.readGpr(rt) >> BigInt(bitPos)) & 1n) === 1n;
+      if (op === 0 ? !bitSet : bitSet) {
+        this.pc += offset;
+        this.branched = true;
+      }
+      return true;
+    }
+
+    // HINT space (NOP, PACIASP/AUTIASP, BTI, YIELD, …): 1101010100 0 00 011 0010 …
+    //   Treat the whole hint space as a no-op so compiler-emitted prologue/landing
+    //   pads (PAC/BTI) don't fault. NOP itself is 0xD503201F.
+    if ((insn & 0xfffff01f) >>> 0 === 0xd503201f) {
+      return true;
+    }
+
+    // SVC #imm16: 11010100 000 imm16 000 01 → trap to a syscall handler.
+    //   AArch64 ABI: syscall number in x8, args x0..x5, result returns in x0.
+    if ((insn & 0xffe0001f) >>> 0 === 0xd4000001) {
+      const nr = Number(this.readGpr(8));
+      const handler = this.syscalls.get(nr);
+      if (!handler) {
+        throw new Error(`Unimplemented syscall ${nr} (x8) at pc=0x${this.pc.toString(16)}`);
+      }
+      const result = handler(this.hostContext());
+      if (result !== undefined) {
+        this.gpr[0] = BigInt.asUintN(64, BigInt(result));
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Data Processing -- Register (bits[28:25] = x101): ADD/SUB/SUBS shifted
+   * register, ORR, EOR. Returns true when handled.
+   */
+  private execDataProcessingRegister(insn: number): boolean {
+    const op2829 = (insn >>> 29) & 0b11;
 
     // ADD (shifted register): sf | 0 | 0 | 01011 | shift | 0 | Rm | imm6 | Rn | Rd
     if (op2829 === 0b00 && ((insn >>> 24) & 0b11111) === 0b01011 && ((insn >>> 21) & 1) === 0) {
@@ -387,21 +695,7 @@ export class CpuEngine {
           ? this.readGpr(rn) + this.readGpr(rm) // no-shift fast path (most common)
           : this.readGpr(rn) + this.applyShift(this.readGpr(rm), shiftType, imm6, sf);
       this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, sum) : BigInt.asUintN(32, sum));
-      return;
-    }
-
-    // SUB (immediate): sf | 1 | 0 | 100010 | sh | imm12 | Rn | Rd
-    if (op2829 === 0b10 && ((insn >>> 23) & 0b111111) === 0b100010) {
-      const sf = insn >>> 31;
-      const sh = (insn >>> 22) & 1; // shift imm12 left by 12 when set
-      let imm12 = (insn >>> 10) & 0xfff;
-      if (sh === 1) imm12 <<= 12;
-      const rn = (insn >>> 5) & 0b11111;
-      const rd = insn & 0b11111;
-      // SUB uses SP semantics for Rn/Rd (encoding 31 = SP, not XZR).
-      const diff = this.readGprSp(rn) - BigInt(imm12);
-      this.writeGprSp(rd, sf === 1 ? BigInt.asUintN(64, diff) : BigInt.asUintN(32, diff));
-      return;
+      return true;
     }
 
     // SUB (shifted register): sf | 1 | 0 | 01011 | shift | 0 | Rm | imm6 | Rn | Rd
@@ -415,18 +709,7 @@ export class CpuEngine {
       const operand2 = this.applyShift(this.readGpr(rm), shiftType, imm6, sf);
       const diff = this.readGpr(rn) - operand2;
       this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, diff) : BigInt.asUintN(32, diff));
-      return;
-    }
-
-    // MOVZ (move wide immediate): sf | 10 | 100101 | hw | imm16 | Rd
-    if (op2829 === 0b10 && ((insn >>> 23) & 0b111111) === 0b100101) {
-      const sf = insn >>> 31;
-      const hw = (insn >>> 21) & 0b11;
-      const imm16 = (insn >>> 5) & 0xffff;
-      const rd = insn & 0b11111;
-      const value = BigInt(imm16) << BigInt(hw * 16);
-      this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, value) : BigInt.asUintN(32, value));
-      return;
+      return true;
     }
 
     // ORR (shifted register): sf | 01 | 01010 | shift | 0 | Rm | imm6 | Rn | Rd
@@ -441,7 +724,7 @@ export class CpuEngine {
       const operand2 = this.applyShift(this.readGpr(rm), shiftType, imm6, sf);
       const value = this.readGpr(rn) | operand2;
       this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, value) : BigInt.asUintN(32, value));
-      return;
+      return true;
     }
 
     // EOR (shifted register): sf | 10 | 01010 | shift | 0 | Rm | imm6 | Rn | Rd
@@ -455,21 +738,7 @@ export class CpuEngine {
       const operand2 = this.applyShift(this.readGpr(rm), shiftType, imm6, sf);
       const value = this.readGpr(rn) ^ operand2;
       this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, value) : BigInt.asUintN(32, value));
-      return;
-    }
-
-    // SUBS/CMP (immediate): sf | 1 | 1 | 100010 | sh | imm12 | Rn | Rd  (S=1 sets flags)
-    //   CMP is SUBS with Rd=XZR. Rn uses SP semantics.
-    if (op2829 === 0b11 && ((insn >>> 23) & 0b111111) === 0b100010) {
-      const sf = insn >>> 31;
-      const sh = (insn >>> 22) & 1;
-      let imm12 = (insn >>> 10) & 0xfff;
-      if (sh === 1) imm12 <<= 12;
-      const rn = (insn >>> 5) & 0b11111;
-      const rd = insn & 0b11111;
-      const result = this.subWithFlags(this.readGprSp(rn), BigInt(imm12), sf);
-      this.writeGpr(rd, result); // Rd=31 → XZR, write discarded
-      return;
+      return true;
     }
 
     // SUBS/CMP (shifted register): sf | 1 | 1 | 01011 | shift | 0 | Rm | imm6 | Rn | Rd
@@ -483,66 +752,362 @@ export class CpuEngine {
       const operand2 = this.applyShift(this.readGpr(rm), shiftType, imm6, sf);
       const result = this.subWithFlags(this.readGpr(rn), operand2, sf);
       this.writeGpr(rd, result);
-      return;
+      return true;
     }
 
-    // CBZ/CBNZ: sf | 011010 | op | imm19 | Rt   (op: 0=CBZ 1=CBNZ)
-    if (((insn >>> 25) & 0b111111) === 0b011010) {
+    // ADDS (shifted register): sf | 0 | 1 | 01011 | shift | 0 | Rm | imm6 | Rn | Rd
+    if (op2829 === 0b01 && ((insn >>> 24) & 0b11111) === 0b01011 && ((insn >>> 21) & 1) === 0) {
       const sf = insn >>> 31;
-      const op = (insn >>> 24) & 1;
-      const rt = insn & 0b11111;
-      const value = sf === 1 ? this.readGpr(rt) : BigInt.asUintN(32, this.readGpr(rt));
-      const isZero = value === 0n;
-      if (op === 0 ? isZero : !isZero) {
-        this.pc += this.imm19Offset(insn);
-        this.branched = true;
-      }
-      return;
+      const shiftType = (insn >>> 22) & 0b11;
+      const rm = (insn >>> 16) & 0b11111;
+      const imm6 = (insn >>> 10) & 0b111111;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      const operand2 = this.applyShift(this.readGpr(rm), shiftType, imm6, sf);
+      const result = this.addWithFlags(this.readGpr(rn), operand2, sf);
+      this.writeGpr(rd, result);
+      return true;
     }
 
-    // B.cond: 0101010 0 | imm19 | 0 | cond
-    if (insn >>> 24 === 0b01010100 && ((insn >>> 4) & 1) === 0) {
-      const cond = insn & 0b1111;
+    // Logical (shifted register), N-bit selects the complement variants:
+    //   opc 00 + N0 = AND, N1 = BIC; opc 01 + N0 = ORR (handled above), N1 = ORN;
+    //   opc 10 + N0 = EOR (handled above), N1 = EON; opc 11 + N0 = ANDS, N1 = BICS.
+    //   sf | opc(2) | 01010 | shift(2) | N | Rm | imm6 | Rn | Rd
+    if (((insn >>> 24) & 0b11111) === 0b01010) {
+      const sf = insn >>> 31;
+      const opc = (insn >>> 29) & 0b11;
+      const nBit = (insn >>> 21) & 1;
+      // ORR/EOR with N=0 are already handled above; only take the remaining forms.
+      const alreadyHandled = nBit === 0 && (opc === 0b01 || opc === 0b10);
+      if (!alreadyHandled) {
+        const shiftType = (insn >>> 22) & 0b11;
+        const rm = (insn >>> 16) & 0b11111;
+        const imm6 = (insn >>> 10) & 0b111111;
+        const rn = (insn >>> 5) & 0b11111;
+        const rd = insn & 0b11111;
+        let operand2 = this.applyShift(this.readGpr(rm), shiftType, imm6, sf);
+        if (nBit === 1) operand2 = ~operand2; // BIC/ORN/EON/BICS invert operand2
+        const a = this.readGpr(rn);
+        let value: bigint;
+        if (opc === 0b00 || opc === 0b11)
+          value = a & operand2; // AND/BIC/ANDS/BICS
+        else if (opc === 0b01)
+          value = a | operand2; // ORN
+        else value = a ^ operand2; // EON
+        value = sf === 1 ? BigInt.asUintN(64, value) : BigInt.asUintN(32, value);
+        if (opc === 0b11) {
+          const width = sf === 1 ? 64n : 32n;
+          this.flagN = value >> (width - 1n) === 1n;
+          this.flagZ = value === 0n;
+          this.flagC = false;
+          this.flagV = false;
+        }
+        this.writeGpr(rd, value);
+        return true;
+      }
+    }
+
+    // Add/subtract (extended register): sf | op | S | 01011 | 00 | 1 | Rm |
+    //   option(3) | imm3 | Rn | Rd. Used for SP-relative arithmetic with a
+    //   zero/sign-extended Rm (e.g. add x0, sp, w1, uxtw #2). Rn uses SP semantics.
+    if (((insn >>> 24) & 0b11111) === 0b01011 && ((insn >>> 21) & 0b111) === 0b001) {
+      const sf = insn >>> 31;
+      const op = (insn >>> 30) & 1; // 0 add, 1 sub
+      const s = (insn >>> 29) & 1; // set flags
+      const rm = (insn >>> 16) & 0b11111;
+      const option = (insn >>> 13) & 0b111;
+      const imm3 = (insn >>> 10) & 0b111;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      const operand2 = this.extendReg(this.readGpr(rm), option, imm3, sf);
+      if (s === 1) {
+        const result =
+          op === 0
+            ? this.addWithFlags(this.readGprSp(rn), operand2, sf)
+            : this.subWithFlags(this.readGprSp(rn), operand2, sf);
+        this.writeGpr(rd, result);
+      } else {
+        const base = this.readGprSp(rn);
+        const value = op === 0 ? base + operand2 : base - operand2;
+        this.writeGprSp(rd, sf === 1 ? BigInt.asUintN(64, value) : BigInt.asUintN(32, value));
+      }
+      return true;
+    }
+
+    // Add/subtract (with carry): sf | op | S | 11010000 | Rm | 000000 | Rn | Rd
+    //   ADC/ADCS (op=0) and SBC/SBCS (op=1). Carry-in from flagC.
+    if (((insn >>> 21) & 0xff) === 0b11010000) {
+      const sf = insn >>> 31;
+      const op = (insn >>> 30) & 1;
+      const s = (insn >>> 29) & 1;
+      const rm = (insn >>> 16) & 0b11111;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      const carry = this.flagC ? 1n : 0n;
+      if (op === 0) {
+        // ADC: Rn + Rm + C
+        const result =
+          s === 1
+            ? this.addWithFlags(this.readGpr(rn), this.readGpr(rm), sf, carry)
+            : this.readGpr(rn) + this.readGpr(rm) + carry;
+        this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, result) : BigInt.asUintN(32, result));
+      } else {
+        // SBC: Rn - Rm - (1 - C) = Rn + ~Rm + C
+        const notRm = ~this.readGpr(rm);
+        const result =
+          s === 1
+            ? this.addWithFlags(this.readGpr(rn), notRm, sf, carry)
+            : this.readGpr(rn) + notRm + carry;
+        this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, result) : BigInt.asUintN(32, result));
+      }
+      return true;
+    }
+
+    // Data-processing (3 source): sf | 00 | 11011 | op31(3) | Rm | o0 | Ra | Rn | Rd
+    //   MADD/MSUB (Rd = Ra ± Rn*Rm), SMULH/UMULH (high 64 bits of 64×64).
+    if (((insn >>> 24) & 0b11111) === 0b11011) {
+      const sf = insn >>> 31;
+      const op31 = (insn >>> 21) & 0b111;
+      const o0 = (insn >>> 15) & 1;
+      const rm = (insn >>> 16) & 0b11111;
+      const ra = (insn >>> 10) & 0b11111;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      if (op31 === 0b000) {
+        // MADD (o0=0) / MSUB (o0=1)
+        const product = this.readGpr(rn) * this.readGpr(rm);
+        const acc = this.readGpr(ra);
+        const value = o0 === 0 ? acc + product : acc - product;
+        this.writeGpr(rd, sf === 1 ? BigInt.asUintN(64, value) : BigInt.asUintN(32, value));
+        return true;
+      }
+      if (op31 === 0b010 && o0 === 0) {
+        // SMULH: signed high 64 bits of the 128-bit product.
+        const a = BigInt.asIntN(64, this.readGpr(rn));
+        const b = BigInt.asIntN(64, this.readGpr(rm));
+        this.writeGpr(rd, BigInt.asUintN(64, (a * b) >> 64n));
+        return true;
+      }
+      if (op31 === 0b110 && o0 === 0) {
+        // UMULH: unsigned high 64 bits of the 128-bit product.
+        const a = this.readGpr(rn) & MASK64;
+        const b = this.readGpr(rm) & MASK64;
+        this.writeGpr(rd, ((a * b) >> 64n) & MASK64);
+        return true;
+      }
+    }
+
+    // Data-processing (2 source): sf | 0 | S | 11010110 | Rm | opcode(6) | Rn | Rd
+    //   UDIV/SDIV and the variable shifts LSLV/LSRV/ASRV/RORV. bit30=0 here
+    //   (bit30=1 is the 1-source class below, same 11010110 discriminant).
+    if (((insn >>> 21) & 0xff) === 0b11010110 && ((insn >>> 30) & 1) === 0) {
+      const sf = insn >>> 31;
+      const opcode = (insn >>> 10) & 0b111111;
+      const rm = (insn >>> 16) & 0b11111;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      const width = sf === 1 ? 64 : 32;
+      const wMask = sf === 1 ? MASK64 : MASK32;
+      const dividend = this.readGpr(rn) & wMask;
+      const divisor = this.readGpr(rm) & wMask;
+      switch (opcode) {
+        case 0b000010: {
+          // UDIV — division by zero yields 0 (AArch64 semantics).
+          const q = divisor === 0n ? 0n : dividend / divisor;
+          this.writeGpr(rd, q & wMask);
+          return true;
+        }
+        case 0b000011: {
+          // SDIV — signed; division by zero yields 0.
+          const a = BigInt.asIntN(width, dividend);
+          const b = BigInt.asIntN(width, divisor);
+          const q = b === 0n ? 0n : a / b; // BigInt division truncates toward zero
+          this.writeGpr(rd, BigInt.asUintN(width, q));
+          return true;
+        }
+        case 0b001000: // LSLV
+          this.writeGpr(rd, this.applyShift(dividend, 0b00, Number(divisor % BigInt(width)), sf));
+          return true;
+        case 0b001001: // LSRV
+          this.writeGpr(rd, this.applyShift(dividend, 0b01, Number(divisor % BigInt(width)), sf));
+          return true;
+        case 0b001010: // ASRV
+          this.writeGpr(rd, this.applyShift(dividend, 0b10, Number(divisor % BigInt(width)), sf));
+          return true;
+        case 0b001011: // RORV
+          this.writeGpr(rd, this.applyShift(dividend, 0b11, Number(divisor % BigInt(width)), sf));
+          return true;
+        default:
+          break;
+      }
+    }
+
+    // Conditional select: sf | op | S | 11010100 | Rm | cond(4) | op2(2) | Rn | Rd
+    //   CSEL/CSINC/CSINV/CSNEG. The op2 low bit selects increment/negate, op
+    //   (bit30) selects invert/negate. Covers CSET/CSETM/CINC/CINV aliases.
+    if (((insn >>> 21) & 0xff) === 0b11010100) {
+      const sf = insn >>> 31;
+      const op = (insn >>> 30) & 1;
+      const rm = (insn >>> 16) & 0b11111;
+      const cond = (insn >>> 12) & 0b1111;
+      const op2 = (insn >>> 10) & 0b11;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      const wMask = sf === 1 ? MASK64 : MASK32;
+      let value: bigint;
       if (this.conditionHolds(cond)) {
-        this.pc += this.imm19Offset(insn);
-        this.branched = true;
+        value = this.readGpr(rn) & wMask;
+      } else {
+        // op:op2 selects the transform applied to Rm: 0:00 CSEL, 0:01 CSINC,
+        // 1:00 CSINV, 1:01 CSNEG.
+        let other = this.readGpr(rm) & wMask;
+        if (op === 0 && op2 === 0b01)
+          other = (other + 1n) & wMask; // CSINC
+        else if (op === 1 && op2 === 0b00)
+          other = ~other & wMask; // CSINV
+        else if (op === 1 && op2 === 0b01) other = (~other + 1n) & wMask; // CSNEG
+        value = other;
       }
-      return;
+      this.writeGpr(rd, value);
+      return true;
     }
 
-    // LDR/STR (immediate, general register): size | 111 | 0 | b2524 | opc(L) | …
-    //   b2927 === 0b111, V(bit26) === 0 ⇒ integer load/store.
-    //   bits 25:24 select form: 0b01 = unsigned offset, 0b00 = pre/post-index.
-    //   bit 22 (L) = 0 store, 1 load. size(31:30): 2 = 32-bit Wt, 3 = 64-bit Xt.
+    // Conditional compare (register): sf | op | 1 | 11010010 | Rm | cond | 0 | Rn | 0 | nzcv
+    //   CCMP (op=1) / CCMN (op=0). If cond holds, compare Rn vs Rm and set NZCV;
+    //   else load the immediate nzcv field into the flags.
+    if (
+      ((insn >>> 21) & 0xff) === 0b11010010 &&
+      ((insn >>> 11) & 1) === 0 &&
+      ((insn >>> 4) & 1) === 0
+    ) {
+      const sf = insn >>> 31;
+      const op = (insn >>> 30) & 1;
+      const rm = (insn >>> 16) & 0b11111;
+      const cond = (insn >>> 12) & 0b1111;
+      const rn = (insn >>> 5) & 0b11111;
+      const nzcv = insn & 0b1111;
+      if (this.conditionHolds(cond)) {
+        if (op === 1) this.subWithFlags(this.readGpr(rn), this.readGpr(rm), sf);
+        else this.addWithFlags(this.readGpr(rn), this.readGpr(rm), sf);
+      } else {
+        this.flagN = ((nzcv >> 3) & 1) === 1;
+        this.flagZ = ((nzcv >> 2) & 1) === 1;
+        this.flagC = ((nzcv >> 1) & 1) === 1;
+        this.flagV = (nzcv & 1) === 1;
+      }
+      return true;
+    }
+
+    // Data-processing (1 source): sf | 1 | S | 11010110 | opcode2(5) | opcode(6) | Rn | Rd
+    //   RBIT/REV16/REV32/REV, CLZ/CLS. Distinguished from 2-source by bit30=1.
+    if (((insn >>> 21) & 0xff) === 0b11010110 && ((insn >>> 30) & 1) === 1) {
+      const sf = insn >>> 31;
+      const opcode = (insn >>> 10) & 0b111111;
+      const rn = (insn >>> 5) & 0b11111;
+      const rd = insn & 0b11111;
+      const width = sf === 1 ? 64 : 32;
+      const src = this.readGpr(rn) & (sf === 1 ? MASK64 : MASK32);
+      switch (opcode) {
+        case 0b000000: // RBIT
+          this.writeGpr(rd, this.reverseBits(src, width));
+          return true;
+        case 0b000001: // REV16
+          this.writeGpr(rd, this.reverseBytes(src, width, 2));
+          return true;
+        case 0b000010: // REV32 (or REV for 32-bit when sf=0)
+          this.writeGpr(rd, this.reverseBytes(src, width, sf === 1 ? 4 : width / 8));
+          return true;
+        case 0b000011: // REV (64-bit)
+          this.writeGpr(rd, this.reverseBytes(src, width, width / 8));
+          return true;
+        case 0b000100: // CLZ
+          this.writeGpr(rd, BigInt(this.countLeadingZeros(src, width)));
+          return true;
+        default:
+          break;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Loads and Stores (bits[28:25] = x1x0): LDR/STR immediate (unsigned offset
+   * and pre/post-index) and LDP/STP. Returns true when handled.
+   */
+  private execLoadStore(insn: number): boolean {
+    // LDR/STR family (integer): size(31:30) | 111 | V(26)=0 | b25:24 | opc(23:22) | …
+    //   opc encodes load/store + signedness: 00 STR, 01 LDR (zero-extend),
+    //   10 LDRS→64-bit (sign-extend), 11 LDRS→32-bit. bits 25:24 select the form:
+    //     0b01 unsigned offset; 0b00 with bit21=0 → unscaled/pre/post-index;
+    //     0b00 with bit21=1 → register offset.
     if (((insn >>> 27) & 0b111) === 0b111 && ((insn >>> 26) & 1) === 0) {
       const size = insn >>> 30; // 0=byte 1=half 2=word 3=dword
+      const opc = (insn >>> 22) & 0b11;
       const form = (insn >>> 24) & 0b11;
-      const isLoad = ((insn >>> 22) & 1) === 1;
       const rn = (insn >>> 5) & 0b11111;
       const rt = insn & 0b11111;
       const bytes = 1 << size;
+      const isLoad = opc !== 0b00; // 00 = store; 01/10/11 = loads
+      const signed = opc === 0b10 || opc === 0b11; // sign-extended loads
+      // Sign-extended load target width: opc 10 → 64-bit, opc 11 → 32-bit.
+      const loadWidth = opc === 0b11 ? 32 : 64;
+
+      const doLoad = (addr: number): void => {
+        const raw = this.loadValue(addr, bytes);
+        const value = signed ? BigInt.asUintN(loadWidth, this.signExtend(raw, bytes * 8)) : raw;
+        this.writeGpr(rt, value);
+      };
 
       if (form === 0b01) {
         // Unsigned offset: imm12 scaled by access size.
         const imm12 = (insn >>> 10) & 0xfff;
         const addr = Number(this.readGprSp(rn)) + imm12 * bytes;
-        if (isLoad) this.writeGpr(rt, this.loadValue(addr, bytes));
+        if (isLoad) doLoad(addr);
         else this.storeValue(addr, bytes, this.readGpr(rt));
-        return;
+        return true;
+      }
+
+      if (form === 0b00 && ((insn >>> 21) & 1) === 1 && ((insn >>> 10) & 0b11) === 0b10) {
+        // Register offset: [Xn, Rm{, extend {amount}}]. option(15:13), S(12) →
+        // shift amount = S ? size : 0. The common case is LSL #size (option 011).
+        const rm = (insn >>> 16) & 0b11111;
+        const option = (insn >>> 13) & 0b111;
+        const s = (insn >>> 12) & 1;
+        const shift = s === 1 ? size : 0;
+        const offset = this.extendReg(this.readGpr(rm), option, shift, 1);
+        const addr = Number(this.readGprSp(rn)) + Number(offset);
+        if (isLoad) doLoad(addr);
+        else this.storeValue(addr, bytes, this.readGpr(rt));
+        return true;
       }
 
       if (form === 0b00) {
-        // Pre/post-index: imm9 signed; idx bits 11:10 (0b11 pre, 0b01 post).
+        // Unscaled (LDUR/STUR, idx=00) or pre/post-index (idx 11/01): imm9 signed.
         const imm9raw = (insn >>> 12) & 0x1ff;
         const imm9 = imm9raw & 0x100 ? imm9raw - 0x200 : imm9raw;
         const idx = (insn >>> 10) & 0b11;
         const base = Number(this.readGprSp(rn));
-        const addr = idx === 0b11 ? base + imm9 : base; // pre adds before, post after
-        if (isLoad) this.writeGpr(rt, this.loadValue(addr, bytes));
+        const addr = idx === 0b11 ? base + imm9 : base; // pre adds before, post/unscaled at base
+        if (isLoad) doLoad(addr);
         else this.storeValue(addr, bytes, this.readGpr(rt));
-        this.writeGprSp(rn, BigInt.asUintN(64, BigInt(base + imm9))); // writeback
-        return;
+        if (idx === 0b11 || idx === 0b01) {
+          this.writeGprSp(rn, BigInt.asUintN(64, BigInt(base + imm9))); // writeback (pre/post only)
+        }
+        return true;
       }
+    }
+
+    // LDR (literal): opc(31:30) | 011 | V(26)=0 | 00 | imm19 | Rt
+    //   PC-relative load: Rt = *(PC + SignExtend(imm19 << 2)). opc 00 → 32-bit,
+    //   01 → 64-bit. Used for large constants the compiler pools after a function.
+    if (((insn >>> 24) & 0b111111) === 0b011000 && ((insn >>> 26) & 1) === 0) {
+      const opc = insn >>> 30;
+      const bytes = opc === 0b01 ? 8 : 4;
+      const rt = insn & 0b11111;
+      const addr = this.pc + this.imm19Offset(insn);
+      this.writeGpr(rt, this.loadValue(addr, bytes));
+      return true;
     }
 
     // LDP/STP (load/store pair): opc | 101 | V(0) | idx(24:23) | L | imm7 | Rt2 | Rn | Rt
@@ -573,27 +1138,10 @@ export class CpuEngine {
         // pre/post-index write the updated base back; signed-offset (0b10) does not.
         this.writeGprSp(rn, BigInt.asUintN(64, BigInt(base + imm7)));
       }
-      return;
+      return true;
     }
 
-    // SVC #imm16: 11010100 000 imm16 000 01 → trap to a syscall handler.
-    //   AArch64 ABI: syscall number in x8, args x0..x5, result returns in x0.
-    if ((insn & 0xffe0001f) >>> 0 === 0xd4000001) {
-      const nr = Number(this.readGpr(8));
-      const handler = this.syscalls.get(nr);
-      if (!handler) {
-        throw new Error(`Unimplemented syscall ${nr} (x8) at pc=0x${this.pc.toString(16)}`);
-      }
-      const result = handler(this.hostContext());
-      if (result !== undefined) {
-        this.gpr[0] = BigInt.asUintN(64, BigInt(result));
-      }
-      return;
-    }
-
-    throw new Error(
-      `Unsupported ARM64 opcode 0x${(insn >>> 0).toString(16).padStart(8, '0')} at pc=0x${this.pc.toString(16)}`,
-    );
+    return false;
   }
 
   /** Decode a 26-bit branch immediate into a byte offset (sign-extended, ×4). */
@@ -674,9 +1222,158 @@ export class CpuEngine {
         const signed = value & mask & signBit ? (value & mask) - (1n << width) : value & mask;
         return (signed >> amt) & mask;
       }
+      case 0b11: {
+        // ROR — rotate right within the operand width (logical shifted-register).
+        const v = value & mask;
+        const a = amt % width;
+        return ((v >> a) | (v << (width - a))) & mask;
+      }
       default:
         throw new Error(`Unsupported shift type ${shiftType}`);
     }
+  }
+
+  /**
+   * Compute operand1 + operand2 at the given width, update NZCV, and return the
+   * (width-masked) result. C = unsigned carry-out, V = signed overflow, matching
+   * AArch64 ADDS semantics. ADC adds an incoming carry bit.
+   */
+  private addWithFlags(operand1: bigint, operand2: bigint, sf: number, carryIn = 0n): bigint {
+    const width = sf === 1 ? 64n : 32n;
+    const mask = (1n << width) - 1n;
+    const a = operand1 & mask;
+    const b = operand2 & mask;
+    const full = a + b + carryIn;
+    const result = full & mask;
+    this.flagN = result >> (width - 1n) === 1n;
+    this.flagZ = result === 0n;
+    this.flagC = full > mask; // unsigned carry-out
+    const signA = (a >> (width - 1n)) & 1n;
+    const signB = (b >> (width - 1n)) & 1n;
+    const signR = (result >> (width - 1n)) & 1n;
+    this.flagV = signA === signB && signA !== signR; // signed overflow
+    return result;
+  }
+
+  /**
+   * Decode a logical-immediate (N:immr:imms) into the replicated bitmask, per the
+   * ARM ARM `DecodeBitMasks` pseudocode (immediate-only path, no tmask needed).
+   * Used by AND/ORR/EOR/ANDS immediate. Throws on the reserved encoding.
+   */
+  private decodeBitMask(n: number, immr: number, imms: number, sf: number): bigint {
+    // len = highest set bit of (N:NOT(imms)); element size esize = 2^len.
+    const combined = (n << 6) | (~imms & 0x3f);
+    let len = -1;
+    for (let i = 6; i >= 0; i--) {
+      if ((combined >> i) & 1) {
+        len = i;
+        break;
+      }
+    }
+    if (len < 1)
+      throw new Error(`Reserved logical-immediate encoding (N=${n}, imms=0x${imms.toString(16)})`);
+    const esize = 1 << len;
+    const levels = esize - 1;
+    const s = imms & levels;
+    const r = immr & levels;
+    if (s === levels) throw new Error('Reserved logical-immediate encoding (imms all-ones)');
+    // welem = Ones(S+1), rotated right by R within the element, then replicated.
+    const esizeB = BigInt(esize);
+    const welem = (1n << BigInt(s + 1)) - 1n;
+    const rB = BigInt(r);
+    const rotated = ((welem >> rB) | (welem << (esizeB - rB))) & ((1n << esizeB) - 1n);
+    // Replicate the element across the 64- or 32-bit register width.
+    const regWidth = sf === 1 ? 64 : 32;
+    let result = 0n;
+    for (let pos = 0; pos < regWidth; pos += esize) {
+      result |= rotated << BigInt(pos);
+    }
+    const mask = sf === 1 ? MASK64 : MASK32;
+    return result & mask;
+  }
+
+  /** Sign-extend the low `bits` of `value` to a signed JS-number-safe BigInt. */
+  private signExtend(value: bigint, bits: number): bigint {
+    const b = BigInt(bits);
+    const signBit = 1n << (b - 1n);
+    const masked = value & ((1n << b) - 1n);
+    return masked & signBit ? masked - (1n << b) : masked;
+  }
+
+  /**
+   * Apply an extended-register operation (UXTB..SXTX) used by ADD/SUB extended
+   * register and the LDR/STR register-offset form: extract the low byte/half/
+   * word/dword, zero- or sign-extend it, then left-shift by `shift`.
+   */
+  private extendReg(value: bigint, option: number, shift: number, sf: number): bigint {
+    const mask = sf === 1 ? MASK64 : MASK32;
+    let extracted: bigint;
+    switch (option) {
+      case 0b000: // UXTB
+        extracted = value & 0xffn;
+        break;
+      case 0b001: // UXTH
+        extracted = value & 0xffffn;
+        break;
+      case 0b010: // UXTW
+        extracted = value & 0xffffffffn;
+        break;
+      case 0b011: // UXTX (no extension)
+        extracted = value & MASK64;
+        break;
+      case 0b100: // SXTB
+        extracted = BigInt.asUintN(64, this.signExtend(value, 8));
+        break;
+      case 0b101: // SXTH
+        extracted = BigInt.asUintN(64, this.signExtend(value, 16));
+        break;
+      case 0b110: // SXTW
+        extracted = BigInt.asUintN(64, this.signExtend(value, 32));
+        break;
+      default: // SXTX (0b111)
+        extracted = value & MASK64;
+        break;
+    }
+    return (extracted << BigInt(shift)) & mask;
+  }
+
+  /** Reverse the bit order of the low `width` bits of `value`. */
+  private reverseBits(value: bigint, width: number): bigint {
+    let result = 0n;
+    let v = value;
+    for (let i = 0; i < width; i++) {
+      result = (result << 1n) | (v & 1n);
+      v >>= 1n;
+    }
+    return result;
+  }
+
+  /** Count leading zeros of the low `width` bits of `value`. */
+  private countLeadingZeros(value: bigint, width: number): number {
+    for (let i = width - 1; i >= 0; i--) {
+      if ((value >> BigInt(i)) & 1n) return width - 1 - i;
+    }
+    return width;
+  }
+
+  /** Reverse `value` byte-wise within each `groupBytes`-sized lane of `width` bits. */
+  private reverseBytes(value: bigint, width: number, groupBytes: number): bigint {
+    const totalBytes = width / 8;
+    const bytes: bigint[] = [];
+    let v = value;
+    for (let i = 0; i < totalBytes; i++) {
+      bytes.push(v & 0xffn);
+      v >>= 8n;
+    }
+    // Reverse within each group of `groupBytes` little-endian bytes.
+    let result = 0n;
+    for (let g = 0; g < totalBytes; g += groupBytes) {
+      for (let i = 0; i < groupBytes; i++) {
+        const src = bytes[g + groupBytes - 1 - i] ?? 0n;
+        result |= src << BigInt((g + i) * 8);
+      }
+    }
+    return result;
   }
 
   // ── Register file (XZR semantics for encoding 31) ──
