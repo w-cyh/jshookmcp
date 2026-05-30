@@ -52,8 +52,10 @@ export class NativeEmulatorHandlers {
         'android-syscalls',
         'getrandom',
         'system-register-read',
+        'memory-barriers',
         'exclusive-load-store',
         'simd-fp-load-store',
+        'simd-ld1-st1-multi',
         'aes-crypto',
         'sha1-crypto',
         'sha256-crypto',
@@ -70,7 +72,7 @@ export class NativeEmulatorHandlers {
       ],
       isa: 'aarch64-integer+neon+crypto+fp',
       activeSessions: this.sessions.count(),
-      note: 'In-process AArch64 interpreter: integer ISA + SIMD/FP load-store + AES/SHA/PMULL crypto-extension (bit-exact vs FIPS-197/180-4/180-1) + scalar IEEE-754 floating-point (FADD/FMUL/FDIV/FSQRT/FCVT/FCMP/FCSEL, float32 via fround) + NEON integer-lane SIMD (three-same ADD/SUB/MUL/logical/compare/min-max, two-register-misc, DUP, MOVI/MVNI, shift-by-immediate, across-lanes reductions, ZIP/UZP/TRN, EXT, TBL/TBX). The long/widening and saturating NEON variants (e.g. SQADD, SADDL) are not yet emulated, so a `.so` relying on those will hit an unsupported opcode (reported with the raw opcode). libapp.so (Flutter Dart AOT) is not executable here.',
+      note: 'In-process AArch64 interpreter: integer ISA (incl. DMB/DSB/ISB barriers as no-ops) + SIMD/FP load-store incl. contiguous LD1/ST1 of multiple registers + AES/SHA/PMULL crypto-extension (bit-exact vs FIPS-197/180-4/180-1) + scalar IEEE-754 floating-point (FADD/FMUL/FDIV/FSQRT/FCVT/FCMP/FCSEL, float32 via fround) + NEON integer-lane SIMD (three-same ADD/SUB/MUL/logical/compare/min-max, two-register-misc, DUP, MOVI/MVNI, shift-by-immediate, across-lanes reductions, ZIP/UZP/TRN, EXT, TBL/TBX). Not yet emulated: the de-interleaving LD2/LD3/LD4 structures and the long/widening + saturating NEON variants (e.g. SQADD, SADDL); a `.so` relying on those hits an unsupported opcode (reported with the raw opcode). libapp.so (Flutter Dart AOT) is not executable here.',
     }));
   }
 

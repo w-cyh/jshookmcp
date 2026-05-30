@@ -164,6 +164,8 @@ describe('NativeEmulatorHandlers — happy path', () => {
     expect(features).toContain('java-mock-field');
     expect(features).toContain('exclusive-load-store');
     expect(features).toContain('system-register-read');
+    // Memory barriers (DMB/DSB/ISB) are no-ops in the single-threaded interpreter.
+    expect(features).toContain('memory-barriers');
     // Phase C/D crypto extension is implemented (bit-exact vs FIPS vectors).
     expect(features).toContain('aes-crypto');
     expect(features).toContain('sha256-crypto');
@@ -173,8 +175,10 @@ describe('NativeEmulatorHandlers — happy path', () => {
     expect(features).toContain('scalar-fp');
     // Phase F NEON integer-lane SIMD is implemented.
     expect(features).toContain('neon-integer-simd');
+    // Contiguous LD1/ST1 of multiple registers (NEON kernels stream rows with these).
+    expect(features).toContain('simd-ld1-st1-multi');
     expect(data.isa).toBe('aarch64-integer+neon+crypto+fp');
-    // The remaining gap (long/widening + saturating NEON variants) is declared, not hidden.
+    // The remaining gap (LD2/3/4 + long/widening + saturating NEON) is declared, not hidden.
     expect(String(data.note)).toMatch(/NEON/);
     expect(String(data.note)).toMatch(/saturating|widening/);
   });
