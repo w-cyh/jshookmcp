@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress';
+import { referenceSidebarItems } from './sidebar-reference-zh.mjs';
 
 export const zh = defineConfig({
   lang: 'zh-CN',
@@ -39,29 +40,7 @@ export const zh = defineConfig({
       '/reference/': [
         {
           text: '参考',
-          items: [
-            { text: '总览', link: '/reference/' },
-            { text: '核心', link: '/reference/domains/core' },
-            { text: '浏览器', link: '/reference/domains/browser' },
-            { text: '协调', link: '/reference/domains/coordination' },
-            { text: '网络', link: '/reference/domains/network' },
-            { text: '工作流', link: '/reference/domains/workflow' },
-            { text: '调试器', link: '/reference/domains/debugger' },
-            { text: '宏', link: '/reference/domains/macro' },
-            { text: '沙盒', link: '/reference/domains/sandbox' },
-            { text: '钩子', link: '/reference/domains/hooks' },
-            { text: '流式', link: '/reference/domains/streaming' },
-            { text: '调用栈/追踪', link: '/reference/domains/trace' },
-            { text: 'WASM', link: '/reference/domains/wasm' },
-            { text: '变换', link: '/reference/domains/transform' },
-            { text: '源映射', link: '/reference/domains/sourcemap' },
-            { text: '进程', link: '/reference/domains/process' },
-            { text: '平台', link: '/reference/domains/platform' },
-            { text: '反反调试', link: '/reference/domains/antidebug' },
-            { text: '编码', link: '/reference/domains/encoding' },
-            { text: '图查询', link: '/reference/domains/graphql' },
-            { text: '维护', link: '/reference/domains/maintenance' },
-          ],
+          items: referenceSidebarItems,
         },
       ],
       '/operations/': [

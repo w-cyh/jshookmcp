@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress';
+import { referenceSidebarItems } from './sidebar-reference-en.mjs';
 
 export const en = defineConfig({
   lang: 'en-US',
@@ -40,29 +41,7 @@ export const en = defineConfig({
       '/en/reference/': [
         {
           text: 'Reference',
-          items: [
-            { text: 'Overview', link: '/en/reference/' },
-            { text: 'Core', link: '/en/reference/domains/core' },
-            { text: 'Browser', link: '/en/reference/domains/browser' },
-            { text: 'Coordination', link: '/en/reference/domains/coordination' },
-            { text: 'Network', link: '/en/reference/domains/network' },
-            { text: 'Workflow', link: '/en/reference/domains/workflow' },
-            { text: 'Debugger', link: '/en/reference/domains/debugger' },
-            { text: 'Macro', link: '/en/reference/domains/macro' },
-            { text: 'Sandbox', link: '/en/reference/domains/sandbox' },
-            { text: 'Hooks', link: '/en/reference/domains/hooks' },
-            { text: 'Streaming', link: '/en/reference/domains/streaming' },
-            { text: 'Trace', link: '/en/reference/domains/trace' },
-            { text: 'WASM', link: '/en/reference/domains/wasm' },
-            { text: 'Transform', link: '/en/reference/domains/transform' },
-            { text: 'SourceMap', link: '/en/reference/domains/sourcemap' },
-            { text: 'Process', link: '/en/reference/domains/process' },
-            { text: 'Platform', link: '/en/reference/domains/platform' },
-            { text: 'AntiDebug', link: '/en/reference/domains/antidebug' },
-            { text: 'Encoding', link: '/en/reference/domains/encoding' },
-            { text: 'GraphQL', link: '/en/reference/domains/graphql' },
-            { text: 'Maintenance', link: '/en/reference/domains/maintenance' },
-          ],
+          items: referenceSidebarItems,
         },
       ],
       '/en/operations/': [
