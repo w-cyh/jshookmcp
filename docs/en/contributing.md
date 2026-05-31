@@ -75,7 +75,7 @@ pnpm run format:docs
 
 - add tests under `tests/server/domains/maintenance/*.test.ts` when you add maintenance tools
 - update `tests/server/ExtensionManager.test.ts` when you change extension loading or security logic
-- update `tests/server/domains/hooks/*.test.ts` when you change hook presets
+- update `tests/server/domains/instrumentation/hooks/*.test.ts` when you change hook presets
 - update `tests/server/domains/workflow/handlers.test.ts` when you change composite workflow handlers
 
 ## Support the project

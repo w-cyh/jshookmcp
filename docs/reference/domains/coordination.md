@@ -2,23 +2,25 @@
 
 域名：`coordination`
 
-用于会话洞察记录与 MCP Task Handoff 的协调域，衔接大语言模型的规划与执行。
+用于会话洞察记录、MCP Task Handoff 与跨 Agent 共享状态板的协调域，衔接大语言模型的规划与执行。
 
 ## Profile
 
+- workflow
 - full
 
 ## 典型场景
 
 - Task Handoff 任务交接
 - 记录会话深度分析结论
+- 跨 Agent 数据共享与状态广播
 
 ## 常见组合
 
 - coordination + workflow
 - coordination + browser
 
-## 工具清单（7）
+## 工具清单（10）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -29,3 +31,6 @@
 | `save_page_snapshot` | 保存当前页面状态快照（URL、Cookie、localStorage、sessionStorage），便于后续恢复。 |
 | `restore_page_snapshot` | 恢复之前保存的页面快照，还原 URL、Cookie 和存储数据。 |
 | `list_page_snapshots` | 列出当前会话中所有已保存的页面快照。 |
+| `state_board` | 统一的共享状态板，用于跨 Agent 的键值协调。 |
+| `state_board_watch` | 监听某个 key 或模式的变化，返回可用于轮询更新的 watch ID。 |
+| `state_board_io` | 导出或导入共享状态板条目。 |

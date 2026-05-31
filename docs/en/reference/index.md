@@ -5,7 +5,7 @@ The following tool domains are available:
 ## Recommended reading order
 
 1. Start with `browser / network / workflow` to understand the day-to-day path.
-2. Continue with `debugger / hooks / streaming` for runtime analysis.
+2. Continue with `debugger / instrumentation / streaming` for runtime analysis.
 3. Finish with `core / sourcemap / transform / wasm / process / platform` for deeper reverse-engineering coverage.
 
 ## Domain matrix
@@ -13,26 +13,20 @@ The following tool domains are available:
 | Domain | Title | Profiles | Typical use |
 | --- | --- | --- | --- |
 | `adb-bridge` | ADB Bridge | full | Android Debug Bridge integration domain for device management, application analysis, and remote debugging. |
-| `antidebug` | AntiDebug | full | Anti-anti-debug domain focused on detecting and bypassing browser-side anti-debugging protections. |
-| `apk-packer` | APK Packer | full | Identify Android APK packer layers by matching `lib/<abi>/lib*.so` filenames against caller-supplied customSignatures (ReDoS-guarded regex compilation). The framework ships no built-in signature table. No unpacking, no dynamic execution, no payload interaction. |
-| `binary-instrument` | Binary Instrument | full | Binary instrumentation domain providing binary analysis and runtime instrumentation capabilities. |
-| `binary-secrets` | Binary Secrets | full | Scan binaries for hardcoded key candidates (raw high-entropy, Base64, hex). Read-only informational output. |
+| `binary-instrument` | Binary Instrument | full | Binary instrumentation domain providing binary analysis, runtime instrumentation, APK packer identification, and hardcoded key candidate scanning. |
 | `boringssl-inspector` | BoringSSL Inspector | workflow, full | BoringSSL/TLS inspection domain supporting TLS traffic analysis and certificate inspection. |
 | `browser` | Browser | workflow, full | Primary browser control and DOM interaction domain; the usual entry point for most workflows. |
-| `canvas` | Canvas | full | Canvas game engine reverse analysis domain supporting Laya, Pixi, Phaser, Cocos, and Unity engines for fingerprinting, scene tree dumping, and object picking. |
-| `coordination` | Coordination | full | Coordination domain for session insights and MCP Task Handoff, bridging the planning and execution boundaries of LLMs. |
+| `canvas` | Canvas | workflow, full | Canvas game engine reverse analysis domain plus Skia rendering capture, supporting Laya, Pixi, Phaser, Cocos, and Unity engines for fingerprinting, scene tree dumping, object picking, and Skia GPU backend detection and scene extraction. |
+| `coordination` | Coordination | workflow, full | Coordination domain for session insights, MCP Task Handoff, and cross-agent shared state board, bridging the planning and execution boundaries of LLMs. |
 | `core` | Core | workflow, full | Core static and semi-static analysis domain for script collection, deobfuscation, semantic inspection, webpack analysis, source map recovery, and crypto detection. |
 | `cross-domain` | Cross-Domain | full | Cross-domain correlation domain that bridges analysis results across multiple domains, supporting workflow orchestration and evidence graph integration. |
 | `dart-inspector` | Dart Inspector | full | Extract and classify strings, recover Smi integer constants, and resolve obfuscated identifiers from Flutter AOT libapp.so using a developer-supplied obfuscation map. |
-| `debugger` | Debugger | workflow, full | CDP-based debugging domain covering breakpoints, stepping, call stacks, watches, and debugger sessions. |
+| `debugger` | Debugger | workflow, full | CDP-based debugging domain covering breakpoints, stepping, call stacks, watches, debugger sessions, and anti-anti-debug. |
 | `encoding` | Encoding | workflow, full | Binary format detection, encoding conversion, entropy analysis, and raw protobuf decoding. |
-| `evidence` | Evidence | full | Evidence-graph domain that models provenance between URLs, scripts, functions, hooks, and captured artifacts. |
 | `extension-registry` | Extension Registry | full | Extension registry domain for managing and discovering community extensions. |
 | `graphql` | GraphQL | workflow, full | GraphQL discovery, extraction, replay, and introspection tooling. |
-| `hooks` | Hooks | full | AI hook generation, injection, export, and built-in/custom preset management. |
-| `instrumentation` | Instrumentation | full | Unified instrumentation-session domain that groups hooks, intercepts, traces, and artifacts into a queryable session. |
-| `macro` | Macro | full | Sub-agent macro orchestration domain that chains multiple tool calls into reusable macro workflows. |
-| `maintenance` | Maintenance | workflow, full | Operations and maintenance domain covering cache hygiene, token budget, environment diagnostics, artifact cleanup, and extension management. |
+| `instrumentation` | Instrumentation | full | Unified instrumentation-session domain that groups hooks, intercepts, traces, evidence graphs, and artifacts into a queryable session. |
+| `maintenance` | Maintenance | workflow, full | Operations and maintenance domain covering cache hygiene, token budget, environment diagnostics, artifact cleanup, extension management, and secure sandbox execution. |
 | `memory` | Memory | full | Memory analysis domain for native scans, pointer-chain discovery, structure inference, and breakpoint-based observation. |
 | `mojo-ipc` | Mojo IPC | full | Mojo IPC monitoring domain for Chromium inter-process communication analysis. |
 | `native-emulator` | Native Emulator | full | In-process, dependency-free self-built ARM64 interpreter for emulating Android `.so` libraries: load a shared object, register mock Java methods, and invoke exported or `Java_*` JNI functions to recover signing/crypto algorithms — no device, JVM, or Frida. Sessions are isolated and explicitly managed (create → … → destroy) with idle auto-expiry. libapp.so (Flutter Dart AOT) is not executable here and routes to the Dart layer. |
@@ -41,9 +35,6 @@ The following tool domains are available:
 | `process` | Process | full | Process, module, memory diagnostics, and controlled injection domain for host-level inspection, troubleshooting, and Windows process experimentation workflows. |
 | `protocol-analysis` | Protocol Analysis | full | Custom protocol analysis domain supporting protocol pattern definition, automatic field detection from hex payloads, state machine inference from captured messages, and Mermaid diagram visualization. |
 | `proxy` | Proxy | full | Full-stack HTTP/HTTPS MITM proxy domain for system-level traffic interception, modification, and application configuration. |
-| `sandbox` | Sandbox | full | WASM-isolated QuickJS sandbox domain for secure custom script execution with MCP tool access. |
-| `shared-state-board` | Shared State Board | workflow, full | Cross-agent state synchronization domain providing a global shared state board for multi-agent collaboration. |
-| `skia-capture` | Skia Capture | workflow, full | Skia rendering engine capture domain for UI rendering analysis and visualization. |
 | `sourcemap` | SourceMap | full | Source map discovery, fetching, parsing, and source tree reconstruction. |
 | `streaming` | Streaming | workflow, full | WebSocket and SSE monitoring domain. |
 | `syscall-hook` | Syscall Hook | full | System call hooking domain providing system call monitoring and mapping capabilities. |
@@ -51,7 +42,7 @@ The following tool domains are available:
 | `transform` | Transform | full | AST/string transform domain plus crypto extraction, harnessing, and comparison tooling. |
 | `v8-inspector` | V8 Inspector | workflow, full | V8 inspector domain providing heap snapshot analysis, CPU profiling, and memory inspection. |
 | `wasm` | WASM | full | WebAssembly dump, disassembly, decompilation, optimization, and offline execution domain. |
-| `workflow` | Workflow | workflow, full | Composite workflow and script-library domain; the main built-in orchestration layer. |
+| `workflow` | Workflow | workflow, full | Composite workflow, script-library, and macro-orchestration domain; the main built-in orchestration layer. |
 
 ## Key high-level entry points
 

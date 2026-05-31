@@ -2,10 +2,11 @@
 
 Domain: `canvas`
 
-Canvas game engine reverse analysis domain supporting Laya, Pixi, Phaser, Cocos, and Unity engines for fingerprinting, scene tree dumping, and object picking.
+Canvas game engine reverse analysis domain plus Skia rendering capture, supporting Laya, Pixi, Phaser, Cocos, and Unity engines for fingerprinting, scene tree dumping, object picking, and Skia GPU backend detection and scene extraction.
 
 ## Profiles
 
+- workflow
 - full
 
 ## Typical scenarios
@@ -14,13 +15,14 @@ Canvas game engine reverse analysis domain supporting Laya, Pixi, Phaser, Cocos,
 - Scene node tree export
 - Coordinate-based object picking
 - Click event handler tracing
+- Skia GPU backend detection and scene extraction
 
 ## Common combinations
 
 - browser + canvas + debugger
-- canvas + evidence + trace
+- canvas + trace
 
-## Full tool list (4)
+## Full tool list (7)
 
 | Tool | Description |
 | --- | --- |
@@ -28,3 +30,6 @@ Canvas game engine reverse analysis domain supporting Laya, Pixi, Phaser, Cocos,
 | `canvas_scene_dump` | Extract the full scene tree / display list from a detected canvas engine. |
 | `canvas_pick_object_at_point` | Pick / hit-test the topmost object at a given screen coordinate using the engine's hit-test system |
 | `canvas_trace_click_handler` | Trace a click event from DOM to JS call stack. |
+| `skia_detect_renderer` | Detect the active Skia renderer backend from the current page context. |
+| `skia_extract_scene` | Extract a lightweight Skia scene tree from the selected canvas. |
+| `skia_correlate_objects` | Correlate requested Skia node identifiers with the extracted scene tree. |

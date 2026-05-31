@@ -296,7 +296,7 @@
   "proxy_setup_adb_device": "通过 ADB 配置 Android 设备流量路由并辅助注入 CA 证书。",
   "browser_list_cdp_targets": "列出当前已连接浏览器目标可见的所有 CDP 目标。",
   "browser_attach_cdp_target": "连接到浏览器中的特定目标，如某个 iframe 或 Worker。",
-  "browser_detach_cdp_target": "断开当前已附加的底层 CDP 目标会话，并将 network/hooks 恢复为常规页面绑定。",
+  "browser_detach_cdp_target": "断开当前已附加的底层 CDP 目标会话，并恢复为常规页面绑定。",
   "browser_evaluate_cdp_target": "在当前已附加的 CDP 目标会话中执行 JavaScript。",
   "tls_probe_endpoint": "连接 TLS 端点并报告证书链基本信息、信任验证结果、ALPN 协商、协议版本、密码套件及 SNI/主机名校验详情，用于授权目标测试。",
   "tcp_open": "建立 TCP 连接，用于后续读写操作。",

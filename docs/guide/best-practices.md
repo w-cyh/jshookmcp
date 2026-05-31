@@ -53,7 +53,7 @@ MCP_TOOL_PROFILE=workflow
 
 | 场景 | 推荐 Profile | 理由 |
 |------|-------------|------|
-| 日常逆向 | `workflow` | 浏览器、网络、调试、Hook 常驻，token 开销适中 |
+| 日常逆向 | `workflow` | 浏览器、网络、调试常驻；需要时再激活 instrumentation，token 开销适中 |
 | 只做搜索/探索 | `search` | 启动时仅注册 8 个元工具，其他域按需 lazy activation，token 最省 |
 | 深度分析（WASM/进程/内存） | `full` | 全域预载，适合重型任务 |
 
@@ -149,7 +149,7 @@ WORKFLOW_BATCH_MAX_TIMEOUT_MS=300000
 **解决**：
 
 1. 切到更高档位：`MCP_TOOL_PROFILE=workflow`
-2. 或运行时调用 `activate_tools(["debugger", "hooks"])`
+2. 或运行时调用 `activate_domain({ domain: "debugger" })` 和 `activate_domain({ domain: "instrumentation" })`
 
 ### Extension 安装失败
 

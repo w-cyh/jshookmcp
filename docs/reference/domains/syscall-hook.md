@@ -17,7 +17,7 @@
 ## 常见组合
 
 - syscall-hook + process
-- syscall-hook + hooks
+- syscall-hook + instrumentation
 
 ## 工具清单（7）
 

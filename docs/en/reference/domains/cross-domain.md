@@ -16,8 +16,8 @@ Cross-domain correlation domain that bridges analysis results across multiple do
 
 ## Common combinations
 
-- cross-domain + evidence
-- cross-domain + v8-inspector + skia-capture
+- cross-domain + instrumentation
+- cross-domain + v8-inspector + canvas
 
 ## Full tool list (6)
 

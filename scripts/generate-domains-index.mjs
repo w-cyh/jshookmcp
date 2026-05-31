@@ -23,18 +23,34 @@ function extractObjectString(source, propName) {
   return m ? m[1] : null;
 }
 
-/**
- * Extract an array literal from source like:
- *   profiles: ['workflow', 'full'],
- */
-function extractStringArray(source, propName) {
-  const re = new RegExp(`${propName}\\s*:\\s*\\[([^\\]]+)\\]`);
+function extractConstArray(source, varName) {
+  const re = new RegExp(`const\\s+${varName}\\s*=\\s*\\[([^\\]]*)\\]`);
   const m = source.match(re);
-  if (!m) return [];
+  if (!m) return null;
   return m[1]
     .split(',')
     .map((s) => s.trim().replace(/['"`]/g, ''))
     .filter(Boolean);
+}
+
+/**
+ * Extract an array literal from source like:
+ *   profiles: ['workflow', 'full'],
+ */
+function extractStringArray(searchSource, propName, fullSource = searchSource) {
+  const re = new RegExp(`${propName}\\s*:\\s*\\[([^\\]]*)\\]`);
+  const m = searchSource.match(re);
+  if (m) {
+    return m[1]
+      .split(',')
+      .map((s) => s.trim().replace(/['"`]/g, ''))
+      .filter(Boolean);
+  }
+
+  const constRef = searchSource.match(new RegExp(`${propName}\\s*:\\s*([A-Z0-9_]+)`));
+  if (!constRef) return [];
+
+  return extractConstArray(fullSource, constRef[1]) ?? [];
 }
 
 function formatLoaderEntry(e) {
@@ -100,14 +116,17 @@ async function main() {
       }
     }
 
+    const manifestStart = source.indexOf('const manifest');
+    const manifestSource = manifestStart >= 0 ? source.slice(manifestStart) : source;
+
     const manifestDomain =
       extractConstString(source, 'DOMAIN') ?? extractObjectString(source, 'domain') ?? domain;
     const depKey =
       extractConstString(source, 'DEP_KEY') ??
-      extractObjectString(source, 'depKey') ??
+      extractObjectString(manifestSource, 'depKey') ??
       `${domain}Handlers`;
-    const profiles = extractStringArray(source, 'profiles');
-    const secondaryDepKeys = extractStringArray(source, 'secondaryDepKeys');
+    const profiles = extractStringArray(manifestSource, 'profiles', source);
+    const secondaryDepKeys = extractStringArray(manifestSource, 'secondaryDepKeys', source);
 
     loaderEntries.push({
       directory: domain,

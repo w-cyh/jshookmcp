@@ -2,7 +2,7 @@
 
 Domain: `maintenance`
 
-Operations and maintenance domain covering cache hygiene, token budget, environment diagnostics, artifact cleanup, and extension management.
+Operations and maintenance domain covering cache hygiene, token budget, environment diagnostics, artifact cleanup, extension management, and secure sandbox execution.
 
 ## Profiles
 
@@ -14,13 +14,14 @@ Operations and maintenance domain covering cache hygiene, token budget, environm
 - Diagnose dependencies
 - Clean retained artifacts
 - Reload plugins and workflows
+- Execute custom scripts in a secure sandbox
 
 ## Common combinations
 
 - maintenance + workflow
 - maintenance + extensions
 
-## Full tool list (12)
+## Full tool list (13)
 
 | Tool | Description |
 | --- | --- |
@@ -36,3 +37,4 @@ Operations and maintenance domain covering cache hygiene, token budget, environm
 | `reload_extensions` | Reload plugins and workflows from configured directories, and directly register extension tools visible in the current profile. |
 | `browse_extension_registry` | Browse the online extension registry for installable plugins and workflows. |
 | `install_extension` | Install an extension from the remote registry. |
+| `execute_sandbox_script` | Execute JavaScript in an isolated sandbox. |

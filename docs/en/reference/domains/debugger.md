@@ -2,7 +2,7 @@
 
 Domain: `debugger`
 
-CDP-based debugging domain covering breakpoints, stepping, call stacks, watches, and debugger sessions.
+CDP-based debugging domain covering breakpoints, stepping, call stacks, watches, debugger sessions, and anti-anti-debug.
 
 ## Profiles
 
@@ -14,13 +14,14 @@ CDP-based debugging domain covering breakpoints, stepping, call stacks, watches,
 - Set and hit breakpoints
 - Evaluate expressions in frames
 - Save and restore debugger sessions
+- Bypass anti-debugging protections
 
 ## Common combinations
 
-- debugger + hooks
-- debugger + antidebug
+- debugger + browser
+- debugger + instrumentation
 
-## Full tool list (16)
+## Full tool list (18)
 
 | Tool | Description |
 | --- | --- |
@@ -40,3 +41,5 @@ CDP-based debugging domain covering breakpoints, stepping, call stacks, watches,
 | `blackbox_add` | Blackbox scripts (skip during debugging) |
 | `blackbox_add_common` | Blackbox all common libraries (one-click) |
 | `blackbox_list` | List script blackbox patterns. |
+| `antidebug_bypass` | Bypass one or more anti-debug protection types. Specify types to apply; omit or use ["all"] to apply all bypasses. Types: all, debugger_statement, timing, stack_trace, console_detect. |
+| `antidebug_detect_protections` | Detect anti-debug protections in current page with bypass recommendations. |

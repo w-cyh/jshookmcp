@@ -2,7 +2,7 @@
 
 域名：`debugger`
 
-基于 CDP 的断点、单步、调用栈、watch 与调试会话管理域。
+基于 CDP 的断点、单步、调用栈、watch、调试会话管理与反反调试域。
 
 ## Profile
 
@@ -14,13 +14,14 @@
 - 断点调试
 - 调用帧求值
 - 调试会话保存/恢复
+- 反调试绕过
 
 ## 常见组合
 
-- debugger + hooks
-- debugger + antidebug
+- debugger + browser
+- debugger + instrumentation
 
-## 工具清单（16）
+## 工具清单（18）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -40,3 +41,5 @@
 | `blackbox_add` | 将脚本加入黑盒列表，调试时自动跳过。 |
 | `blackbox_add_common` | 一键将常见第三方库加入黑盒列表。 |
 | `blackbox_list` | 列出全部黑盒脚本匹配规则。 |
+| `antidebug_bypass` | 绕过指定类型的反调试保护。 |
+| `antidebug_detect_protections` | 检测当前页面的反调试机制并给出绕过建议。 |

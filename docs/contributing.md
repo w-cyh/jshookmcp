@@ -75,7 +75,7 @@ pnpm run format:docs
 
 - 新增维护工具时，补 `tests/server/domains/maintenance/*.test.ts`
 - 修改扩展加载安全逻辑时，补 `tests/server/ExtensionManager.test.ts`
-- 修改 Hook preset 时，补 `tests/server/domains/hooks/*.test.ts`
+- 修改 Hook preset 时，补 `tests/server/domains/instrumentation/hooks/*.test.ts`
 - 修改复合 workflow handler 时，补 `tests/server/domains/workflow/handlers.test.ts`
 
 ## 支持项目

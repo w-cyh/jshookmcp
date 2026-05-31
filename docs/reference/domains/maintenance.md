@@ -2,7 +2,7 @@
 
 域名：`maintenance`
 
-运维与维护域，覆盖缓存、token 预算、环境诊断、产物清理与扩展管理。
+运维与维护域，覆盖缓存、token 预算、环境诊断、产物清理、扩展管理与安全沙箱执行。
 
 ## Profile
 
@@ -14,13 +14,14 @@
 - 依赖诊断
 - 产物清理
 - 扩展热加载
+- 安全脚本执行
 
 ## 常见组合
 
 - maintenance + workflow
 - maintenance + extensions
 
-## 工具清单（12）
+## 工具清单（13）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -36,3 +37,4 @@
 | `reload_extensions` | 从已配置目录重新加载全部插件和工作流。 |
 | `browse_extension_registry` | 浏览远程 jshookmcp 扩展注册表以发现可用插件和工作流。 |
 | `install_extension` | 从远程注册表安装扩展到 jshook 的扩展目录。 |
+| `execute_sandbox_script` | 在隔离沙箱中安全执行自定义 JavaScript 脚本。 |

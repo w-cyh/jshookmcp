@@ -2,7 +2,7 @@
 
 域名：`workflow`
 
-复合工作流与脚本库域，是 built-in 高层编排入口。
+复合工作流、脚本库与宏编排域，是 built-in 高层编排入口。
 
 ## Profile
 
@@ -14,12 +14,13 @@
 - 一键 API 采集
 - 注册与验证流程
 - 批量探测与 bundle 搜索
+- 多步宏编排
 
 ## 常见组合
 
 - workflow + browser + network
 
-## 工具清单（6）
+## 工具清单（8）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -29,3 +30,5 @@
 | `js_bundle_search` | 抓取远程 JavaScript Bundle，并在一次调用中按多个命名正则模式搜索。 |
 | `list_extension_workflows` | 列出已安装的扩展工作流。 |
 | `run_extension_workflow` | 执行指定的扩展工作流。 |
+| `run_macro` | 执行预设的自动化操作序列。 |
+| `list_macros` | 列出所有可用宏（内置和用户自定义），包含名称、描述、标签和步骤数。 |

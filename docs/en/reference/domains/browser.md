@@ -18,7 +18,7 @@ Primary browser control and DOM interaction domain; the usual entry point for mo
 ## Common combinations
 
 - browser + network
-- browser + hooks
+- browser + instrumentation
 - browser + workflow
 
 ## Full tool list (64)

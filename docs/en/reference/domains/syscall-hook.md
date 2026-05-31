@@ -17,7 +17,7 @@ System call hooking domain providing system call monitoring and mapping capabili
 ## Common combinations
 
 - syscall-hook + process
-- syscall-hook + hooks
+- syscall-hook + instrumentation
 
 ## Full tool list (7)
 

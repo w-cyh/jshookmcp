@@ -18,7 +18,7 @@
 ## 常见组合
 
 - browser + network
-- browser + hooks
+- browser + instrumentation
 - browser + workflow
 
 ## 工具清单（64）
@@ -32,7 +32,7 @@
 | `browser_list_cdp_targets` | 列出当前已连接浏览器目标可见的所有 CDP 目标。 |
 | `browser_select_tab` | 切换到指定的标签页，可按索引、URL 或标题模式匹配。 |
 | `browser_attach_cdp_target` | 连接到浏览器中的特定目标，如某个 iframe 或 Worker。 |
-| `browser_detach_cdp_target` | 断开当前已附加的底层 CDP 目标会话，并将 network/hooks 恢复为常规页面绑定。 |
+| `browser_detach_cdp_target` | 断开当前已附加的底层 CDP 目标会话，并恢复为常规页面绑定。 |
 | `browser_evaluate_cdp_target` | 在当前已附加的 CDP 目标会话中执行 JavaScript。 |
 | `browser_launch` | 启动浏览器。 |
 | `browser_close` | 关闭浏览器。 |

@@ -2,7 +2,7 @@
 
 域名：`binary-instrument`
 
-二进制插桩域，提供二进制分析和运行时插桩能力。
+二进制插桩域，提供二进制分析、运行时插桩、APK 加固识别与密钥候选扫描能力。
 
 ## Profile
 
@@ -12,14 +12,15 @@
 
 - 二进制分析
 - 运行时插桩
-- 内存模式检测
+- APK 加固层识别
+- 硬编码密钥候选检测
 
 ## 常见组合
 
 - binary-instrument + memory
 - binary-instrument + process
 
-## 工具清单（24）
+## 工具清单（28）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -47,3 +48,7 @@
 | `export_hook_script` | 将生成的 hook 模板导出为完整可运行的 Frida 脚本。 |
 | `frida_enumerate_functions` | 枚举 Frida 会话中指定模块的导出函数。 |
 | `frida_find_symbols` | 使用 ApiResolver 在 Frida 会话中搜索匹配模式的符号。 |
+| `apk_packer_detect` | 通过匹配 `lib/&lt;abi&gt;/lib*.so` 文件名识别 Android APK 加固层；框架不内置签名表，调用方通过 customSignatures 提供（ReDoS 防护正则编译）。**不脱壳、不动态执行、不与加固载荷交互。** |
+| `apk_packer_list_signatures` | 返回框架当前的签名表（默认为空）。可按 vendor 子串过滤。纯声明式数据查询，无需 APK 输入。 |
+| `apk_signing_block_parse` | 只读解析 APK Signing Block（v2/v3/v3.1/v4 签名方案），检测密钥轮换谱系及残留块/dex 前缀/魔数偏移异常标记。不修改 APK。 |
+| `binary_key_extract` | 扫描二进制文件中的硬编码密钥候选（高熵原始字节、Base64、十六进制）。只读分析，不执行解密。 |
