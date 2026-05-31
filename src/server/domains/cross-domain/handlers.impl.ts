@@ -24,13 +24,12 @@ const V5_DOMAIN_NAMES = [
   'browser',
   'network',
   'canvas',
-  'skia-capture',
   'v8-inspector',
   'mojo-ipc',
   'syscall-hook',
   'binary-instrument',
   'boringssl-inspector',
-  'evidence',
+  'instrumentation',
 ];
 
 export class CrossDomainWorkflowClassifier {
@@ -179,7 +178,7 @@ export class CrossDomainWorkflowClassifier {
     if (toolName.startsWith('tls_') || toolName.startsWith('net_raw_'))
       return ['boringssl-inspector'];
     if (toolName.startsWith('canvas_')) return ['canvas'];
-    if (toolName.startsWith('skia_')) return ['skia-capture'];
+    if (toolName.startsWith('skia_')) return ['canvas'];
     if (toolName.startsWith('v8_')) return ['v8-inspector'];
     if (toolName.startsWith('mojo_')) return ['mojo-ipc'];
     if (toolName.startsWith('syscall_')) return ['syscall-hook'];
@@ -200,7 +199,7 @@ export class CrossDomainWorkflowClassifier {
       return ['cross-domain'];
     }
     if (toolName.startsWith('evidence_')) {
-      return ['evidence'];
+      return ['instrumentation'];
     }
     if (toolName.startsWith('boringssl_')) {
       return ['boringssl-inspector'];

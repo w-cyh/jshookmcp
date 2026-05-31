@@ -4,6 +4,7 @@ import {
   cacheTools,
   extensionTools,
   artifactTools,
+  sandboxTools,
 } from '@server/domains/maintenance/definitions';
 
 describe('maintenance domain definitions', () => {
@@ -12,9 +13,16 @@ describe('maintenance domain definitions', () => {
     expect(Array.isArray(cacheTools)).toBe(true);
     expect(Array.isArray(extensionTools)).toBe(true);
     expect(Array.isArray(artifactTools)).toBe(true);
+    expect(Array.isArray(sandboxTools)).toBe(true);
   });
   it('should have valid tool shapes', async () => {
-    const allTools = [...tokenBudgetTools, ...cacheTools, ...extensionTools, ...artifactTools];
+    const allTools = [
+      ...tokenBudgetTools,
+      ...cacheTools,
+      ...extensionTools,
+      ...artifactTools,
+      ...sandboxTools,
+    ];
     expect(allTools.length).toBeGreaterThan(0);
     for (const tool of allTools) {
       expect(tool.name).toBeDefined();

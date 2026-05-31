@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { RuntimeSnapshotScheduler } from '@server/persistence/RuntimeSnapshotScheduler';
-import { StateBoardStore } from '@server/domains/shared-state-board/handlers/shared';
-import { SharedStateBoardHandlers } from '@server/domains/shared-state-board/index';
+import { StateBoardStore } from '@server/domains/coordination/state-board/handlers/shared';
+import { SharedStateBoardHandlers } from '@server/domains/coordination/state-board';
 import { ReverseEvidenceGraph, resetIdCounter } from '@server/evidence/ReverseEvidenceGraph';
 import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';

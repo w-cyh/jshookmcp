@@ -71,6 +71,41 @@ describe('Profile Restructuring (PROF-01~04)', () => {
     });
   });
 
+  describe('merged domain tier preservation', () => {
+    it('keeps merged full-only tools out of workflow', () => {
+      const workflowTools = new Set(getToolsForProfile('workflow').map((t) => t.name));
+      const fullTools = new Set(getToolsForProfile('full').map((t) => t.name));
+
+      for (const toolName of [
+        'antidebug_bypass',
+        'antidebug_detect_protections',
+        'execute_sandbox_script',
+        'run_macro',
+        'list_macros',
+        'canvas_engine_fingerprint',
+        'create_task_handoff',
+      ]) {
+        expect(workflowTools.has(toolName)).toBe(false);
+        expect(fullTools.has(toolName)).toBe(true);
+      }
+    });
+
+    it('preserves workflow visibility for merged skia and state-board tools', () => {
+      const workflowTools = new Set(getToolsForProfile('workflow').map((t) => t.name));
+
+      for (const toolName of [
+        'skia_detect_renderer',
+        'skia_extract_scene',
+        'skia_correlate_objects',
+        'state_board',
+        'state_board_watch',
+        'state_board_io',
+      ]) {
+        expect(workflowTools.has(toolName)).toBe(true);
+      }
+    });
+  });
+
   describe('buildProfileDomains hierarchy', () => {
     it('validates search ⊂ workflow ⊂ full', () => {
       const searchDomains = getProfileDomains('search');

@@ -263,10 +263,16 @@ export class MCPServer implements MCPServerContext {
     | import('@server/domains/boringssl-inspector/handlers').BoringsslInspectorHandlers
     | undefined;
   declare skiaCaptureHandlers:
-    | import('@server/domains/skia-capture/handlers').SkiaCaptureHandlers
+    | import('@server/domains/canvas/skia').SkiaCaptureHandlers
     | undefined;
   declare binaryInstrumentHandlers:
     | import('@server/domains/binary-instrument/handlers').BinaryInstrumentHandlers
+    | undefined;
+  declare binarySecretsHandlers:
+    | import('@server/domains/binary-instrument/secrets/handlers').BinarySecretsHandlers
+    | undefined;
+  declare apkPackerHandlers:
+    | import('@server/domains/binary-instrument/apk-packer/handlers').ApkPackerHandlers
     | undefined;
   declare adbBridgeHandlers:
     | import('@server/domains/adb-bridge/handlers').ADBBridgeHandlers
@@ -290,9 +296,11 @@ export class MCPServer implements MCPServerContext {
   declare advancedHandlers:
     | import('@server/domains/network/index').AdvancedToolHandlers
     | undefined;
-  declare aiHookHandlers: import('@server/domains/hooks/index').AIHookToolHandlers | undefined;
+  declare aiHookHandlers:
+    | import('@server/domains/instrumentation/hooks/ai-handlers').AIHookToolHandlers
+    | undefined;
   declare hookPresetHandlers:
-    | import('@server/domains/hooks/index').HookPresetToolHandlers
+    | import('@server/domains/instrumentation/hooks/preset-handlers').HookPresetToolHandlers
     | undefined;
   declare deobfuscator: import('@modules/deobfuscator/Deobfuscator').Deobfuscator | undefined;
   declare advancedDeobfuscator:
@@ -324,7 +332,7 @@ export class MCPServer implements MCPServerContext {
     | import('@server/domains/encoding/index').EncodingToolHandlers
     | undefined;
   declare antidebugHandlers:
-    | import('@server/domains/antidebug/index').AntiDebugToolHandlers
+    | import('@server/domains/debugger/antidebug/index').AntiDebugToolHandlers
     | undefined;
   declare graphqlHandlers: import('@server/domains/graphql/index').GraphQLToolHandlers | undefined;
   declare platformHandlers:
@@ -339,7 +347,9 @@ export class MCPServer implements MCPServerContext {
   declare coordinationHandlers:
     | import('@server/domains/coordination/index').CoordinationHandlers
     | undefined;
-  declare evidenceHandlers: import('@server/domains/evidence/index').EvidenceHandlers | undefined;
+  declare evidenceHandlers:
+    | import('@server/domains/instrumentation/evidence/handlers').EvidenceHandlers
+    | undefined;
   declare instrumentationHandlers:
     | import('@server/domains/instrumentation/index').InstrumentationHandlers
     | undefined;
@@ -923,6 +933,8 @@ const DOMAIN_INSTANCE_KEYS: ReadonlyArray<
   'boringsslInspectorHandlers',
   'skiaCaptureHandlers',
   'binaryInstrumentHandlers',
+  'binarySecretsHandlers',
+  'apkPackerHandlers',
   'adbBridgeHandlers',
   'mojoIpcHandlers',
   'syscallHookHandlers',
@@ -943,8 +955,10 @@ const DOMAIN_INSTANCE_KEYS: ReadonlyArray<
   'coreAnalysisHandlers',
   'coreMaintenanceHandlers',
   'extensionManagementHandlers',
+  'sandboxHandlers',
   'processHandlers',
   'workflowHandlers',
+  'macroHandlers',
   'wasmHandlers',
   'streamingHandlers',
   'encodingHandlers',
@@ -954,6 +968,7 @@ const DOMAIN_INSTANCE_KEYS: ReadonlyArray<
   'sourcemapHandlers',
   'transformHandlers',
   'coordinationHandlers',
+  'sharedStateBoardHandlers',
   'evidenceHandlers',
   'instrumentationHandlers',
 ];

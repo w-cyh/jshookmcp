@@ -69,7 +69,7 @@ vi.mock('@utils/logger', () => ({
 }));
 
 // Antidebug scripts
-vi.mock('@server/domains/antidebug/scripts', () => ({
+vi.mock('@server/domains/debugger/antidebug/scripts', () => ({
   ANTI_DEBUG_SCRIPTS: {
     bypassDebuggerStatement: '/* bypass debugger */',
     bypassTiming: '/* bypass timing */',
@@ -79,7 +79,7 @@ vi.mock('@server/domains/antidebug/scripts', () => ({
   },
 }));
 
-vi.mock('@server/domains/antidebug/scripts.data', () => ({
+vi.mock('@server/domains/debugger/antidebug/scripts.data', () => ({
   ANTI_DEBUG_SCRIPTS: {
     bypassDebuggerStatement: '/* bypass debugger */',
     bypassTiming: '/* bypass timing */',
@@ -160,11 +160,11 @@ vi.mock('@server/domains/platform/handlers/bridge-handlers', () => ({
 }));
 
 // Hooks dependencies
-vi.mock('@server/domains/hooks/preset-definitions', () => ({
+vi.mock('@server/domains/instrumentation/hooks/preset-definitions', () => ({
   PRESETS: {},
   PRESET_LIST: [],
 }));
-vi.mock('@server/domains/hooks/preset-builder', () => ({
+vi.mock('@server/domains/instrumentation/hooks/preset-builder', () => ({
   buildHookCode: vi.fn(),
 }));
 
@@ -461,20 +461,20 @@ describe('Domain handler delegation (handlers.ts)', () => {
   // Antidebug handlers.ts: full class with actual logic
   describe('antidebug/handlers.ts', () => {
     it('exports AntiDebugToolHandlers as a constructor', async () => {
-      const mod = await import('@server/domains/antidebug/handlers');
+      const mod = await import('@server/domains/debugger/antidebug/handlers');
       expect(mod.AntiDebugToolHandlers).toBeDefined();
       expect(typeof mod.AntiDebugToolHandlers).toBe('function');
     });
 
     it('can be instantiated with a collector', async () => {
-      const mod = await import('@server/domains/antidebug/handlers');
+      const mod = await import('@server/domains/debugger/antidebug/handlers');
       const mockCollector = { getActivePage: vi.fn() } as never;
       const instance = new mod.AntiDebugToolHandlers(mockCollector);
       expect(instance).toBeDefined();
     });
 
     it('has expected handler methods', async () => {
-      const mod = await import('@server/domains/antidebug/handlers');
+      const mod = await import('@server/domains/debugger/antidebug/handlers');
       const mockCollector = { getActivePage: vi.fn() } as never;
       const instance = new mod.AntiDebugToolHandlers(mockCollector);
 
@@ -571,7 +571,7 @@ describe('Domain handler delegation (handlers.ts)', () => {
   // Hooks handlers
   describe('hooks/ai-handlers.ts', () => {
     it('exports AIHookToolHandlers as a constructor', async () => {
-      const mod = await import('@server/domains/hooks/ai-handlers');
+      const mod = await import('@server/domains/instrumentation/hooks/ai-handlers');
       expect(mod.AIHookToolHandlers).toBeDefined();
       expect(typeof mod.AIHookToolHandlers).toBe('function');
     });
@@ -579,7 +579,7 @@ describe('Domain handler delegation (handlers.ts)', () => {
 
   describe('hooks/preset-handlers.ts', () => {
     it('exports HookPresetToolHandlers as a constructor', async () => {
-      const mod = await import('@server/domains/hooks/preset-handlers');
+      const mod = await import('@server/domains/instrumentation/hooks/preset-handlers');
       expect(mod.HookPresetToolHandlers).toBeDefined();
       expect(typeof mod.HookPresetToolHandlers).toBe('function');
     });

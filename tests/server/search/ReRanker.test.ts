@@ -21,12 +21,12 @@ function makeToolMetadata(overrides: Partial<ToolMetadata> & { name: string }): 
 const SAMPLE_TOOLS: ToolMetadata[] = [
   makeToolMetadata({
     name: 'hook_install_fetch',
-    domain: 'hooks',
+    domain: 'instrumentation',
     description: 'Install and intercept fetch requests with trap and patch',
   }),
   makeToolMetadata({
     name: 'hook_install_xhr',
-    domain: 'hooks',
+    domain: 'instrumentation',
     description: 'Hook and intercept XMLHttpRequest calls',
   }),
   makeToolMetadata({
@@ -116,7 +116,7 @@ const SAMPLE_TOOLS: ToolMetadata[] = [
   }),
   makeToolMetadata({
     name: 'antidebug_detect_devtools',
-    domain: 'antidebug',
+    domain: 'debugger',
     description: 'Antidebug detect devtools anti protection bypass',
   }),
 ];
@@ -217,7 +217,7 @@ describe('search/ReRanker', () => {
       makeInput({
         toolName: 'hook_intercept',
         score: 5,
-        domain: 'hooks',
+        domain: 'instrumentation',
         description: 'Intercept function calls',
       }),
       makeInput({
@@ -267,13 +267,13 @@ describe('search/ReRanker', () => {
       makeInput({
         toolName: 'hook_install',
         score: 1,
-        domain: 'hooks',
+        domain: 'instrumentation',
         description: 'Install a hook',
       }),
       makeInput({
         toolName: 'hook_remove',
         score: 1,
-        domain: 'hooks',
+        domain: 'instrumentation',
         description: 'Remove a hook but has hook in description too',
       }),
     ];
@@ -325,12 +325,12 @@ describe('search/ReRanker', () => {
     reRanker.buildFromTools([
       makeToolMetadata({
         name: 'hook_install_fetch',
-        domain: 'hooks',
+        domain: 'instrumentation',
         description: 'Hook intercept fetch requests',
       }),
       makeToolMetadata({
         name: 'hook_remove_trap',
-        domain: 'hooks',
+        domain: 'instrumentation',
         description: 'Remove hook trap intercept',
       }),
       makeToolMetadata({
@@ -350,7 +350,7 @@ describe('search/ReRanker', () => {
       makeInput({
         toolName: 'hook_install_fetch',
         score: 2,
-        domain: 'hooks',
+        domain: 'instrumentation',
         description: 'Hook intercept fetch',
       }),
     ];

@@ -48,7 +48,7 @@ vi.mock('@server/domains/shared/modules', () => ({
   StealthScripts: mockClass(),
 }));
 
-vi.mock('@server/domains/antidebug/scripts', () => ({
+vi.mock('@server/domains/debugger/antidebug/scripts', () => ({
   ANTI_DEBUG_SCRIPTS: {
     bypassDebuggerStatement: '(function(){/* bypass __ANTI_DEBUG_MODE__ */})()',
     bypassTiming: '(function(){/* timing __ANTI_DEBUG_MAX_DRIFT__ */})()',
@@ -58,7 +58,7 @@ vi.mock('@server/domains/antidebug/scripts', () => ({
   },
 }));
 
-vi.mock('@server/domains/antidebug/scripts.data', () => ({
+vi.mock('@server/domains/debugger/antidebug/scripts.data', () => ({
   ANTI_DEBUG_SCRIPTS: {
     bypassDebuggerStatement: '(function(){/* bypass __ANTI_DEBUG_MODE__ */})()',
     bypassTiming: '(function(){/* timing __ANTI_DEBUG_MAX_DRIFT__ */})()',
@@ -108,11 +108,11 @@ vi.mock('@server/domains/platform/handlers/bridge-handlers', () => ({
 // ── AntiDebugToolHandlers tests ──
 
 describe('AntiDebugToolHandlers', () => {
-  let AntiDebugToolHandlers: typeof import('@server/domains/antidebug/handlers').AntiDebugToolHandlers;
+  let AntiDebugToolHandlers: typeof import('@server/domains/debugger/antidebug/handlers').AntiDebugToolHandlers;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    const mod = await import('@server/domains/antidebug/handlers');
+    const mod = await import('@server/domains/debugger/antidebug/handlers');
     AntiDebugToolHandlers = mod.AntiDebugToolHandlers;
   });
 

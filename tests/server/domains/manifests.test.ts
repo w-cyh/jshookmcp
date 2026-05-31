@@ -74,7 +74,7 @@ vi.mock('@server/domains/analysis/index', () => ({
   },
 }));
 
-vi.mock('@server/domains/antidebug/index', () => ({
+vi.mock('@server/domains/debugger/antidebug/index', () => ({
   AntiDebugToolHandlers: function () {
     return { _mock: 'AntiDebugToolHandlers' };
   },
@@ -104,7 +104,7 @@ vi.mock('@server/domains/graphql/index', () => ({
   },
 }));
 
-vi.mock('@server/domains/hooks/index', () => ({
+vi.mock('@server/domains/instrumentation/hooks/index', () => ({
   AIHookToolHandlers: function () {
     return { _mock: 'AIHookToolHandlers' };
   },
@@ -119,6 +119,9 @@ vi.mock('@server/domains/maintenance/index', () => ({
   },
   ExtensionManagementHandlers: function () {
     return { _mock: 'ExtensionManagementHandlers' };
+  },
+  SandboxToolHandlers: function () {
+    return { _mock: 'SandboxToolHandlers' };
   },
 }));
 
@@ -173,12 +176,11 @@ vi.mock('@server/domains/workflow/index', () => ({
 // ── Manifest imports ────────────────────────────────────────────────────────
 
 import analysisManifest from '@server/domains/analysis/manifest';
-import antidebugManifest from '@server/domains/antidebug/manifest';
 import browserManifest from '@server/domains/browser/manifest';
 import debuggerManifest from '@server/domains/debugger/manifest';
 import encodingManifest from '@server/domains/encoding/manifest';
 import graphqlManifest from '@server/domains/graphql/manifest';
-import hooksManifest from '@server/domains/hooks/manifest';
+import hooksManifest from '@server/domains/instrumentation/manifest';
 import maintenanceManifest from '@server/domains/maintenance/manifest';
 import networkManifest from '@server/domains/network/manifest';
 import platformManifest from '@server/domains/platform/manifest';
@@ -206,6 +208,7 @@ interface ManifestLike {
 }
 
 function mockContext(): Record<string, unknown> {
+  const domainInstanceMap = new Map<string, unknown>();
   return {
     config: { puppeteer: {}, llm: {} },
     llm: { _mock: 'llm' },
@@ -219,6 +222,12 @@ function mockContext(): Record<string, unknown> {
     pageController: { _mock: 'pageController' },
     domInspector: { _mock: 'domInspector' },
     consoleMonitor: { _mock: 'consoleMonitor' },
+    // Domain instance store for instrumentation ensure()
+    domainInstanceMap,
+    getDomainInstance: (key: string) => domainInstanceMap.get(key),
+    setDomainInstance: (key: string, value: unknown) => {
+      domainInstanceMap.set(key, value);
+    },
     // Workflow manifest accesses handlerDeps proxy
     handlerDeps: new Proxy(
       {},
@@ -226,6 +235,7 @@ function mockContext(): Record<string, unknown> {
         get: (_target, prop) => {
           if (prop === 'browserHandlers') return { _mock: 'browserHandlers' };
           if (prop === 'advancedHandlers') return { _mock: 'advancedHandlers' };
+          if (prop === 'hookPresetHandlers') return { handleHookPreset: vi.fn() };
           return undefined;
         },
       },
@@ -246,12 +256,6 @@ const ALL_MANIFESTS: Array<{
     manifest: analysisManifest as unknown as ManifestLike,
     expectedDomain: 'core',
     expectedDepKey: 'coreAnalysisHandlers',
-  },
-  {
-    label: 'antidebug',
-    manifest: antidebugManifest as unknown as ManifestLike,
-    expectedDomain: 'antidebug',
-    expectedDepKey: 'antidebugHandlers',
   },
   {
     label: 'browser',
@@ -278,10 +282,10 @@ const ALL_MANIFESTS: Array<{
     expectedDepKey: 'graphqlHandlers',
   },
   {
-    label: 'hooks',
+    label: 'instrumentation',
     manifest: hooksManifest as unknown as ManifestLike,
-    expectedDomain: 'hooks',
-    expectedDepKey: 'aiHookHandlers',
+    expectedDomain: 'instrumentation',
+    expectedDepKey: 'instrumentationHandlers',
   },
   {
     label: 'maintenance',
@@ -433,19 +437,18 @@ describe('domain manifests', () => {
     });
   });
 
-  // Verify all 16 domains are covered
-  it('covers all 16 domains', async () => {
-    expect(ALL_MANIFESTS).toHaveLength(16);
+  // Verify all 15 domains are covered
+  it('covers all 15 domains', async () => {
+    expect(ALL_MANIFESTS).toHaveLength(15);
     const domains = new Set(ALL_MANIFESTS.map((m) => m.label));
     expect(domains).toEqual(
       new Set([
         'analysis',
-        'antidebug',
         'browser',
         'debugger',
         'encoding',
         'graphql',
-        'hooks',
+        'instrumentation',
         'maintenance',
         'network',
         'platform',

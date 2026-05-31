@@ -1,5 +1,7 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { tool } from '@server/registry/tool-builder';
+import { apkPackerTools } from './apk-packer/definitions';
+import { binarySecretsTools } from './secrets/definitions';
 
 export const binaryInstrumentTools: Tool[] = [
   tool('binary_instrument_capabilities', (t) =>
@@ -192,4 +194,6 @@ export const binaryInstrumentTools: Tool[] = [
       .required('decompileDir', 'query')
       .query(),
   ),
+  ...apkPackerTools,
+  ...binarySecretsTools,
 ];

@@ -50,7 +50,7 @@ vi.mock('@server/domains/analysis/index', () => ({
   CoreAnalysisHandlers: vi.fn(),
 }));
 
-vi.mock('@server/domains/antidebug/index', () => ({
+vi.mock('@server/domains/debugger/antidebug/index', () => ({
   AntiDebugToolHandlers: vi.fn(),
 }));
 
@@ -70,7 +70,7 @@ vi.mock('@server/domains/graphql/index', () => ({
   GraphQLToolHandlers: vi.fn(),
 }));
 
-vi.mock('@server/domains/hooks/index', () => ({
+vi.mock('@server/domains/instrumentation/hooks/index', () => ({
   AIHookToolHandlers: vi.fn(),
   HookPresetToolHandlers: vi.fn(),
 }));

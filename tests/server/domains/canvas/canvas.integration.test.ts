@@ -191,6 +191,7 @@ vi.mock('@server/domains/canvas/handlers', () => ({
 
 import manifest from '@server/domains/canvas/manifest';
 import { canvasTools } from '@server/domains/canvas/definitions';
+import { skiaTools } from '@server/domains/canvas/skia/definitions';
 import { TEST_URLS, withPath } from '@tests/shared/test-urls';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -240,10 +241,10 @@ describe('canvas domain manifest', () => {
       expect(manifest.depKey).toBe('canvasHandlers');
     });
 
-    it('profiles include only "full"', async () => {
+    it('profiles include "workflow" and "full"', async () => {
       expect(manifest.profiles).toContain('full');
-      expect(manifest.profiles).not.toContain('workflow');
-      expect(manifest.profiles).toHaveLength(1);
+      expect(manifest.profiles).toContain('workflow');
+      expect(manifest.profiles).toHaveLength(2);
     });
 
     it('ensure is a function', async () => {
@@ -275,6 +276,32 @@ describe('canvas domain manifest', () => {
       expect(manifest.workflowRule.tools).toContain('canvas_scene_dump');
       expect(manifest.workflowRule.tools).toContain('canvas_pick_object_at_point');
       expect(manifest.workflowRule.tools).toContain('canvas_trace_click_handler');
+      expect(manifest.workflowRule.tools).toContain('skia_detect_renderer');
+      expect(manifest.workflowRule.tools).toContain('skia_extract_scene');
+      expect(manifest.workflowRule.tools).toContain('skia_correlate_objects');
+    });
+
+    it('keeps canvas-native tools full-only while leaving skia tools in workflow', async () => {
+      const registrationsByName = new Map(
+        manifest.registrations.map((registration) => [registration.tool.name, registration]),
+      );
+
+      for (const toolName of [
+        'canvas_engine_fingerprint',
+        'canvas_scene_dump',
+        'canvas_pick_object_at_point',
+        'canvas_trace_click_handler',
+      ]) {
+        expect(registrationsByName.get(toolName)?.profiles).toEqual(['full']);
+      }
+
+      for (const toolName of [
+        'skia_detect_renderer',
+        'skia_extract_scene',
+        'skia_correlate_objects',
+      ]) {
+        expect(registrationsByName.get(toolName)?.profiles).toBeUndefined();
+      }
     });
 
     it('has priority 80', async () => {
@@ -323,8 +350,8 @@ describe('canvas domain manifest', () => {
   // ── 4. Tool registrations ────────────────────────────────────────────────
 
   describe('registrations', () => {
-    it('has exactly 4 tool registrations', async () => {
-      expect(manifest.registrations).toHaveLength(4);
+    it('has exactly 7 tool registrations (4 canvas + 3 skia)', async () => {
+      expect(manifest.registrations).toHaveLength(7);
     });
 
     it('all registrations reference domain "canvas"', async () => {
@@ -372,7 +399,7 @@ describe('canvas domain manifest', () => {
 
     it('registration tool names match definitions export', async () => {
       const registrationNames = new Set(manifest.registrations.map(getToolName));
-      const definitionNames = new Set(canvasTools.map((t) => t.name));
+      const definitionNames = new Set([...canvasTools, ...skiaTools].map((t) => t.name));
       expect(registrationNames).toEqual(definitionNames);
     });
   });

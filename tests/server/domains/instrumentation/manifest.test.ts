@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import manifest from '@server/domains/instrumentation/manifest';
+
+vi.mock('@server/registry/ensure-browser-core', () => ({
+  ensureBrowserCore: vi.fn((ctx: Record<string, unknown>) => {
+    if (!ctx.collector) ctx.collector = { on: vi.fn(), _mock: 'collector' };
+    if (!ctx.pageController) ctx.pageController = { _mock: 'pageController' };
+    if (!ctx.domInspector) ctx.domInspector = { _mock: 'domInspector' };
+    if (!ctx.scriptManager) ctx.scriptManager = { _mock: 'scriptManager' };
+    if (!ctx.consoleMonitor) ctx.consoleMonitor = { _mock: 'consoleMonitor' };
+  }),
+}));
 
 describe('instrumentation manifest', () => {
   it('has kind "domain-manifest" and version 1', async () => {
@@ -17,6 +27,12 @@ describe('instrumentation manifest', () => {
     expect(manifest.profiles).not.toContain('search');
   });
 
+  it('has secondaryDepKeys for hooks and evidence', async () => {
+    expect(manifest.secondaryDepKeys).toContain('aiHookHandlers');
+    expect(manifest.secondaryDepKeys).toContain('hookPresetHandlers');
+    expect(manifest.secondaryDepKeys).toContain('evidenceHandlers');
+  });
+
   it('registers the expected instrumentation tools without hard-coded count coupling', async () => {
     const names = manifest.registrations.map((r) => r.tool.name);
     expect(new Set(names).size).toBe(names.length);
@@ -25,6 +41,11 @@ describe('instrumentation manifest', () => {
     expect(names).toContain('instrumentation_artifact');
     expect(names).toContain('instrumentation_hook_preset');
     expect(names).toContain('instrumentation_network_replay');
+    expect(names).toContain('ai_hook');
+    expect(names).toContain('hook_preset');
+    expect(names).toContain('evidence_query');
+    expect(names).toContain('evidence_export');
+    expect(names).toContain('evidence_chain');
   });
 
   it('workflowRule patterns match instrumentation keywords', async () => {
@@ -35,6 +56,9 @@ describe('instrumentation manifest', () => {
     expect(patterns.some((p) => p.test('intercept unified'))).toBe(true);
     expect(patterns.some((p) => p.test('trace session'))).toBe(true);
     expect(patterns.some((p) => p.test('instrument all apis'))).toBe(true);
+    // Evidence patterns
+    expect(patterns.some((p) => p.test('evidence graph query'))).toBe(true);
+    expect(patterns.some((p) => p.test('provenance chain report'))).toBe(true);
   });
 
   it('depKey is "instrumentationHandlers"', async () => {
@@ -45,7 +69,11 @@ describe('instrumentation manifest', () => {
     // Create a minimal context mock
     const domainInstanceMap = new Map<string, unknown>();
     const ctx = {
+      config: { puppeteer: {} },
       instrumentationHandlers: undefined,
+      aiHookHandlers: undefined,
+      hookPresetHandlers: undefined,
+      evidenceHandlers: undefined,
       handlerDeps: {
         hookPresetHandlers: {
           handleHookPreset: async () => ({ content: [{ type: 'text', text: '{}' }] }),

@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => {
     tool('network_replay_request', 'Replay a captured request'),
     tool('debugger_lifecycle', 'Enable the debugger'),
     tool('detect_crypto', 'Detect cryptographic code'),
-    tool('ai_hook_inject', 'Inject a runtime hook'),
+    tool('ai_hook', 'Manage runtime hooks'),
     tool('binary_detect_format', 'Detect binary format'),
     tool('binary_decode', 'Decode binary data'),
     tool('proto_auto_detect', 'Auto-detect a protocol pattern'),
@@ -49,7 +49,7 @@ const mocks = vi.hoisted(() => {
     tool('sourcemap_fetch_and_parse', 'Fetch and parse a source map'),
     tool('sourcemap_reconstruct_tree', 'Reconstruct the source tree'),
     tool('antidebug_detect_protections', 'Detect anti-debug protections'),
-    tool('antidebug_bypass_all', 'Apply anti-debug bypasses'),
+    tool('antidebug_bypass', 'Apply anti-debug bypasses'),
     tool('get_token_budget_stats', 'Inspect token budget state'),
     tool('run_extension_workflow', 'Execute extension workflow'),
     tool('list_extension_workflows', 'List loaded extension workflows'),
@@ -71,7 +71,7 @@ const mocks = vi.hoisted(() => {
     ['network_replay_request', 'network'],
     ['debugger_lifecycle', 'debugger'],
     ['detect_crypto', 'core'],
-    ['ai_hook_inject', 'hooks'],
+    ['ai_hook', 'instrumentation'],
     ['binary_detect_format', 'encoding'],
     ['binary_decode', 'encoding'],
     ['proto_auto_detect', 'protocol-analysis'],
@@ -80,8 +80,8 @@ const mocks = vi.hoisted(() => {
     ['sourcemap_discover', 'sourcemap'],
     ['sourcemap_fetch_and_parse', 'sourcemap'],
     ['sourcemap_reconstruct_tree', 'sourcemap'],
-    ['antidebug_detect_protections', 'antidebug'],
-    ['antidebug_bypass_all', 'antidebug'],
+    ['antidebug_detect_protections', 'debugger'],
+    ['antidebug_bypass', 'debugger'],
     ['get_token_budget_stats', 'maintenance'],
     ['run_extension_workflow', 'workflow'],
     ['list_extension_workflows', 'workflow'],
@@ -379,7 +379,7 @@ describe('ToolRouter', () => {
                 /(api|request)\s*(sign|签名|加签)/i,
                 /(找|定位|逆向).*(签名|sign)/i,
               ],
-              requiredDomains: ['network', 'debugger', 'hooks', 'core'],
+              requiredDomains: ['network', 'debugger', 'instrumentation', 'core'],
               priority: 95,
               steps: [
                 {
@@ -412,7 +412,7 @@ describe('ToolRouter', () => {
                 },
                 {
                   id: 'hook',
-                  toolName: 'ai_hook_inject',
+                  toolName: 'ai_hook',
                   description:
                     'Inject a hook for the candidate signing function once the hook code is ready',
                   prerequisites: ['locate'],
@@ -434,7 +434,7 @@ describe('ToolRouter', () => {
                 /(api|request)\s*(sign|签名|加签)/i,
                 /(找|定位|逆向).*(签名|sign)/i,
               ],
-              requiredDomains: ['network', 'debugger', 'hooks', 'core'],
+              requiredDomains: ['network', 'debugger', 'instrumentation', 'core'],
               priority: 95,
               steps: [
                 {
@@ -467,7 +467,7 @@ describe('ToolRouter', () => {
                 },
                 {
                   id: 'hook',
-                  toolName: 'ai_hook_inject',
+                  toolName: 'ai_hook',
                   description:
                     'Inject a hook for the candidate signing function once the hook code is ready',
                   prerequisites: ['locate'],
@@ -487,7 +487,7 @@ describe('ToolRouter', () => {
                   /(api|request)\s*(sign|签名|加签)/i,
                   /(找|定位|逆向).*(签名|sign)/i,
                 ],
-                requiredDomains: ['network', 'debugger', 'hooks', 'core'],
+                requiredDomains: ['network', 'debugger', 'instrumentation', 'core'],
                 priority: 95,
                 steps: [
                   {
@@ -521,7 +521,7 @@ describe('ToolRouter', () => {
                   },
                   {
                     id: 'hook',
-                    toolName: 'ai_hook_inject',
+                    toolName: 'ai_hook',
                     description:
                       'Inject a hook for the candidate signing function once the hook code is ready',
                     prerequisites: ['locate'],
@@ -560,7 +560,7 @@ describe('ToolRouter', () => {
       action: 'activate',
       toolName: undefined,
       command:
-        'activate_tools with names: ["browser_attach", "browser_launch", "network_monitor", "network_get_requests", "debugger_lifecycle", "detect_crypto", "ai_hook_inject"]',
+        'activate_tools with names: ["browser_attach", "browser_launch", "network_monitor", "network_get_requests", "debugger_lifecycle", "detect_crypto", "ai_hook"]',
       description: 'Activate 7 preset tools for 签名定位 / Signature Locate',
     });
     expect(response.nextActions[1]).toEqual({

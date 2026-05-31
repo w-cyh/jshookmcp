@@ -5,20 +5,29 @@ import {
   cacheTools,
   extensionTools,
   artifactTools,
+  sandboxTools,
 } from '@server/domains/maintenance/definitions';
 import type {
   CoreMaintenanceHandlers,
   ExtensionManagementHandlers,
+  SandboxToolHandlers,
 } from '@server/domains/maintenance/index';
 
 const DOMAIN = 'maintenance' as const;
 const DEP_KEY = 'coreMaintenanceHandlers' as const;
 const EXT_DEP_KEY = 'extensionManagementHandlers' as const;
+const SANDBOX_DEP_KEY = 'sandboxHandlers' as const;
 type H = CoreMaintenanceHandlers;
 type E = ExtensionManagementHandlers;
+type S = SandboxToolHandlers;
 const coreToolDefinitions = [...tokenBudgetTools, ...cacheTools, ...artifactTools] as const;
 const extensionToolDefinitions = [...extensionTools] as const;
-const t = toolLookup([...coreToolDefinitions, ...extensionToolDefinitions]);
+const sandboxToolDefinitions = [...sandboxTools] as const;
+const t = toolLookup([
+  ...coreToolDefinitions,
+  ...extensionToolDefinitions,
+  ...sandboxToolDefinitions,
+]);
 const coreRegistrations = defineMethodRegistrations<
   H,
   (typeof coreToolDefinitions)[number]['name']
@@ -95,10 +104,26 @@ const extensionRegistrations = defineMethodRegistrations<
   ],
 });
 
+const sandboxRegistrations = defineMethodRegistrations<
+  S,
+  (typeof sandboxToolDefinitions)[number]['name']
+>({
+  domain: DOMAIN,
+  depKey: SANDBOX_DEP_KEY,
+  lookup: t,
+  entries: [
+    {
+      tool: 'execute_sandbox_script',
+      method: 'handleExecuteSandboxScript',
+      profiles: ['full'],
+    },
+  ],
+});
+
 async function ensure(ctx: MCPServerContext): Promise<H> {
-  const { CoreMaintenanceHandlers, ExtensionManagementHandlers } =
+  const { CoreMaintenanceHandlers, ExtensionManagementHandlers, SandboxToolHandlers } =
     await import('@server/domains/maintenance/index');
-  if (!ctx.coreMaintenanceHandlers || !ctx.extensionManagementHandlers) {
+  if (!ctx.coreMaintenanceHandlers || !ctx.extensionManagementHandlers || !ctx.sandboxHandlers) {
     if (!ctx.coreMaintenanceHandlers) {
       ctx.coreMaintenanceHandlers = new CoreMaintenanceHandlers({
         tokenBudget: ctx.tokenBudget,
@@ -107,6 +132,9 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
     }
     if (!ctx.extensionManagementHandlers) {
       ctx.extensionManagementHandlers = new ExtensionManagementHandlers(ctx);
+    }
+    if (!ctx.sandboxHandlers) {
+      ctx.sandboxHandlers = new SandboxToolHandlers(ctx);
     }
   }
   return ctx.coreMaintenanceHandlers;
@@ -117,10 +145,10 @@ const manifest = {
   version: 1,
   domain: DOMAIN,
   depKey: DEP_KEY,
-  secondaryDepKeys: ['extensionManagementHandlers'],
+  secondaryDepKeys: ['extensionManagementHandlers', 'sandboxHandlers'],
   profiles: ['workflow', 'full'],
   ensure,
-  registrations: [...coreRegistrations, ...extensionRegistrations],
+  registrations: [...coreRegistrations, ...extensionRegistrations, ...sandboxRegistrations],
 } satisfies DomainManifest<typeof DEP_KEY, H, typeof DOMAIN>;
 
 export default manifest;

@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
     tool('browser_launch', 'Launch browser'),
     tool('page_navigate', 'Navigate page'),
     tool('network_get_requests', 'Inspect requests'),
-    tool('hooks_probe', 'Probe hook state'),
+    tool('ai_hook', 'Manage runtime hooks'),
   ],
   registrations: [
     { domain: 'browser', tool: tool('browser_launch') },
@@ -31,7 +31,7 @@ vi.mock('@server/ToolCatalog', () => ({
   getToolDomain: vi.fn((name: string) => {
     if (name.startsWith('browser_') || name.startsWith('page_')) return 'browser';
     if (name.startsWith('network_')) return 'network';
-    if (name.startsWith('hooks_')) return 'hooks';
+    if (name === 'ai_hook' || name.startsWith('hook_')) return 'instrumentation';
     return null;
   }),
 }));
@@ -100,7 +100,7 @@ describe('MCPServer.search.helpers', () => {
   it('treats enabled, activated, and extension tool domains as visible', () => {
     const ctx = createCtx({
       enabledDomains: new Set(['network']),
-      activatedToolNames: new Set(['hooks_probe']),
+      activatedToolNames: new Set(['ai_hook']),
       extensionToolsByName: new Map([
         [
           'run_extension_workflow',
@@ -114,7 +114,7 @@ describe('MCPServer.search.helpers', () => {
     });
 
     expect(getVisibleDomainsForTier(ctx)).toEqual(
-      new Set(['browser', 'network', 'hooks', 'workflow']),
+      new Set(['browser', 'network', 'instrumentation', 'workflow']),
     );
   });
 

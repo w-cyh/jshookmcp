@@ -101,7 +101,8 @@ export function resolveSearchQualityToolDomain(name: string): string | null {
     return 'transform';
   if (name.startsWith('memory_') || name.startsWith('heap_')) return 'memory';
   if (name.startsWith('process_')) return 'process';
-  if (name.startsWith('hook_')) return 'hooks';
+  if (name.startsWith('hook_') || name.startsWith('ai_hook_') || name.startsWith('evidence_'))
+    return 'instrumentation';
   if (name.startsWith('encode_') || name.startsWith('decode_') || name.startsWith('binary_'))
     return 'encoding';
   if (name.startsWith('graphql_')) return 'graphql';
@@ -115,17 +116,16 @@ export function resolveSearchQualityToolDomain(name: string): string | null {
   )
     return 'sourcemap';
   if (name.startsWith('trace_')) return 'trace';
-  if (name.startsWith('evidence_')) return 'evidence';
   if (name.startsWith('instrumentation_')) return 'instrumentation';
   if (name.startsWith('coordination_')) return 'coordination';
   if (name.startsWith('maintenance_')) return 'maintenance';
-  if (name.startsWith('macro_')) return 'macro';
-  if (name.startsWith('sandbox_')) return 'sandbox';
+  if (name.startsWith('macro_')) return 'workflow';
+  if (name.startsWith('sandbox_')) return 'maintenance';
   if (name.startsWith('canvas_')) return 'canvas';
-  if (name.startsWith('shared_state_')) return 'shared-state-board';
+  if (name.startsWith('shared_state_') || name.startsWith('state_board')) return 'coordination';
   if (name.startsWith('v8_')) return 'v8-inspector';
   if (name.startsWith('boringssl_') || name.startsWith('tls_')) return 'boringssl-inspector';
-  if (name.startsWith('skia_')) return 'skia-capture';
+  if (name.startsWith('skia_')) return 'canvas';
   if (
     name.startsWith('frida_') ||
     name.startsWith('ghidra_') ||
@@ -146,7 +146,7 @@ export function resolveSearchQualityToolDomain(name: string): string | null {
   )
     return 'extension-registry';
   if (name.startsWith('platform_')) return 'platform';
-  if (name.startsWith('antidebug_')) return 'antidebug';
+  if (name.startsWith('antidebug_')) return 'debugger';
   return null;
 }
 

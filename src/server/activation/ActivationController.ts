@@ -58,7 +58,7 @@ const DEFAULT_BOOST_RULES: BoostRule[] = [
   },
   {
     eventPattern: 'network:intercept_started',
-    targetDomains: ['network', 'hooks'],
+    targetDomains: ['network', 'instrumentation'],
     threshold: 1,
     windowMs: ACTIVATION_BOOST_WINDOW_MS,
     priority: 9,
@@ -79,7 +79,7 @@ const DEFAULT_BOOST_RULES: BoostRule[] = [
   },
   {
     eventPattern: 'skia:scene_captured',
-    targetDomains: ['skia-capture'],
+    targetDomains: ['canvas'],
     threshold: 1,
     windowMs: ACTIVATION_BOOST_WINDOW_MS,
     priority: 10,

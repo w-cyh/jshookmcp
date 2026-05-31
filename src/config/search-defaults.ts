@@ -17,8 +17,8 @@ export const DEFAULT_QUERY_CATEGORY_PROFILE_CONFIGS = [
       '(?:security|vuln|xss|injection|csrf|exploit|attack|prototype\\s*pollution|漏洞|安全|注入|攻击)',
     flags: 'i',
     domainBoosts: [
-      { domain: 'hooks', weight: 1.35 },
-      { domain: 'antidebug', weight: 1.2 },
+      { domain: 'instrumentation', weight: 1.35 },
+      { domain: 'debugger', weight: 1.2 },
       { domain: 'core', weight: 1.1 },
     ],
   },
@@ -101,7 +101,7 @@ export const DEFAULT_QUERY_CATEGORY_PROFILE_CONFIGS = [
     pattern: '(?:skia|gpu|render|scenegraph|scene\\s?tree|raster|draw\\s?call|layer)',
     flags: 'i',
     domainBoosts: [
-      { domain: 'skia-capture', weight: 1.6 },
+      { domain: 'canvas', weight: 1.6 },
       { domain: 'browser', weight: 1.1 },
     ],
   },

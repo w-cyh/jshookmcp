@@ -77,14 +77,14 @@ const DEFAULT_COMPOUND_CONDITIONS: CompoundCondition[] = [
       { type: 'domain_active', domain: 'network' },
       { type: 'domain_active', domain: 'browser' },
     ],
-    boostDomains: ['hooks'],
+    boostDomains: ['instrumentation'],
     priority: 10,
   },
   {
     id: 'skia-to-v8-correlation',
     name: 'Skia scene + V8 heap correlation',
     conditions: [
-      { type: 'domain_active', domain: 'skia-capture' },
+      { type: 'domain_active', domain: 'canvas' },
       {
         type: 'event_count',
         event: 'v8:heap_captured',

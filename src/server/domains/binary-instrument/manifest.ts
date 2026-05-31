@@ -1,7 +1,11 @@
 import type { DomainManifest, MCPServerContext } from '@server/domains/shared/registry';
 import { defineMethodRegistrations, toolLookup } from '@server/domains/shared/registry';
 import { binaryInstrumentTools } from './definitions';
+import { apkPackerTools } from './apk-packer/definitions';
+import { binarySecretsTools } from './secrets/definitions';
 import type { BinaryInstrumentHandlers } from './handlers';
+import type { ApkPackerHandlers } from './apk-packer/handlers';
+import type { BinarySecretsHandlers } from './secrets/handlers';
 
 const DOMAIN = 'binary-instrument' as const;
 const DEP_KEY = 'binaryInstrumentHandlers' as const;
@@ -39,6 +43,40 @@ const registrations = defineMethodRegistrations<H, (typeof binaryInstrumentTools
   ],
 });
 
+// ── Secondary sub-domain registrations ──
+
+const apkPackerLookup = toolLookup(apkPackerTools);
+const apkPackerRegistrations = defineMethodRegistrations<
+  ApkPackerHandlers,
+  (typeof apkPackerTools)[number]['name']
+>({
+  domain: DOMAIN,
+  depKey: 'apkPackerHandlers' as const,
+  lookup: apkPackerLookup,
+  entries: [
+    { tool: 'apk_packer_detect', method: 'handleApkPackerDetect' },
+    { tool: 'apk_packer_list_signatures', method: 'handleApkPackerListSignatures' },
+    { tool: 'apk_signing_block_parse', method: 'handleApkSigningBlockParse' },
+  ],
+});
+
+const binarySecretsLookup = toolLookup(binarySecretsTools);
+const binarySecretsRegistrations = defineMethodRegistrations<
+  BinarySecretsHandlers,
+  (typeof binarySecretsTools)[number]['name']
+>({
+  domain: DOMAIN,
+  depKey: 'binarySecretsHandlers' as const,
+  lookup: binarySecretsLookup,
+  entries: [{ tool: 'binary_key_extract', method: 'handleBinaryKeyExtract' }],
+});
+
+const allRegistrations = [
+  ...registrations,
+  ...apkPackerRegistrations,
+  ...binarySecretsRegistrations,
+];
+
 async function ensure(ctx: MCPServerContext): Promise<H> {
   const { BinaryInstrumentHandlers } = await import('./handlers');
   const { GhidraAnalyzer, HookGenerator } = await import('@modules/binary-instrument');
@@ -49,6 +87,17 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
     ctx.setDomainInstance(DEP_KEY, handlers);
   }
 
+  // Instantiate secondary sub-domain handlers and store on context
+  if (!ctx.getDomainInstance('apkPackerHandlers')) {
+    const { ApkPackerHandlers } = await import('./apk-packer/handlers');
+    ctx.setDomainInstance('apkPackerHandlers', new ApkPackerHandlers());
+  }
+
+  if (!ctx.getDomainInstance('binarySecretsHandlers')) {
+    const { BinarySecretsHandlers } = await import('./secrets/handlers');
+    ctx.setDomainInstance('binarySecretsHandlers', new BinarySecretsHandlers());
+  }
+
   return handlers;
 }
 
@@ -57,9 +106,10 @@ const manifest = {
   version: 1,
   domain: DOMAIN,
   depKey: DEP_KEY,
+  secondaryDepKeys: ['apkPackerHandlers', 'binarySecretsHandlers'] as const,
   profiles: ['full'],
   ensure,
-  registrations,
+  registrations: allRegistrations,
   workflowRule: {
     patterns: [
       /\b(frida|ghidra|ida|unidbg|jadx|binary|disassemb|decompil|dump\s?so)\b/i,

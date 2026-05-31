@@ -5,23 +5,39 @@ import {
   toolLookup,
 } from '@server/domains/shared/registry';
 import { canvasTools } from '@server/domains/canvas/definitions';
+import { skiaTools } from '@server/domains/canvas/skia/definitions';
 import type { CanvasToolHandlers } from '@server/domains/canvas/handlers';
+import type { SkiaCaptureHandlers } from '@server/domains/canvas/skia';
+import { asToolResponse } from '@server/domains/shared/response';
 import type { ReverseEvidenceGraph } from '@server/evidence/ReverseEvidenceGraph';
 import type { CanvasDomainDependencies } from '@server/domains/canvas/dependencies';
 
 const DOMAIN = 'canvas' as const;
 const DEP_KEY = 'canvasHandlers' as const;
+const SKIA_DEP_KEY = 'skiaCaptureHandlers' as const;
 type H = CanvasToolHandlers;
-const t = toolLookup(canvasTools);
+type SK = SkiaCaptureHandlers;
+const t = toolLookup([...canvasTools, ...skiaTools]);
 const registrations = defineMethodRegistrations<H, (typeof canvasTools)[number]['name']>({
   domain: DOMAIN,
   depKey: DEP_KEY,
   lookup: t,
   entries: [
-    { tool: 'canvas_engine_fingerprint', method: 'handleFingerprint' },
-    { tool: 'canvas_scene_dump', method: 'handleSceneDump' },
-    { tool: 'canvas_pick_object_at_point', method: 'handlePick' },
-    { tool: 'canvas_trace_click_handler', method: 'handleTraceClick' },
+    { tool: 'canvas_engine_fingerprint', method: 'handleFingerprint', profiles: ['full'] },
+    { tool: 'canvas_scene_dump', method: 'handleSceneDump', profiles: ['full'] },
+    { tool: 'canvas_pick_object_at_point', method: 'handlePick', profiles: ['full'] },
+    { tool: 'canvas_trace_click_handler', method: 'handleTraceClick', profiles: ['full'] },
+  ],
+});
+const skiaRegistrations = defineMethodRegistrations<SK, (typeof skiaTools)[number]['name']>({
+  domain: DOMAIN,
+  depKey: SKIA_DEP_KEY,
+  lookup: t,
+  wrapResult: asToolResponse,
+  entries: [
+    { tool: 'skia_detect_renderer', method: 'handleSkiaDetectRenderer' },
+    { tool: 'skia_extract_scene', method: 'handleSkiaExtractScene' },
+    { tool: 'skia_correlate_objects', method: 'handleSkiaCorrelateObjects' },
   ],
 });
 
@@ -29,7 +45,7 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
   const { DebuggerManager } = await import('@server/domains/shared/modules');
   const { TraceRecorder } = await import('@modules/trace/TraceRecorder');
   const { ReverseEvidenceGraph } = await import('@server/evidence/ReverseEvidenceGraph');
-  const { CanvasToolHandlers } = await import('@server/domains/canvas/handlers');
+  const { CanvasToolHandlers, SkiaCaptureHandlers } = await import('@server/domains/canvas/index');
 
   await ensureBrowserCore(ctx);
   if (!ctx.debuggerManager) ctx.debuggerManager = new DebuggerManager(ctx.collector!);
@@ -48,6 +64,12 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
     };
     (ctx as unknown as Record<string, unknown>).canvasHandlers = new CanvasToolHandlers(deps);
   }
+  if (!ctx.skiaCaptureHandlers) {
+    ctx.skiaCaptureHandlers = new SkiaCaptureHandlers({
+      pageController: ctx.pageController ?? null,
+      eventBus: ctx.eventBus,
+    });
+  }
   return (ctx as unknown as Record<string, unknown>).canvasHandlers as H;
 }
 
@@ -56,7 +78,8 @@ const manifest = {
   version: 1,
   domain: DOMAIN,
   depKey: DEP_KEY,
-  profiles: ['full'],
+  secondaryDepKeys: ['skiaCaptureHandlers'],
+  profiles: ['workflow', 'full'],
   ensure,
 
   workflowRule: {
@@ -64,6 +87,9 @@ const manifest = {
       /(canvas|scene|engine|game).*(pick|dump|trace|reverse)/i,
       /(canvas|webgl|webgpu|scene).*(graph|tree|node)/i,
       /(laya|pixi|phaser|cocos|unity).*(reverse|scene|dump|hook)/i,
+      /\b(skia|gpu|render(er)?|scene\s?(tree|graph)|draw\s?call|raster|paint|layer)\b/i,
+      /skia.*(render|detect|scene)/i,
+      /gpu.*backend/i,
     ],
     priority: 80,
     tools: [
@@ -71,8 +97,11 @@ const manifest = {
       'canvas_scene_dump',
       'canvas_pick_object_at_point',
       'canvas_trace_click_handler',
+      'skia_detect_renderer',
+      'skia_extract_scene',
+      'skia_correlate_objects',
     ],
-    hint: 'Canvas reverse: fingerprint engine → dump scene tree → pick object at point → trace click to handler',
+    hint: 'Canvas/Skia reverse: fingerprint engine → dump scene tree → pick object at point → trace click; or detect Skia GPU backend → extract scene → correlate with JS objects.',
   },
 
   prerequisites: {
@@ -100,9 +129,36 @@ const manifest = {
         fix: "Call debugger_lifecycle({ action: 'enable' }) first",
       },
     ],
+    skia_detect_renderer: [
+      {
+        condition: 'Browser must be running with CDP attached',
+        fix: 'Call browser_launch or browser_attach first',
+      },
+    ],
+    skia_extract_scene: [
+      {
+        condition: 'Browser must be running with CDP attached',
+        fix: 'Call browser_launch or browser_attach first',
+      },
+    ],
+    skia_correlate_objects: [
+      {
+        condition: 'V8 heap snapshot should be available for robust matching',
+        fix: 'Run v8_heap_snapshot_capture before correlation',
+      },
+    ],
   },
 
-  registrations,
+  toolDependencies: [
+    {
+      from: 'skia_correlate_objects',
+      to: 'v8_heap_snapshot_capture',
+      relation: 'precedes',
+      weight: 0.6,
+    },
+  ],
+
+  registrations: [...registrations, ...skiaRegistrations],
 } satisfies DomainManifest<typeof DEP_KEY, H, typeof DOMAIN>;
 
 export default manifest;

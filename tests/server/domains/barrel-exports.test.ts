@@ -53,7 +53,7 @@ vi.mock('@utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@server/domains/antidebug/scripts', () => ({
+vi.mock('@server/domains/debugger/antidebug/scripts', () => ({
   ANTI_DEBUG_SCRIPTS: {
     bypassDebuggerStatement: '',
     bypassTiming: '',
@@ -62,7 +62,7 @@ vi.mock('@server/domains/antidebug/scripts', () => ({
     detectProtections: '',
   },
 }));
-vi.mock('@server/domains/antidebug/scripts.data', () => ({
+vi.mock('@server/domains/debugger/antidebug/scripts.data', () => ({
   ANTI_DEBUG_SCRIPTS: {
     bypassDebuggerStatement: '',
     bypassTiming: '',
@@ -129,8 +129,11 @@ vi.mock('@server/domains/platform/handlers/bridge-handlers', () => ({
 }));
 
 // Hooks dependencies
-vi.mock('@server/domains/hooks/preset-definitions', () => ({ PRESETS: {}, PRESET_LIST: [] }));
-vi.mock('@server/domains/hooks/preset-builder', () => ({ buildHookCode: vi.fn() }));
+vi.mock('@server/domains/instrumentation/hooks/preset-definitions', () => ({
+  PRESETS: {},
+  PRESET_LIST: [],
+}));
+vi.mock('@server/domains/instrumentation/hooks/preset-builder', () => ({ buildHookCode: vi.fn() }));
 
 // Maintenance dependencies
 vi.mock('@utils/TokenBudgetManager', () => ({
@@ -284,7 +287,7 @@ describe('Domain barrel file exports (index.ts)', () => {
 
   describe('antidebug/index.ts', () => {
     it('exports antidebugTools, ANTI_DEBUG_SCRIPTS, and AntiDebugToolHandlers', async () => {
-      const mod = await import('@server/domains/antidebug/index');
+      const mod = await import('@server/domains/debugger/antidebug/index');
       expect(mod.antidebugTools).toBeDefined();
       expect(Array.isArray(mod.antidebugTools)).toBe(true);
       expect(mod.ANTI_DEBUG_SCRIPTS).toBeDefined();
@@ -335,7 +338,7 @@ describe('Domain barrel file exports (index.ts)', () => {
 
   describe('hooks/index.ts', () => {
     it('exports hook tool definitions and both handler classes', async () => {
-      const mod = await import('@server/domains/hooks/index');
+      const mod = await import('@server/domains/instrumentation/hooks/index');
       expect(mod.aiHookTools).toBeDefined();
       expect(mod.hookPresetTools).toBeDefined();
       expect(mod.AIHookToolHandlers).toBeDefined();

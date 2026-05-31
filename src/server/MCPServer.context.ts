@@ -11,9 +11,9 @@ import type { TokenBudgetManager } from '@utils/TokenBudgetManager';
 import type { UnifiedCacheManager } from '@utils/UnifiedCacheManager';
 import type { DetailedDataManager } from '@utils/DetailedDataManager';
 import type { ADBBridgeHandlers } from '@server/domains/adb-bridge/handlers';
-import type { ApkPackerHandlers } from '@server/domains/apk-packer/handlers';
+import type { ApkPackerHandlers } from '@server/domains/binary-instrument/apk-packer/handlers';
 import type { BinaryInstrumentHandlers } from '@server/domains/binary-instrument/handlers';
-import type { BinarySecretsHandlers } from '@server/domains/binary-secrets/handlers';
+import type { BinarySecretsHandlers } from '@server/domains/binary-instrument/secrets/handlers';
 import type { BoringsslInspectorHandlers } from '@server/domains/boringssl-inspector/handlers';
 import type { CrossDomainHandlers } from '@server/domains/cross-domain/handlers';
 import type { DartInspectorHandlers } from '@server/domains/dart-inspector/handlers';
@@ -21,7 +21,7 @@ import type { ExtensionRegistryHandlers } from '@server/domains/extension-regist
 import type { MojoIPCHandlers } from '@server/domains/mojo-ipc/handlers';
 import type { NativeEmulatorHandlers } from '@server/domains/native-emulator/handlers';
 import type { ProtocolAnalysisHandlers } from '@server/domains/protocol-analysis/handlers';
-import type { SkiaCaptureHandlers } from '@server/domains/skia-capture/handlers';
+import type { SkiaCaptureHandlers } from '@server/domains/canvas/skia';
 import type { SyscallHookHandlers } from '@server/domains/syscall-hook/handlers';
 import type { V8InspectorHandlers } from '@server/domains/v8-inspector/handlers';
 import type {
@@ -146,8 +146,8 @@ export interface DomainInstances {
   dartInspectorHandlers?: DartInspectorHandlers;
   debuggerHandlers?: import('@server/domains/debugger/index').DebuggerToolHandlers;
   advancedHandlers?: import('@server/domains/network/index').AdvancedToolHandlers;
-  aiHookHandlers?: import('@server/domains/hooks/index').AIHookToolHandlers;
-  hookPresetHandlers?: import('@server/domains/hooks/index').HookPresetToolHandlers;
+  aiHookHandlers?: import('@server/domains/instrumentation/hooks/ai-handlers').AIHookToolHandlers;
+  hookPresetHandlers?: import('@server/domains/instrumentation/hooks/preset-handlers').HookPresetToolHandlers;
   deobfuscator?: import('@modules/deobfuscator/Deobfuscator').Deobfuscator;
   advancedDeobfuscator?: import('@modules/deobfuscator/AdvancedDeobfuscator').AdvancedDeobfuscator;
   astOptimizer?: import('@modules/deobfuscator/ASTOptimizer').ASTOptimizer;
@@ -158,12 +158,14 @@ export interface DomainInstances {
   coreAnalysisHandlers?: import('@server/domains/analysis/index').CoreAnalysisHandlers;
   coreMaintenanceHandlers?: import('@server/domains/maintenance/index').CoreMaintenanceHandlers;
   extensionManagementHandlers?: import('@server/domains/maintenance/index').ExtensionManagementHandlers;
+  sandboxHandlers?: import('@server/domains/maintenance/handlers.sandbox').SandboxToolHandlers;
   processHandlers?: import('@server/domains/process/index').ProcessToolHandlers;
   workflowHandlers?: import('@server/domains/workflow/index').WorkflowHandlers;
+  macroHandlers?: import('@server/domains/workflow/macro').MacroToolHandlers;
   wasmHandlers?: import('@server/domains/wasm/index').WasmToolHandlers;
   streamingHandlers?: import('@server/domains/streaming/index').StreamingToolHandlers;
   encodingHandlers?: import('@server/domains/encoding/index').EncodingToolHandlers;
-  antidebugHandlers?: import('@server/domains/antidebug/index').AntiDebugToolHandlers;
+  antidebugHandlers?: import('@server/domains/debugger/antidebug/index').AntiDebugToolHandlers;
   graphqlHandlers?: import('@server/domains/graphql/index').GraphQLToolHandlers;
   platformHandlers?: import('@server/domains/platform/index').PlatformToolHandlers;
   sourcemapHandlers?: import('@server/domains/sourcemap/index').SourcemapToolHandlers;
@@ -171,11 +173,11 @@ export interface DomainInstances {
   coordinationHandlers?: import('@server/domains/coordination/index').CoordinationHandlers;
   traceRecorder?: import('@modules/trace/TraceRecorder').TraceRecorder;
   traceHandlers?: import('@server/domains/trace/index').TraceToolHandlers;
-  evidenceHandlers?: import('@server/domains/evidence/index').EvidenceHandlers;
+  evidenceHandlers?: import('@server/domains/instrumentation/evidence/handlers').EvidenceHandlers;
   instrumentationHandlers?:
     | import('@server/domains/instrumentation/index').InstrumentationHandlers
     | undefined;
-  sharedStateBoardHandlers?: import('@server/domains/shared-state-board/index').SharedStateBoardHandlers;
+  sharedStateBoardHandlers?: import('@server/domains/coordination/state-board').SharedStateBoardHandlers;
   proxyHandlers?: import('@server/domains/proxy/index').ProxyHandlers;
 }
 

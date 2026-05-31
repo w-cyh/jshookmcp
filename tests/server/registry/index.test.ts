@@ -154,4 +154,24 @@ describe('registry/index', () => {
       '[registry] Profile hierarchy: workflow not subset of full',
     );
   });
+
+  it('preserves generated secondaryDepKeys metadata for merged domains', async () => {
+    vi.doUnmock('@server/registry/generated-domains.js');
+    const generated = await import('@server/registry/generated-domains.js');
+
+    const debuggerEntry = generated.generatedManifestLoaders.find(
+      (entry) => entry.domain === 'debugger',
+    );
+    expect(debuggerEntry?.secondaryDepKeys).toContain('antidebugHandlers');
+
+    const workflowEntry = generated.generatedManifestLoaders.find(
+      (entry) => entry.domain === 'workflow',
+    );
+    expect(workflowEntry?.secondaryDepKeys).toContain('macroHandlers');
+
+    const maintenanceEntry = generated.generatedManifestLoaders.find(
+      (entry) => entry.domain === 'maintenance',
+    );
+    expect(maintenanceEntry?.secondaryDepKeys).toContain('sandboxHandlers');
+  });
 });

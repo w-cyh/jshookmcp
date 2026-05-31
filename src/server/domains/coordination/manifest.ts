@@ -1,32 +1,74 @@
 import type { DomainManifest, MCPServerContext } from '@server/domains/shared/registry';
 import { defineMethodRegistrations, toolLookup } from '@server/domains/shared/registry';
 import { coordinationTools } from '@server/domains/coordination/definitions';
+import { sharedStateBoardTools } from '@server/domains/coordination/state-board/definitions';
 import type { CoordinationHandlers } from '@server/domains/coordination/index';
+import type { SharedStateBoardHandlers } from '@server/domains/coordination/state-board';
+import type { RuntimeSnapshotScheduler } from '@server/persistence/RuntimeSnapshotScheduler';
+import { resolve } from 'node:path';
 
 const DOMAIN = 'coordination' as const;
 const DEP_KEY = 'coordinationHandlers' as const;
+const SSB_DEP_KEY = 'sharedStateBoardHandlers' as const;
 type H = CoordinationHandlers;
-const t = toolLookup(coordinationTools);
+type SSB = SharedStateBoardHandlers;
+const t = toolLookup([...coordinationTools, ...sharedStateBoardTools]);
 const registrations = defineMethodRegistrations<H, (typeof coordinationTools)[number]['name']>({
   domain: DOMAIN,
   depKey: DEP_KEY,
   lookup: t,
   entries: [
-    { tool: 'create_task_handoff', method: 'handleCreateTaskHandoff' },
-    { tool: 'complete_task_handoff', method: 'handleCompleteTaskHandoff' },
-    { tool: 'get_task_context', method: 'handleGetTaskContext' },
-    { tool: 'append_session_insight', method: 'handleAppendSessionInsight' },
-    { tool: 'save_page_snapshot', method: 'handleSavePageSnapshot' },
-    { tool: 'restore_page_snapshot', method: 'handleRestorePageSnapshot' },
-    { tool: 'list_page_snapshots', method: 'handleListPageSnapshots' },
+    { tool: 'create_task_handoff', method: 'handleCreateTaskHandoff', profiles: ['full'] },
+    { tool: 'complete_task_handoff', method: 'handleCompleteTaskHandoff', profiles: ['full'] },
+    { tool: 'get_task_context', method: 'handleGetTaskContext', profiles: ['full'] },
+    { tool: 'append_session_insight', method: 'handleAppendSessionInsight', profiles: ['full'] },
+    { tool: 'save_page_snapshot', method: 'handleSavePageSnapshot', profiles: ['full'] },
+    { tool: 'restore_page_snapshot', method: 'handleRestorePageSnapshot', profiles: ['full'] },
+    { tool: 'list_page_snapshots', method: 'handleListPageSnapshots', profiles: ['full'] },
+  ],
+});
+const stateBoardRegistrations = defineMethodRegistrations<
+  SSB,
+  (typeof sharedStateBoardTools)[number]['name']
+>({
+  domain: DOMAIN,
+  depKey: SSB_DEP_KEY,
+  lookup: t,
+  entries: [
+    { tool: 'state_board', method: 'handleDispatch' },
+    { tool: 'state_board_watch', method: 'handleWatchDispatch' },
+    { tool: 'state_board_io', method: 'handleIODispatch' },
   ],
 });
 
 async function ensure(ctx: MCPServerContext): Promise<H> {
-  const { CoordinationHandlers } = await import('@server/domains/coordination/index');
+  const { CoordinationHandlers, SharedStateBoardHandlers } =
+    await import('@server/domains/coordination/index');
   if (!ctx.coordinationHandlers) {
     ctx.coordinationHandlers = new CoordinationHandlers(ctx);
   }
+
+  // Shared state board (merged from the former shared-state-board domain)
+  if (!ctx.sharedStateBoardHandlers) {
+    ctx.sharedStateBoardHandlers = new SharedStateBoardHandlers();
+  }
+  const scheduler = ctx.getDomainInstance<RuntimeSnapshotScheduler>('snapshotScheduler');
+  const stateDir = ctx.getDomainInstance<string>('snapshotStateDir');
+  ctx.sharedStateBoardHandlers.setPersistNotifier(
+    scheduler ? () => scheduler.notifyDirty() : undefined,
+  );
+  if (
+    scheduler &&
+    stateDir &&
+    !ctx.getDomainInstance<boolean>('sharedStateBoardSnapshotRegistered')
+  ) {
+    scheduler.register(
+      resolve(stateDir, 'state-board', 'current.json'),
+      ctx.sharedStateBoardHandlers.getStore(),
+    );
+    ctx.setDomainInstance('sharedStateBoardSnapshotRegistered', true);
+  }
+
   return ctx.coordinationHandlers;
 }
 
@@ -35,9 +77,10 @@ const manifest = {
   version: 1,
   domain: DOMAIN,
   depKey: DEP_KEY,
-  profiles: ['full'],
+  secondaryDepKeys: ['sharedStateBoardHandlers'],
+  profiles: ['workflow', 'full'],
   ensure,
-  registrations,
+  registrations: [...registrations, ...stateBoardRegistrations],
 } satisfies DomainManifest<typeof DEP_KEY, H, typeof DOMAIN>;
 
 export default manifest;

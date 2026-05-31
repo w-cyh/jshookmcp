@@ -117,7 +117,14 @@ describe('search/SearchProfileTier', () => {
   it('full tier: no penalty applied', async () => {
     const { ToolSearchEngine } = await import('@server/search/ToolSearchEngineImpl');
     const engine = new ToolSearchEngine();
-    const allDomains = new Set(['browser', 'network', 'debugger', 'analysis', 'hooks', 'memory']);
+    const allDomains = new Set([
+      'browser',
+      'network',
+      'debugger',
+      'analysis',
+      'instrumentation',
+      'memory',
+    ]);
     const results = await engine.search(
       'V8 heap snapshot capture',
       10,

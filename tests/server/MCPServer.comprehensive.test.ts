@@ -279,7 +279,7 @@ describe('MCPServer — additional coverage', () => {
   describe('manifest secondary dep keys', () => {
     it('secondary dep keys create lazy proxies that call ensure', () => {
       mocks.allManifests.push({
-        domain: 'hooks',
+        domain: 'instrumentation',
         depKey: 'aiHookHandlers',
         secondaryDepKeys: ['hookPresetHandlers'],
         ensure: vi.fn(async () => ({ handleHook: vi.fn() })),

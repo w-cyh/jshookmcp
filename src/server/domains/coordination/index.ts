@@ -11,6 +11,8 @@ import { randomUUID } from 'node:crypto';
 import { COORDINATION_GOTO_TIMEOUT_MS } from '@src/constants';
 import type { MCPServerContext } from '@server/domains/shared/registry';
 export * from './definitions';
+export { sharedStateBoardTools } from './state-board/definitions';
+export { SharedStateBoardHandlers } from './state-board';
 
 // ── Types ──
 

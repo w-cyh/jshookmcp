@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DEBUGGER_CORE_TOOLS } from '@server/domains/debugger/definitions.tools.core';
 import { DEBUGGER_ADVANCED_TOOLS } from '@server/domains/debugger/definitions.tools.advanced';
+import { antidebugTools } from '@server/domains/debugger/antidebug/definitions';
 import { debuggerTools } from '@server/domains/debugger/definitions.tools';
 
 // Re-export through definitions.ts
@@ -232,13 +233,17 @@ describe('debugger tool definitions', () => {
   // ── Combined debuggerTools ─────────────────────────────────
 
   describe('debuggerTools (combined)', () => {
-    it('merges core and advanced tools', async () => {
-      expect(debuggerTools).toEqual([...DEBUGGER_CORE_TOOLS, ...DEBUGGER_ADVANCED_TOOLS]);
+    it('merges core, advanced, and antidebug tools', async () => {
+      expect(debuggerTools).toEqual([
+        ...DEBUGGER_CORE_TOOLS,
+        ...DEBUGGER_ADVANCED_TOOLS,
+        ...antidebugTools,
+      ]);
     });
 
     it('has correct total count', async () => {
       expect(debuggerTools).toHaveLength(
-        DEBUGGER_CORE_TOOLS.length + DEBUGGER_ADVANCED_TOOLS.length,
+        DEBUGGER_CORE_TOOLS.length + DEBUGGER_ADVANCED_TOOLS.length + antidebugTools.length,
       );
     });
 

@@ -158,6 +158,13 @@ describe('Three-Tier Boost Hierarchy', () => {
     // browser domain is in workflow tier
     expect(getToolMinimalTier('page_navigate')).toBe('workflow');
 
+    // merged sub-domain tools preserve their original tiers
+    expect(getToolMinimalTier('skia_detect_renderer')).toBe('workflow');
+    expect(getToolMinimalTier('state_board')).toBe('workflow');
+    expect(getToolMinimalTier('antidebug_bypass')).toBe('full');
+    expect(getToolMinimalTier('execute_sandbox_script')).toBe('full');
+    expect(getToolMinimalTier('run_macro')).toBe('full');
+
     // process domain is in full tier
     expect(getToolMinimalTier('electron_attach')).toBe('full');
   });
@@ -203,13 +210,13 @@ describe('Three-Tier Boost Hierarchy', () => {
     }
   });
 
-  it('full tier adds hooks, process, wasm, antidebug, platform, sourcemap, transform', () => {
+  it('full tier adds instrumentation, process, wasm, debugger-antidebug, platform, sourcemap, transform', () => {
     const fullDomains = new Set(getProfileDomains('full'));
     for (const domain of [
-      'hooks',
+      'instrumentation',
       'process',
       'wasm',
-      'antidebug',
+      'debugger',
       'platform',
       'sourcemap',
       'transform',

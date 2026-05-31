@@ -336,7 +336,7 @@ describe('MCPServer', () => {
         ensure: vi.fn(() => ({ handleGetTokenBudgetStats: vi.fn() })),
       },
       {
-        domain: 'hooks',
+        domain: 'instrumentation',
         depKey: 'aiHookHandlers',
         secondaryDepKeys: ['hookPresetHandlers'],
         ensure: vi.fn(() => ({})),

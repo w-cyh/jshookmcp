@@ -50,6 +50,11 @@ describe('debugger manifest', () => {
       expect(manifest.profiles).toHaveLength(2);
     });
 
+    it('declares antidebugHandlers as a secondary dependency', async () => {
+      const manifest = await loadManifest();
+      expect(manifest.secondaryDepKeys).toContain('antidebugHandlers');
+    });
+
     it('ensure is a function', async () => {
       const manifest = await loadManifest();
       expect(typeof manifest.ensure).toBe('function');
@@ -109,6 +114,9 @@ describe('debugger manifest', () => {
       'blackbox_add',
       'blackbox_add_common',
       'blackbox_list',
+      // Antidebug tools (merged sub-domain)
+      'antidebug_bypass',
+      'antidebug_detect_protections',
     ];
 
     it(`has exactly ${expectedRegistrations.length} registrations`, async () => {
@@ -122,6 +130,18 @@ describe('debugger manifest', () => {
         (registration) => getToolName(registration) === name,
       );
       expect(found).toBeDefined();
+    });
+
+    it('keeps merged antidebug tools full-only', async () => {
+      const manifest = await loadManifest();
+      const antidebugRegistrations = manifest.registrations.filter((registration) =>
+        ['antidebug_bypass', 'antidebug_detect_protections'].includes(getToolName(registration)),
+      );
+
+      expect(antidebugRegistrations).toHaveLength(2);
+      for (const registration of antidebugRegistrations) {
+        expect(registration.profiles).toEqual(['full']);
+      }
     });
   });
 

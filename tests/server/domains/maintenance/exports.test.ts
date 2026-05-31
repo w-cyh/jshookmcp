@@ -16,13 +16,20 @@ describe('server/domains/maintenance exports', () => {
 
     await assertDomainExportContract({
       expectedDomain: 'maintenance',
-      definitionExportNames: ['artifactTools', 'cacheTools', 'extensionTools', 'tokenBudgetTools'],
+      definitionExportNames: [
+        'artifactTools',
+        'cacheTools',
+        'extensionTools',
+        'sandboxTools',
+        'tokenBudgetTools',
+      ],
       loadDefinitions: () => import('@server/domains/maintenance/definitions'),
       getToolArrays: (module) => [
         module.tokenBudgetTools as Array<Record<string, unknown>>,
         module.cacheTools as Array<Record<string, unknown>>,
         module.artifactTools as Array<Record<string, unknown>>,
         module.extensionTools as Array<Record<string, unknown>>,
+        module.sandboxTools as Array<Record<string, unknown>>,
       ],
       loadManifest: () => import('@server/domains/maintenance/manifest'),
     });

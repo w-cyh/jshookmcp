@@ -318,7 +318,7 @@ export function rerankResultsForContext(
         result.domain === 'browser' ||
         result.domain === 'network' ||
         result.domain === 'debugger' ||
-        result.domain === 'hooks' ||
+        result.domain === 'instrumentation' ||
         result.domain === 'maintenance'
       ) {
         score *= RERANK_STATELESS_INTERACTIVE_PENALTY;

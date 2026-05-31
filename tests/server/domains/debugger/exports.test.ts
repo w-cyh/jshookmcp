@@ -16,7 +16,7 @@ describe('server/domains/debugger exports', () => {
 
     await assertDomainExportContract({
       expectedDomain: 'debugger',
-      definitionExportNames: ['debuggerTools'],
+      definitionExportNames: ['antidebugTools', 'debuggerTools'],
       loadDefinitions: () => import('@server/domains/debugger/definitions'),
       getToolArrays: (module) => [module.debuggerTools as Array<Record<string, unknown>>],
       loadManifest: () => import('@server/domains/debugger/manifest'),

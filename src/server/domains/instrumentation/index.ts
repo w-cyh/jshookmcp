@@ -1,2 +1,2 @@
 export { InstrumentationHandlers } from './handlers';
-export { instrumentationTools } from './definitions';
+export { instrumentationTools, aiHookTools, hookPresetTools, evidenceTools } from './definitions';
