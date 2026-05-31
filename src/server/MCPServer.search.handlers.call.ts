@@ -128,42 +128,48 @@ export async function handleCallTool(
   // but not yet activated (e.g., when search returned 0 results and domain
   // fallback activation was triggered).
   if (!ctx.router.has(name)) {
-    const { ensureAllDomainsLoaded } = await import('@server/registry/index');
-    await ensureAllDomainsLoaded();
+    // Try auto-activation only when the registry is already initialised
+    // (it may not be in unit-test contexts with minimal mocks).
+    let autoActivated = false;
+    try {
+      const { ensureAllDomainsLoaded } = await import('@server/registry/index');
+      await ensureAllDomainsLoaded();
 
-    // Check if the tool exists in the catalog
-    const { getToolByName } = await import('@server/MCPServer.search.helpers');
-    const toolMap = await getToolByName(ctx);
-    const toolDef = toolMap.get(name);
+      const { getToolByName } = await import('@server/MCPServer.search.helpers');
+      const toolMap = await getToolByName(ctx);
+      const toolDef = toolMap.get(name);
 
-    if (toolDef) {
-      // Auto-activate the tool and its domain
-      const { activateToolNames } = await import('@server/MCPServer.search.handlers.activate');
-      const { getToolDomain } = await import('@server/ToolCatalog');
-      const domain = getToolDomain(name);
-      if (domain && !ctx.enabledDomains.has(domain)) {
-        const { handleActivateDomain } = await import('@server/MCPServer.search.handlers.domain');
-        try {
-          await handleActivateDomain(ctx, {
-            domain,
-            ttlMinutes: (await import('@src/constants')).ACTIVATION_TTL_MINUTES,
-          });
-        } catch {
-          /* fall through to individual activation */
+      if (toolDef) {
+        const { activateToolNames } = await import('@server/MCPServer.search.handlers.activate');
+        const { getToolDomain } = await import('@server/ToolCatalog');
+        const domain = getToolDomain(name);
+        if (domain && !ctx.enabledDomains.has(domain)) {
+          const { handleActivateDomain } = await import('@server/MCPServer.search.handlers.domain');
+          try {
+            await handleActivateDomain(ctx, {
+              domain,
+              ttlMinutes: (await import('@src/constants')).ACTIVATION_TTL_MINUTES,
+            });
+          } catch {
+            /* fall through to individual activation */
+          }
         }
+        if (!ctx.router.has(name)) {
+          await activateToolNames(ctx, [name]);
+        }
+        callMetadata.wasAutoActivated = true;
+        callMetadata.activatedTools = [name];
+        autoActivated = true;
       }
-      if (!ctx.router.has(name)) {
-        await activateToolNames(ctx, [name]);
-      }
-      callMetadata.wasAutoActivated = true;
-      callMetadata.activatedTools = [name];
-    } else {
+    } catch {
+      /* registry not initialised — fall through to error */
+    }
+
+    if (!autoActivated) {
       return asTextResponse(
         JSON.stringify({
           success: false,
-          error:
-            `Tool "${name}" is not currently active and was not found in the tool catalog. ` +
-            `Use search_tools to discover available tools, then call_tool to invoke them.`,
+          error: `Tool "${name}" is not currently active. Use activate_tools or activate_domain first, then call it directly.`,
           ...callMetadata,
         }),
       );

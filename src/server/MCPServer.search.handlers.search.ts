@@ -31,7 +31,7 @@ export async function handleSearchTools(
   const engine = await getSearchEngine(ctx);
   const activeNames = getActiveToolNames(ctx);
   const visibleDomains = getVisibleDomainsForTier(ctx);
-  const results = await engine.search(query, topK, activeNames, visibleDomains, getBaseTier(ctx));
+  let results = await engine.search(query, topK, activeNames, visibleDomains, getBaseTier(ctx));
   const latencyMs = Math.round(performance.now() - searchStart);
 
   ctx.mcpLog.info('jshookmcp', {
@@ -108,7 +108,7 @@ export async function handleSearchTools(
           getBaseTier(ctx),
         );
         if (retryResults.length > 0) {
-          return retryResults;
+          results = retryResults;
         }
       }
     }
