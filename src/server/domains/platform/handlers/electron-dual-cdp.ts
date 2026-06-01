@@ -8,6 +8,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import type { ToolResponse } from '@server/types';
 import { parseStringArg, pathExists } from '@server/domains/platform/handlers/platform-utils';
 import { handleSafe } from '@server/domains/shared/ResponseBuilder';
@@ -91,18 +92,36 @@ export async function handleElectronLaunchDebug(
     }
 
     // SECURITY: Validate that exePath looks like an Electron binary.
-    // Reject arbitrary executables (python, bash, node, etc.)
+    // 1. Fast path — filename heuristic (electron/chrome/chromium)
+    // 2. Structural check — companion files typical of Electron apps
+    // 3. Escape hatch — skipBinaryCheck override
+    const skipBinaryCheck = (args.skipBinaryCheck as boolean | undefined) === true;
     const exeBaseName = exePath.split(/[\\/]/).pop()?.toLowerCase() ?? '';
     const ELECTRON_EXE_PATTERNS = [/^electron/i, /\.app$/i, /chrome/i, /chromium/i];
-    const isElectronBinary = ELECTRON_EXE_PATTERNS.some((p) => p.test(exeBaseName));
-    if (!isElectronBinary) {
-      return {
-        success: false,
-        error:
-          `exePath does not appear to be an Electron binary: ${exeBaseName}. Only Electron/Chromium ` +
-          `executables are ` +
-          `allowed.`,
-      };
+    const isElectronByName = ELECTRON_EXE_PATTERNS.some((p) => p.test(exeBaseName));
+
+    if (!isElectronByName && !skipBinaryCheck) {
+      // Structural detection — check for Electron companion files
+      const exeDir = dirname(exePath);
+      const structuralChecks = [
+        join(exeDir, 'resources', 'app.asar'),
+        join(exeDir, 'resources', 'app'),
+        join(exeDir, 'ffmpeg.dll'),
+        join(exeDir, 'libEGL.dll'),
+        join(exeDir, 'libGLESv2.dll'),
+        join(exeDir, 'vk_swiftshader.dll'),
+        join(exeDir, '..', 'Frameworks', 'Electron Framework.framework'),
+      ];
+      const isStructuralElectron = await Promise.all(structuralChecks.map(pathExists));
+      if (!isStructuralElectron.some(Boolean)) {
+        return {
+          success: false,
+          error:
+            `exePath does not appear to be an Electron binary: ${exeBaseName}. ` +
+            `No Electron companion files found (resources/app.asar, Chromium DLLs, etc.). ` +
+            `Pass skipBinaryCheck:true to override.`,
+        };
+      }
     }
 
     const mainPort = (args.mainPort as number | undefined) ?? 9229;

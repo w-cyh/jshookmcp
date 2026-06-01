@@ -132,6 +132,77 @@ describe('electron_launch_debug', () => {
     // @ts-expect-error
     expect(status.renderer.alive).toBe(true);
   });
+
+  it('should accept renamed exe when Electron companion files exist', async () => {
+    const { handleElectronLaunchDebug } = await loadModule();
+
+    // First call: pathExists(exePath) → true
+    // Subsequent calls: structural checks — resources/app.asar exists
+    mockPathExists
+      .mockResolvedValueOnce(true) // exePath exists
+      .mockResolvedValueOnce(true) // resources/app.asar
+      .mockResolvedValueOnce(false) // resources/app
+      .mockResolvedValueOnce(false) // ffmpeg.dll
+      .mockResolvedValueOnce(false) // libEGL.dll
+      .mockResolvedValueOnce(false) // libGLESv2.dll
+      .mockResolvedValueOnce(false) // vk_swiftshader.dll
+      .mockResolvedValueOnce(false); // Frameworks/...
+    mockReadFile.mockResolvedValueOnce(makeFuseBuffer());
+    mockFetch.mockResolvedValue({ ok: true, text: async () => 'ready' });
+    mockSpawn.mockReturnValue({ pid: 5555, unref: vi.fn() });
+
+    const result = parse(
+      await handleElectronLaunchDebug({
+        exePath: 'C:\\EchoPet\\EchoPet.exe',
+        waitMs: 0,
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.sessionId).toBe('electron-5555');
+  });
+
+  it('should reject renamed exe without Electron companion files', async () => {
+    const { handleElectronLaunchDebug } = await loadModule();
+
+    // First call: pathExists(exePath) → true
+    // All structural checks fail
+    mockPathExists.mockResolvedValueOnce(true);
+    // Remaining calls all return false
+    mockPathExists.mockResolvedValue(false);
+
+    const result = parse(
+      await handleElectronLaunchDebug({
+        exePath: 'C:\\Random\\random.exe',
+      }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('does not appear to be an Electron binary');
+    expect(result.error).toContain('skipBinaryCheck:true');
+  });
+
+  it('should accept any exe when skipBinaryCheck is true', async () => {
+    const { handleElectronLaunchDebug } = await loadModule();
+
+    // pathExists(exePath) → true, all structural checks return false
+    mockPathExists.mockResolvedValueOnce(true);
+    mockPathExists.mockResolvedValue(false);
+    mockReadFile.mockResolvedValueOnce(makeFuseBuffer());
+    mockFetch.mockResolvedValue({ ok: true, text: async () => 'ready' });
+    mockSpawn.mockReturnValue({ pid: 6666, unref: vi.fn() });
+
+    const result = parse(
+      await handleElectronLaunchDebug({
+        exePath: 'C:\\Suspicious\\malware.exe',
+        skipBinaryCheck: true,
+        waitMs: 0,
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.sessionId).toBe('electron-6666');
+  });
 });
 
 describe('electron_debug_status', () => {

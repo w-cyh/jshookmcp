@@ -122,6 +122,11 @@ export const platformTools: Tool[] = [
       })
       .array('args', { type: 'string' }, 'Extra command-line arguments.')
       .boolean('skipFuseCheck', 'Skip fuse status check.', { default: false })
+      .boolean(
+        'skipBinaryCheck',
+        'Skip Electron binary validation. Use when the target exe has been renamed (e.g. Code.exe, Discord.exe).',
+        { default: false },
+      )
       .number('waitMs', 'Milliseconds to wait for CDP ports.', {
         default: 8000,
         minimum: 1000,
