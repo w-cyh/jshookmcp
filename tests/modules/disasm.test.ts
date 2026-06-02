@@ -9,6 +9,62 @@ import {
   SUPPORTED_DISASSEMBLY_ARCHITECTURES,
 } from '@modules/native-emulator/disasm';
 
+function rvI(funct3: number, rd: number, rs1: number, imm: number, opcode = 0x13): number {
+  return (((imm & 0xfff) << 20) | (rs1 << 15) | (funct3 << 12) | (rd << 7) | opcode) >>> 0;
+}
+
+function rvR(funct7: number, funct3: number, rd: number, rs1: number, rs2: number): number {
+  return (
+    (((funct7 & 0x7f) << 25) | (rs2 << 20) | (rs1 << 15) | (funct3 << 12) | (rd << 7) | 0x33) >>> 0
+  );
+}
+
+function rvS(funct3: number, rs1: number, rs2: number, imm: number): number {
+  const low = imm & 0x1f;
+  const high = (imm >> 5) & 0x7f;
+  return ((high << 25) | (rs2 << 20) | (rs1 << 15) | (funct3 << 12) | (low << 7) | 0x23) >>> 0;
+}
+
+function rvB(funct3: number, rs1: number, rs2: number, imm: number): number {
+  const value = imm & 0x1fff;
+  return (
+    ((((value >> 12) & 0x1) << 31) |
+      (((value >> 5) & 0x3f) << 25) |
+      (rs2 << 20) |
+      (rs1 << 15) |
+      (funct3 << 12) |
+      (((value >> 1) & 0xf) << 8) |
+      (((value >> 11) & 0x1) << 7) |
+      0x63) >>>
+    0
+  );
+}
+
+function rvJ(rd: number, imm: number): number {
+  const value = imm & 0x1fffff;
+  return (
+    ((((value >> 20) & 0x1) << 31) |
+      (((value >> 1) & 0x3ff) << 21) |
+      (((value >> 11) & 0x1) << 20) |
+      (((value >> 12) & 0xff) << 12) |
+      (rd << 7) |
+      0x6f) >>>
+    0
+  );
+}
+
+function mipsR(funct: number, rd: number, rs: number, rt: number, shamt = 0): number {
+  return ((rs << 21) | (rt << 16) | (rd << 11) | (shamt << 6) | funct) >>> 0;
+}
+
+function mipsI(opcode: number, rt: number, rs: number, imm: number): number {
+  return ((opcode << 26) | (rs << 21) | (rt << 16) | (imm & 0xffff)) >>> 0;
+}
+
+function mipsJ(opcode: number, target: number): number {
+  return ((opcode << 26) | (target & 0x03ffffff)) >>> 0;
+}
+
 describe('disassembleArm64', () => {
   // ─── RET / NOP ───────────────────────────────────────────────────
   it('decodes RET', () => {
@@ -229,48 +285,201 @@ describe('disassembleInstruction multi-architecture entrypoint', () => {
 
   it('decodes x64 common instructions', () => {
     expect(disassembleInstruction('x64', [0x90], 0x1000n)).toContain('nop');
+    expect(disassembleInstruction('x64', [0xc3], 0x1000n)).toContain('ret');
+    expect(disassembleInstruction('x64', [0xcc], 0x1000n)).toContain('int3');
     expect(disassembleInstruction('x64', [0x55], 0x1000n)).toContain('push');
     expect(disassembleInstruction('x64', [0x55], 0x1000n)).toContain('rbp');
+    expect(disassembleInstruction('x64', [0x58], 0x1000n)).toContain('pop');
+    expect(disassembleInstruction('x64', [0x41, 0x50], 0x1000n)).toContain('r8');
+    expect(disassembleInstruction('x64', [0x41, 0x58], 0x1000n)).toContain('r8');
     expect(disassembleInstruction('x64', [0x48, 0x89, 0xe5], 0x1000n)).toContain('mov');
     expect(disassembleInstruction('x64', [0x48, 0x89, 0xe5], 0x1000n)).toContain('rbp, rsp');
+    expect(disassembleInstruction('x64', [0x4c, 0x8b, 0xc3], 0x1000n)).toContain('r8, rbx');
+    expect(disassembleInstruction('x64', [0x4d, 0x8b, 0x01], 0x1000n)).toContain('r8, [r9]');
+    expect(
+      disassembleInstruction(
+        'x64',
+        [0x48, 0xb8, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11],
+        0x1000n,
+      ),
+    ).toContain('#0x1122334455667788');
   });
 
   it('decodes x86 relative and register instructions', () => {
     expect(disassembleInstruction('x86', [0xe8, 0x01, 0x00, 0x00, 0x00], 0x1000n)).toContain(
       '0x1006',
     );
+    expect(disassembleInstruction('x86', [0xe9, 0x01, 0x00, 0x00, 0x00], 0x1000n)).toContain(
+      '0x1006',
+    );
+    expect(disassembleInstruction('x86', [0xeb, 0xfe], 0x1000n)).toContain('0x1000');
+    expect(disassembleInstruction('x86', [0x74, 0x02], 0x1000n)).toContain('je');
+    expect(disassembleInstruction('x86', [0x0f, 0x85, 0x04, 0x00, 0x00, 0x00], 0x1000n)).toContain(
+      'jne',
+    );
+    expect(disassembleInstruction('x86', [0xb8, 0x78, 0x56, 0x34, 0x12], 0x1000n)).toContain(
+      '#0x12345678',
+    );
+    expect(disassembleInstruction('x86', [0x03, 0xc1], 0x1000n)).toContain('add');
+    expect(disassembleInstruction('x86', [0x29, 0x08], 0x1000n)).toContain('[rax], ecx');
+    expect(disassembleInstruction('x86', [0x2b, 0xc1], 0x1000n)).toContain('sub');
+    expect(disassembleInstruction('x86', [0x39, 0xc1], 0x1000n)).toContain('cmp');
+    expect(disassembleInstruction('x86', [0x3b, 0xc1], 0x1000n)).toContain('cmp');
     expect(disassembleInstruction('x86', [0x31, 0xc0], 0x1000n)).toContain('xor');
     expect(disassembleInstruction('x86', [0x31, 0xc0], 0x1000n)).toContain('eax, eax');
+    expect(disassembleInstruction('x86', [0xff], 0x1000n)).toContain('<unknown>');
   });
 
   it('decodes modern x86/x64 SIMD and crypto prefixes', () => {
     expect(disassembleInstruction('x64', [0x0f, 0x58, 0xc1], 0x1000n)).toContain('addps');
+    expect(disassembleInstruction('x64', [0x66, 0x0f, 0x58, 0xc1], 0x1000n)).toContain('addpd');
+    expect(disassembleInstruction('x64', [0xf3, 0x0f, 0x58, 0xc1], 0x1000n)).toContain('addss');
+    expect(disassembleInstruction('x64', [0xf2, 0x0f, 0x58, 0xc1], 0x1000n)).toContain('addsd');
+    expect(disassembleInstruction('x64', [0x66, 0x0f, 0x6f, 0xc1], 0x1000n)).toContain('movdqa');
+    expect(disassembleInstruction('x64', [0xf3, 0x0f, 0x6f, 0xc1], 0x1000n)).toContain('movdqu');
+    expect(disassembleInstruction('x64', [0x66, 0x0f, 0x7f, 0xc1], 0x1000n)).toContain('movdqa');
+    expect(disassembleInstruction('x64', [0xf3, 0x0f, 0x7f, 0xc1], 0x1000n)).toContain('movdqu');
     expect(disassembleInstruction('x64', [0x66, 0x0f, 0xef, 0xc0], 0x1000n)).toContain('pxor');
+    expect(disassembleInstruction('x64', [0x66, 0x0f, 0x38, 0xdb, 0xc1], 0x1000n)).toContain(
+      'aesimc',
+    );
     expect(disassembleInstruction('x64', [0x66, 0x0f, 0x38, 0xdc, 0xc1], 0x1000n)).toContain(
       'aesenc',
+    );
+    expect(disassembleInstruction('x64', [0x66, 0x0f, 0x38, 0xdd, 0xc1], 0x1000n)).toContain(
+      'aesenclast',
+    );
+    expect(disassembleInstruction('x64', [0x66, 0x0f, 0x38, 0xde, 0xc1], 0x1000n)).toContain(
+      'aesdec',
+    );
+    expect(disassembleInstruction('x64', [0x66, 0x0f, 0x38, 0xdf, 0xc1], 0x1000n)).toContain(
+      'aesdeclast',
+    );
+    expect(disassembleInstruction('x64', [0x66, 0x0f, 0x38, 0x40, 0xc1], 0x1000n)).toContain(
+      'pmulld',
+    );
+    expect(disassembleInstruction('x64', [0x66, 0x0f, 0x38, 0x41, 0xc1], 0x1000n)).toContain(
+      'phminposuw',
+    );
+    expect(disassembleInstruction('x64', [0xf3, 0x0f, 0xb8, 0xc1], 0x1000n)).toContain('popcnt');
+    expect(disassembleInstruction('x64', [0xf3, 0x0f, 0xbd, 0xc1], 0x1000n)).toContain('lzcnt');
+    expect(disassembleInstruction('x64', [0xf3, 0x0f, 0x38, 0xf5, 0xc1], 0x1000n)).toContain(
+      'bzhi',
     );
     expect(disassembleInstruction('x64', [0x66, 0x0f, 0x3a, 0x44, 0xc1, 0x00], 0x1000n)).toContain(
       'pclmulqdq',
     );
+    expect(disassembleInstruction('x64', [0x66, 0x0f, 0x3a, 0xdf, 0xc1, 0x01], 0x1000n)).toContain(
+      'aeskeygenassist',
+    );
+    expect(disassembleInstruction('x64', [0xf0, 0x90], 0x1000n)).toContain('nop');
   });
 
   it('decodes AVX and AVX2 VEX-prefixed instructions', () => {
+    expect(disassembleInstruction('x64', [0xc5, 0xf8, 0x58, 0xc2], 0x1000n)).toContain('xmm');
+    expect(disassembleInstruction('x64', [0xc5, 0x74, 0x58, 0xc2], 0x1000n)).toContain('ymm');
+    expect(disassembleInstruction('x64', [0xc5, 0x78, 0x58, 0xc2], 0x1000n)).toContain('xmm8');
     expect(disassembleInstruction('x64', [0xc5, 0xf4, 0x58, 0xc2], 0x1000n)).toContain('vaddps');
+    expect(disassembleInstruction('x64', [0xc5, 0xf5, 0x6f, 0xc2], 0x1000n)).toContain('vmovdqa');
+    expect(disassembleInstruction('x64', [0xc5, 0xf6, 0x6f, 0xc2], 0x1000n)).toContain('vmovdqu');
+    expect(disassembleInstruction('x64', [0xc5, 0xf5, 0x7f, 0xc2], 0x1000n)).toContain('vmovdqa');
+    expect(disassembleInstruction('x64', [0xc5, 0xf6, 0x7f, 0xc2], 0x1000n)).toContain('vmovdqu');
     expect(disassembleInstruction('x64', [0xc4, 0xe2, 0x7d, 0x40, 0xc1], 0x1000n)).toContain(
       'vpmulld',
     );
+    expect(disassembleInstruction('x64', [0xc4, 0xe2, 0x7d, 0xdc, 0xc1], 0x1000n)).toContain(
+      'vaesenc',
+    );
+    expect(disassembleInstruction('x64', [0xc4, 0xe2, 0x7d, 0xdd, 0xc1], 0x1000n)).toContain(
+      'vaesenclast',
+    );
+    expect(disassembleInstruction('x64', [0xc4, 0xe2, 0x7d, 0xde, 0xc1], 0x1000n)).toContain(
+      'vaesdec',
+    );
+    expect(disassembleInstruction('x64', [0xc4, 0xe2, 0x7d, 0xdf, 0xc1], 0x1000n)).toContain(
+      'vaesdeclast',
+    );
+    expect(disassembleInstruction('x64', [0xc4, 0xe2, 0x7d, 0xf6, 0xc1], 0x1000n)).toContain(
+      'vpsadbw',
+    );
+    expect(disassembleInstruction('x64', [0xc4, 0xe2, 0x7d, 0x5a, 0xc1], 0x1000n)).toContain(
+      'vbroadcasti128',
+    );
+    expect(disassembleInstruction('x64', [0xc4, 0xe3, 0x79, 0x44, 0xc1, 0x10], 0x1000n)).toContain(
+      'vpclmulqdq',
+    );
+    expect(disassembleInstruction('x64', [0xc5, 0xf8, 0x99], 0x1000n)).toContain('vex');
+    expect(disassembleInstruction('x64', [0xc5, 0xf8], 0x1000n)).toContain('<unknown>');
   });
 
   it('decodes common AVX-512 EVEX-prefixed instructions', () => {
     expect(disassembleInstruction('x64', [0x62, 0xf1, 0x74, 0x48, 0x58, 0xc2], 0x1000n)).toContain(
       'vaddps',
     );
+    expect(disassembleInstruction('x64', [0x62, 0xf1, 0x74, 0x28, 0x58, 0xc2], 0x1000n)).toContain(
+      'ymm',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf1, 0x74, 0x08, 0x58, 0xc2], 0x1000n)).toContain(
+      'xmm',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xe1, 0x74, 0x4f, 0x58, 0xc2], 0x1000n)).toContain(
+      '{k7}',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xe1, 0x74, 0xcf, 0x58, 0xc2], 0x1000n)).toContain(
+      '{z}',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf1, 0x74, 0x58, 0x58, 0x02], 0x1000n)).toContain(
+      '{evex-b}',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf1, 0x75, 0x48, 0x6f, 0xc2], 0x1000n)).toContain(
+      'vmovdqa64',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf1, 0x76, 0x48, 0x6f, 0xc2], 0x1000n)).toContain(
+      'vmovdqu64',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf1, 0x75, 0x48, 0x7f, 0xc2], 0x1000n)).toContain(
+      'vmovdqa64',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf1, 0x76, 0x48, 0x7f, 0xc2], 0x1000n)).toContain(
+      'vmovdqu64',
+    );
     expect(disassembleInstruction('x64', [0x62, 0xf2, 0x75, 0x48, 0x25, 0xc2], 0x1000n)).toContain(
       'vpternlogd',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf2, 0x75, 0x48, 0x40, 0xc2], 0x1000n)).toContain(
+      'vpmulld',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf2, 0x75, 0x48, 0x58, 0xc2], 0x1000n)).toContain(
+      'vpbroadcastd',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf2, 0x75, 0x48, 0x59, 0xc2], 0x1000n)).toContain(
+      'vpbroadcastq',
     );
     expect(disassembleInstruction('x64', [0x62, 0xf2, 0x7d, 0x48, 0x7c, 0xc0], 0x1000n)).toContain(
       'vpbroadcastd',
     );
+    expect(disassembleInstruction('x64', [0x62, 0xf2, 0x7d, 0x48, 0x7e, 0xc0], 0x1000n)).toContain(
+      'vpbroadcastq',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf2, 0x75, 0x48, 0xdc, 0xc2], 0x1000n)).toContain(
+      'vaesenc',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf2, 0x75, 0x48, 0xdd, 0xc2], 0x1000n)).toContain(
+      'vaesenclast',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf2, 0x75, 0x48, 0xde, 0xc2], 0x1000n)).toContain(
+      'vaesdec',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf2, 0x75, 0x48, 0xdf, 0xc2], 0x1000n)).toContain(
+      'vaesdeclast',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0x61, 0x74, 0x48, 0x58, 0xc2], 0x1000n)).toContain(
+      'zmm24',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf1, 0x74, 0x48, 0x99, 0xc2], 0x1000n)).toContain(
+      '<unknown>',
+    );
+    expect(disassembleInstruction('x64', [0x62, 0xf1, 0x74, 0x48], 0x1000n)).toContain('<unknown>');
   });
 
   it('decodes RISC-V common instructions', () => {
@@ -280,10 +489,139 @@ describe('disassembleInstruction multi-architecture entrypoint', () => {
     expect(disassembleInstruction('riscv64', 0x002081b3, 0x1000n)).toContain('add');
   });
 
+  it('decodes RISC-V immediate, memory, branch, and jump families', () => {
+    for (const [funct3, mnemonic] of [
+      [1, 'slli'],
+      [2, 'slti'],
+      [3, 'sltiu'],
+      [4, 'xori'],
+      [5, 'srli'],
+      [6, 'ori'],
+      [7, 'andi'],
+    ] as const) {
+      expect(disassembleInstruction('riscv64', rvI(funct3, 1, 2, 3), 0x1000n)).toContain(mnemonic);
+    }
+    expect(disassembleInstruction('riscv64', rvI(5, 1, 2, 0x403), 0x1000n)).toContain('srai');
+
+    for (const [funct7, funct3, mnemonic] of [
+      [32, 0, 'sub'],
+      [0, 1, 'sll'],
+      [0, 2, 'slt'],
+      [0, 3, 'sltu'],
+      [0, 4, 'xor'],
+      [0, 5, 'srl'],
+      [32, 5, 'sra'],
+      [0, 6, 'or'],
+      [0, 7, 'and'],
+    ] as const) {
+      expect(disassembleInstruction('riscv64', rvR(funct7, funct3, 1, 2, 3), 0x1000n)).toContain(
+        mnemonic,
+      );
+    }
+
+    for (const [funct3, mnemonic] of [
+      [0, 'lb'],
+      [1, 'lh'],
+      [2, 'lw'],
+      [3, 'ld'],
+      [4, 'lbu'],
+      [5, 'lhu'],
+      [6, 'lwu'],
+    ] as const) {
+      expect(disassembleInstruction('riscv64', rvI(funct3, 1, 2, 8, 0x03), 0x1000n)).toContain(
+        mnemonic,
+      );
+    }
+
+    for (const [funct3, mnemonic] of [
+      [0, 'sb'],
+      [1, 'sh'],
+      [2, 'sw'],
+      [3, 'sd'],
+    ] as const) {
+      expect(disassembleInstruction('riscv64', rvS(funct3, 1, 2, 8), 0x1000n)).toContain(mnemonic);
+    }
+
+    for (const [funct3, mnemonic] of [
+      [0, 'beq'],
+      [1, 'bne'],
+      [4, 'blt'],
+      [5, 'bge'],
+      [6, 'bltu'],
+      [7, 'bgeu'],
+    ] as const) {
+      expect(disassembleInstruction('riscv64', rvB(funct3, 1, 2, 8), 0x1000n)).toContain(mnemonic);
+    }
+
+    expect(disassembleInstruction('riscv64', rvJ(1, 16), 0x1000n)).toContain('jal');
+    expect(disassembleInstruction('riscv64', rvI(0, 1, 2, 12, 0x67), 0x1000n)).toContain('jalr');
+    expect(disassembleInstruction('riscv64', 0x123450b7, 0x1000n)).toContain('lui');
+    expect(disassembleInstruction('riscv64', 0x12345097, 0x1000n)).toContain('auipc');
+    expect(disassembleInstruction('riscv64', 0xffffffff, 0x1000n)).toContain('<unknown>');
+  });
+
   it('decodes MIPS common instructions', () => {
     expect(disassembleInstruction('mips', 0x00000000, 0x1000n)).toContain('nop');
     expect(disassembleInstruction('mips', 0x012a4020, 0x1000n)).toContain('add');
     expect(disassembleInstruction('mips', 0x8d080004, 0x1000n)).toContain('lw');
+  });
+
+  it('decodes MIPS R-type, immediate, memory, and control-transfer families', () => {
+    for (const [funct, mnemonic] of [
+      [0x08, 'jr'],
+      [0x09, 'jalr'],
+      [0x00, 'sll'],
+      [0x02, 'srl'],
+      [0x03, 'sra'],
+      [0x21, 'addu'],
+      [0x22, 'sub'],
+      [0x23, 'subu'],
+      [0x24, 'and'],
+      [0x25, 'or'],
+      [0x26, 'xor'],
+      [0x27, 'nor'],
+      [0x2a, 'slt'],
+      [0x2b, 'sltu'],
+    ] as const) {
+      expect(disassembleInstruction('mips', mipsR(funct, 8, 9, 10, 3), 0x1000n)).toContain(
+        mnemonic,
+      );
+    }
+
+    for (const [opcode, mnemonic] of [
+      [0x08, 'addi'],
+      [0x09, 'addiu'],
+      [0x0a, 'slti'],
+      [0x0b, 'sltiu'],
+      [0x0c, 'andi'],
+      [0x0d, 'ori'],
+      [0x0e, 'xori'],
+    ] as const) {
+      expect(disassembleInstruction('mips', mipsI(opcode, 8, 9, 0x10), 0x1000n)).toContain(
+        mnemonic,
+      );
+    }
+
+    for (const [opcode, mnemonic] of [
+      [0x20, 'lb'],
+      [0x21, 'lh'],
+      [0x23, 'lw'],
+      [0x24, 'lbu'],
+      [0x25, 'lhu'],
+      [0x28, 'sb'],
+      [0x29, 'sh'],
+      [0x2b, 'sw'],
+    ] as const) {
+      expect(disassembleInstruction('mips', mipsI(opcode, 8, 9, -4), 0x1000n)).toContain(mnemonic);
+    }
+
+    expect(disassembleInstruction('mips', mipsJ(0x02, 0x123), 0x1000n)).toContain('j');
+    expect(disassembleInstruction('mips', mipsJ(0x03, 0x123), 0x1000n)).toContain('jal');
+    expect(disassembleInstruction('mips', mipsI(0x04, 8, 9, 2), 0x1000n)).toContain('beq');
+    expect(disassembleInstruction('mips', mipsI(0x05, 8, 9, 2), 0x1000n)).toContain('bne');
+    expect(disassembleInstruction('mips', mipsI(0x0f, 8, 0, 0x1234), 0x1000n)).toContain('lui');
+    expect(disassembleInstruction('mips', mipsR(0x3f, 8, 9, 10), 0x1000n)).toContain('<unknown>');
+    expect(disassembleInstruction('mips', 0xffffffff, 0x1000n)).toContain('<unknown>');
   });
 
   it('decodes MIPSEL bytes using little-endian order', () => {
