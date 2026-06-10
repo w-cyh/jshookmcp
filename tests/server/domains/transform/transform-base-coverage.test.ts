@@ -81,8 +81,8 @@ class TestableBase extends TransformToolHandlersBase {
   public getPool() {
     return this.cryptoHarnessPool;
   }
-  public testToTextResponse(payload: any) {
-    return this.toTextResponse(payload);
+  public testToTextResponse(body: any) {
+    return this.toTextResponse(body);
   }
   public testFail(tool: string, error: any) {
     return this.fail(tool, error);
@@ -306,7 +306,7 @@ describe('TransformToolHandlersBase — additional coverage', () => {
   // ── toTextResponse and fail ───────────────────────────────
 
   describe('toTextResponse', () => {
-    it('wraps payload in MCP text content format', async () => {
+    it('wraps body in MCP text content format', async () => {
       const response = base.testToTextResponse({ key: 'value' });
       expect(response.content).toHaveLength(1);
       // @ts-expect-error
@@ -408,13 +408,13 @@ describe('TransformToolHandlersBase — additional coverage', () => {
       // @ts-expect-error
       pool.submit.mockResolvedValueOnce({
         ok: false,
-        error: 'worker rejected payload',
+        error: 'worker rejected request',
       });
 
       const result = await base.testRunCryptoHarness('fn', 'fn', ['x', 'y']);
       expect(result.allPassed).toBe(false);
       expect(result.results).toHaveLength(2);
-      expect(result.results[0]!.error).toBe('worker rejected payload');
+      expect(result.results[0]!.error).toBe('worker rejected request');
     });
   });
 

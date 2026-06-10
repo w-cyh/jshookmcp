@@ -237,13 +237,24 @@ describe('TransformToolHandlersOps', () => {
       expect(diff).toContain('+b');
     });
 
-    it('uses fallback diff for large inputs', async () => {
+    it('keeps large inputs on the LCS path when the changed middle is small', async () => {
       const spy = vi.spyOn(ops as any, 'buildFallbackDiff');
 
       const oldText = Array.from({ length: 600 }, (_, i) => `L${i}`).join('\n');
       const newText = Array.from({ length: 600 }, (_, i) => (i === 300 ? `X${i}` : `L${i}`)).join(
         '\n',
       );
+
+      const diff = ops.testBuildDiff(oldText, newText);
+      expect(spy).not.toHaveBeenCalled();
+      expect(diff).toContain('-L300');
+      expect(diff).toContain('+X300');
+    });
+
+    it('uses fallback diff when the changed middle exceeds the LCS budget', async () => {
+      const spy = vi.spyOn(ops as any, 'buildFallbackDiff');
+      const oldText = Array.from({ length: 600 }, (_, i) => `L${i}`).join('\n');
+      const newText = Array.from({ length: 600 }, (_, i) => `X${i}`).join('\n');
 
       const diff = ops.testBuildDiff(oldText, newText);
       expect(spy).toHaveBeenCalledTimes(1);

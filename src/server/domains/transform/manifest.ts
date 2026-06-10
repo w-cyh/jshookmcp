@@ -18,6 +18,7 @@ const registrations = defineMethodRegistrations<H, (typeof transformTools)[numbe
     { tool: 'crypto_extract_standalone', method: 'handleCryptoExtractStandalone' },
     { tool: 'crypto_test_harness', method: 'handleCryptoTestHarness' },
     { tool: 'crypto_compare', method: 'handleCryptoCompare' },
+    { tool: 'transform_workbench', method: 'handleTransformWorkbench' },
   ],
 });
 

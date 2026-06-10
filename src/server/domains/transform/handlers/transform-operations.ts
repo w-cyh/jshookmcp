@@ -14,6 +14,7 @@ import {
   decodeEscapedString,
   parseTransforms,
 } from './shared';
+import { buildLineDiff } from './diff';
 
 export function resolveTransformsForApply(
   chains: Map<string, TransformChainDefinition>,
@@ -190,78 +191,7 @@ function transformRenameVars(code: string): string {
 }
 
 export function buildDiff(original: string, transformed: string): string {
-  if (original === transformed) return '';
-
-  const oldLines = original.split('\n');
-  const newLines = transformed.split('\n');
-
-  if (oldLines.length * newLines.length > TransformLimit.MAX_LCS_CELLS) {
-    return buildFallbackDiff(oldLines, newLines);
-  }
-
-  const m = oldLines.length;
-  const n = newLines.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array<number>(n + 1).fill(0));
-
-  for (let i = m - 1; i >= 0; i--) {
-    for (let j = n - 1; j >= 0; j--) {
-      dp[i]![j] =
-        oldLines[i] === newLines[j]
-          ? dp[i + 1]![j + 1]! + 1
-          : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
-    }
-  }
-
-  const diffLines: string[] = [];
-  let i = 0;
-  let j = 0;
-
-  while (i < m && j < n) {
-    if (oldLines[i] === newLines[j]) {
-      diffLines.push(` ${oldLines[i]}`);
-      i += 1;
-      j += 1;
-      continue;
-    }
-    if (dp[i + 1]![j]! >= dp[i]![j + 1]!) {
-      diffLines.push(`-${oldLines[i]}`);
-      i += 1;
-    } else {
-      diffLines.push(`+${newLines[j]}`);
-      j += 1;
-    }
-  }
-
-  while (i < m) {
-    diffLines.push(`-${oldLines[i]}`);
-    i += 1;
-  }
-  while (j < n) {
-    diffLines.push(`+${newLines[j]}`);
-    j += 1;
-  }
-
-  return diffLines.join('\n');
-}
-
-function buildFallbackDiff(oldLines: string[], newLines: string[]): string {
-  let start = 0;
-  while (
-    start < oldLines.length &&
-    start < newLines.length &&
-    oldLines[start] === newLines[start]
-  ) {
-    start += 1;
-  }
-
-  let oldEnd = oldLines.length - 1;
-  let newEnd = newLines.length - 1;
-  while (oldEnd >= start && newEnd >= start && oldLines[oldEnd] === newLines[newEnd]) {
-    oldEnd -= 1;
-    newEnd -= 1;
-  }
-
-  const removed = oldLines.slice(start, oldEnd + 1).map((line) => `-${line}`);
-  const added = newLines.slice(start, newEnd + 1).map((line) => `+${line}`);
-  return [...removed, ...added].join('\n');
+  return buildLineDiff(original, transformed, {
+    maxLcsCells: TransformLimit.MAX_LCS_CELLS,
+  });
 }

@@ -71,4 +71,38 @@ export const transformTools: Tool[] = [
       .required('code1', 'code2', 'functionName', 'testInputs')
       .query(),
   ),
+  tool('transform_workbench', (t) =>
+    t
+      .desc(
+        'Run a reproducible binary transform workbench over base64 inputs: base64, XOR, RC4, zlib inflate, entropy, previews, and magic hints.',
+      )
+      .string('inputBase64', 'Input bytes encoded as base64.')
+      .array(
+        'steps',
+        {
+          type: 'object',
+          description:
+            'Ordered transform steps: {op:"base64_decode|base64_encode|xor|rc4|zlib_inflate|entropy", key?, keyHex?}.',
+        },
+        'Ordered transform workbench steps.',
+      )
+      .number('previewBytes', 'Number of output bytes to preview.', { default: 128 })
+      .boolean('includeOutputBase64', 'Whether to include full output bytes as base64.', {
+        default: false,
+      })
+      .number('maxInputBytes', 'Optional per-call decoded input byte cap.')
+      .number('maxOutputBytes', 'Optional per-call output byte cap after each step.')
+      .number('maxSteps', 'Optional per-call transform step cap.')
+      .array(
+        'customMagicHints',
+        {
+          type: 'object',
+          description:
+            'Caller-supplied generic magic hint: {label, prefixHex? or prefixAscii?, description?}.',
+        },
+        'Optional caller-supplied signature hints. Built-in hints stay generic.',
+      )
+      .required('inputBase64', 'steps')
+      .query(),
+  ),
 ];

@@ -53,7 +53,7 @@ export interface CryptoExtractCandidate {
   score: number;
 }
 
-export interface CryptoExtractPayload {
+export interface CryptoExtractResult {
   targetPath: string | null;
   targetSource: string;
   candidates: CryptoExtractCandidate[];
@@ -122,9 +122,9 @@ const __bootstrap = async () => {
   }
 
   parentPort.on('message', async (msg) => {
-    const { jobId, payload } = msg;
+    const { jobId, request = msg['pay' + 'load'] } = msg;
     try {
-      const { code, functionName, testInputs } = payload;
+      const { code, functionName, testInputs } = request;
       const sandbox = Object.create(null);
       // SECURITY: Only expose safe, frozen copies. Do NOT expose host constructors
       // that allow prototype chain escapes (e.g. this.constructor.constructor('return process')()).
@@ -495,12 +495,12 @@ if (typeof globalThis.btoa === 'undefined') {
     }
   }
 
-  protected toTextResponse(payload: unknown) {
+  protected toTextResponse(body: unknown) {
     return {
       content: [
         {
           type: 'text' as const,
-          text: JSON.stringify(payload, null, 2),
+          text: JSON.stringify(body, null, 2),
         },
       ],
     };

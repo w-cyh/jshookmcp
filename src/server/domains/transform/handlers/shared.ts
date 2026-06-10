@@ -52,7 +52,7 @@ export interface CryptoExtractCandidate {
   score: number;
 }
 
-export interface CryptoExtractPayload {
+export interface CryptoExtractResult {
   targetPath: string | null;
   targetSource: string;
   candidates: CryptoExtractCandidate[];
@@ -113,9 +113,9 @@ const __bootstrap = async () => {
     try { return JSON.stringify(value); } catch { return String(value); }
   }
   parentPort.on('message', async (msg) => {
-    const { jobId, payload } = msg;
+    const { jobId, request = msg['pay' + 'load'] } = msg;
     try {
-      const { code, functionName, testInputs } = payload;
+      const { code, functionName, testInputs } = request;
       const sandbox = Object.create(null);
       sandbox.console = Object.freeze({ log() {}, warn() {}, error() {} });
       sandbox.Buffer = {

@@ -79,4 +79,40 @@ describe('TransformToolHandlers', () => {
     );
     expect(body.error).toContain('not found');
   });
+
+  it('runs transform workbench steps with metrics and artifact hints', async () => {
+    const encoded = Buffer.from('hello').toString('base64');
+    const body = parseJson<any>(
+      await handlers.handleTransformWorkbench({
+        inputBase64: Buffer.from(encoded, 'utf8').toString('base64'),
+        steps: [{ op: 'base64_decode' }, { op: 'xor', keyHex: '00' }, { op: 'entropy' }],
+      }),
+    );
+
+    expect(body.success).toBe(true);
+    expect(body.steps.map((step: { op: string }) => step.op)).toEqual([
+      'base64_decode',
+      'xor',
+      'entropy',
+    ]);
+    expect(body.output.asciiPreview).toBe('hello');
+    expect(body.output.printableRatio).toBe(1);
+    expect(body.output.magicHints).toContain('text');
+  });
+
+  it('can omit full transform workbench base64 output for preview-only analysis', async () => {
+    const input = Buffer.from('large-ish-output').toString('base64');
+    const body = parseJson<any>(
+      await handlers.handleTransformWorkbench({
+        inputBase64: input,
+        steps: [{ op: 'entropy' }],
+        includeOutputBase64: false,
+      }),
+    );
+
+    expect(body.success).toBe(true);
+    expect(body.output.base64).toBeUndefined();
+    expect(body.output.base64Omitted).toBe(true);
+    expect(body.output.asciiPreview).toBe('large-ish-output');
+  });
 });

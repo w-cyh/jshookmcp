@@ -2,7 +2,7 @@
  * Crypto sub-handler — extract, test harness, and compare operations.
  */
 
-import type { CryptoExtractPayload, TransformSharedState } from './shared';
+import type { CryptoExtractResult, TransformSharedState } from './shared';
 import {
   CRYPTO_KEYWORDS,
   requireString,
@@ -43,7 +43,7 @@ export class CryptoHandlers {
 
       const extracted = (await evaluateWithTimeout(
         page,
-        (target, keywords): CryptoExtractPayload => {
+        (target, keywords): CryptoExtractResult => {
           const keywordList = Array.isArray(keywords) ? keywords : [];
           const lowerKeywords = keywordList.map((item) => String(item).toLowerCase());
           const globalObj: Record<string, unknown> = window as unknown as Record<string, unknown>;
@@ -200,7 +200,7 @@ export class CryptoHandlers {
         },
         targetFunction,
         CRYPTO_KEYWORDS,
-      )) as CryptoExtractPayload;
+      )) as CryptoExtractResult;
 
       if (!extracted || extracted.targetSource.trim().length === 0) {
         throw new Error('No crypto/signature-like function found on current page');

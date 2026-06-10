@@ -11,18 +11,21 @@ import type { TransformSharedState } from './handlers/shared';
 import { createTransformSharedState } from './handlers/shared';
 import { AstHandlers } from './handlers/ast-handlers';
 import { CryptoHandlers } from './handlers/crypto-handlers';
+import { WorkbenchHandlers } from './handlers/workbench-handlers';
 
 export class TransformToolHandlers {
   protected collector: CodeCollector;
   protected state: TransformSharedState;
   private ast: AstHandlers;
   private crypto: CryptoHandlers;
+  private workbench: WorkbenchHandlers;
 
   constructor(collector: CodeCollector) {
     this.collector = collector;
     this.state = createTransformSharedState(collector);
     this.ast = new AstHandlers(this.state);
     this.crypto = new CryptoHandlers(this.state);
+    this.workbench = new WorkbenchHandlers();
   }
 
   async close(): Promise<void> {
@@ -58,4 +61,6 @@ export class TransformToolHandlers {
   handleCryptoTestHarness = (args: Record<string, unknown>) =>
     this.crypto.handleCryptoTestHarness(args);
   handleCryptoCompare = (args: Record<string, unknown>) => this.crypto.handleCryptoCompare(args);
+  handleTransformWorkbench = (args: Record<string, unknown>) =>
+    this.workbench.handleTransformWorkbench(args);
 }

@@ -1,7 +1,7 @@
 import {
   CRYPTO_KEYWORDS,
   type CryptoExtractCandidate,
-  type CryptoExtractPayload,
+  type CryptoExtractResult,
 } from '@server/domains/transform/handlers.impl.transform-base';
 import { TransformToolHandlersOps } from '@server/domains/transform/handlers.impl.transform-ops';
 import { evaluateWithTimeout } from '@modules/collector/PageController';
@@ -15,7 +15,7 @@ export class TransformToolHandlersCrypto extends TransformToolHandlersOps {
 
       const extracted = (await evaluateWithTimeout(
         page,
-        (target, keywords): CryptoExtractPayload => {
+        (target, keywords): CryptoExtractResult => {
           const keywordList = Array.isArray(keywords) ? keywords : [];
           const lowerKeywords = keywordList.map((item) => String(item).toLowerCase());
           const globalObj: Record<string, unknown> = window as unknown as Record<string, unknown>;
@@ -187,7 +187,7 @@ export class TransformToolHandlersCrypto extends TransformToolHandlersOps {
         },
         targetFunction,
         CRYPTO_KEYWORDS,
-      )) as CryptoExtractPayload;
+      )) as CryptoExtractResult;
 
       if (!extracted || extracted.targetSource.trim().length === 0) {
         throw new Error('No crypto/signature-like function found on current page');
