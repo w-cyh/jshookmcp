@@ -32,6 +32,12 @@ describe('config utilities', () => {
     delete process.env.CACHE_DIR;
     delete process.env.MAX_CONCURRENT_ANALYSIS;
     delete process.env.MAX_CODE_SIZE_MB;
+    delete process.env.APK_STATIC_TRIAGE_DEFAULT_ENTRIES;
+    delete process.env.DEX_MAGIC_ASCII;
+    delete process.env.FRIDA_DEX_DUMP_TIMEOUT_MS;
+    delete process.env.NEMU_RAW_MEMORY_MAX_BYTES;
+    delete process.env.REVERSE_SESSION_RUN_MAX_STEPS;
+    delete process.env.TRANSFORM_WORKBENCH_MAX_STEPS;
     delete process.env.SEARCH_QUERY_CATEGORY_PROFILES_JSON;
     delete process.env.SEARCH_CJK_QUERY_ALIASES_JSON;
     delete process.env.SEARCH_INTENT_TOOL_BOOST_RULES_JSON;
@@ -79,6 +85,8 @@ describe('config utilities', () => {
     expect(config.puppeteer.timeout).toBe(30000);
     expect(config.cache.ttl).toBe(3600);
     expect(config.performance.maxConcurrentAnalysis).toBe(3);
+    expect(config.reverseEngineering.nativeEmulator.rawMemoryMaxBytes).toBe(16 * 1024 * 1024);
+    expect(config.reverseEngineering.reverseSession.runMaxSteps).toBe(50);
     expect(config.search.queryCategoryProfiles.length).toBeGreaterThan(0);
     expect(config.search.cjkQueryAliases.length).toBeGreaterThan(0);
     expect(config.search.intentToolBoostRules.length).toBeGreaterThan(0);
@@ -92,6 +100,25 @@ describe('config utilities', () => {
     const config = getConfig();
     expect(config.mcp.name).toBe('custom-server');
     expect(config.mcp.version).toBe('9.9.9');
+  });
+
+  it('reads reverse-engineering runtime limits from environment', async () => {
+    process.env.APK_STATIC_TRIAGE_DEFAULT_ENTRIES = '42';
+    process.env.DEX_MAGIC_ASCII = 'dex\n';
+    process.env.FRIDA_DEX_DUMP_TIMEOUT_MS = '1234';
+    process.env.NEMU_RAW_MEMORY_MAX_BYTES = '8192';
+    process.env.REVERSE_SESSION_RUN_MAX_STEPS = '7';
+    process.env.TRANSFORM_WORKBENCH_MAX_STEPS = '5';
+
+    const { getConfig } = await import('@utils/config');
+    const config = getConfig().reverseEngineering;
+
+    expect(config.apk.staticTriageDefaultEntries).toBe(42);
+    expect(config.binaryMagic.dexMagicAscii).toBe('dex\n');
+    expect(config.frida.dexDumpTimeoutMs).toBe(1234);
+    expect(config.nativeEmulator.rawMemoryMaxBytes).toBe(8192);
+    expect(config.reverseSession.runMaxSteps).toBe(7);
+    expect(config.transformWorkbench.maxSteps).toBe(5);
   });
 
   it('resolves executable path by priority order', async () => {

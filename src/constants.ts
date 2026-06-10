@@ -579,6 +579,12 @@ export const MEMORY_SCAN_MAX_BUFFER_BYTES = int('MEMORY_SCAN_MAX_BUFFER_BYTES', 
 export const MEMORY_SCAN_MAX_RESULTS = int('MEMORY_SCAN_MAX_RESULTS', 10_000);
 export const MEMORY_SCAN_MAX_REGIONS = int('MEMORY_SCAN_MAX_REGIONS', 50_000);
 export const MEMORY_SCAN_REGION_MAX_BYTES = int('MEMORY_SCAN_REGION_MAX_BYTES', 16_777_216);
+export const MEMORY_ENUM_REGIONS_RETURN_LIMIT = int('MEMORY_ENUM_REGIONS_RETURN_LIMIT', 10_000);
+export const MEMORY_ENUM_REGIONS_MAX_BUFFER_BYTES = int(
+  'MEMORY_ENUM_REGIONS_MAX_BUFFER_BYTES',
+  10 * 1024 * 1024,
+);
+export const MEMORY_VMMAP_MAX_BUFFER_BYTES = int('MEMORY_VMMAP_MAX_BUFFER_BYTES', 5 * 1024 * 1024);
 export const MEMORY_INJECT_TIMEOUT_MS = int('MEMORY_INJECT_TIMEOUT_MS', 30_000);
 export const ENABLE_INJECTION_TOOLS = bool('ENABLE_INJECTION_TOOLS', true);
 export const MEMORY_MONITOR_INTERVAL_MS = int('MEMORY_MONITOR_INTERVAL_MS', 1_000);
@@ -773,20 +779,8 @@ export const PROXY_ADB_TIMEOUT_MS = int('PROXY_ADB_TIMEOUT_MS', 60_000);
 export const PROXY_ADB_MAX_BUFFER_BYTES = int('PROXY_ADB_MAX_BUFFER_BYTES', 8 * 1024 * 1024);
 
 /* ================================================================== */
-/*  APK / DEX artifact analysis                                        */
+/*  Binary string extraction                                           */
 /* ================================================================== */
-
-export const APK_STATIC_TRIAGE_MIN_ENTRIES = int('APK_STATIC_TRIAGE_MIN_ENTRIES', 100);
-export const APK_STATIC_TRIAGE_DEFAULT_ENTRIES = int('APK_STATIC_TRIAGE_DEFAULT_ENTRIES', 2_000);
-export const APK_STATIC_TRIAGE_MAX_ENTRIES = int('APK_STATIC_TRIAGE_MAX_ENTRIES', 20_000);
-export const APK_STATIC_TRIAGE_ASSET_HINT_LIMIT = int('APK_STATIC_TRIAGE_ASSET_HINT_LIMIT', 200);
-export const APK_STATIC_TRIAGE_NATIVE_LIB_LIMIT = int('APK_STATIC_TRIAGE_NATIVE_LIB_LIMIT', 300);
-
-export const DEX_SCAN_DEFAULT_MAX_HITS = int('DEX_SCAN_DEFAULT_MAX_HITS', 50);
-export const DEX_SCAN_MAX_HITS = int('DEX_SCAN_MAX_HITS', 500);
-export const DEX_SCAN_MAX_EXTRACT_BYTES = int('DEX_SCAN_MAX_EXTRACT_BYTES', 512 * 1024 * 1024);
-export const DEX_MAGIC_ASCII = str('DEX_MAGIC_ASCII', 'dex\n');
-export const CDEX_MAGIC_ASCII = str('CDEX_MAGIC_ASCII', 'cdex');
 
 export const BINARY_STRINGS_MIN_LENGTH_DEFAULT = int('BINARY_STRINGS_MIN_LENGTH_DEFAULT', 4);
 export const BINARY_STRINGS_MIN_LENGTH_FLOOR = int('BINARY_STRINGS_MIN_LENGTH_FLOOR', 2);
@@ -795,13 +789,6 @@ export const BINARY_STRINGS_MAX_RESULTS_DEFAULT = int('BINARY_STRINGS_MAX_RESULT
 export const BINARY_STRINGS_MAX_RESULTS_LIMIT = int('BINARY_STRINGS_MAX_RESULTS_LIMIT', 50_000);
 export const BINARY_STRINGS_PRINTABLE_ASCII_MIN = int('BINARY_STRINGS_PRINTABLE_ASCII_MIN', 0x20);
 export const BINARY_STRINGS_PRINTABLE_ASCII_MAX = int('BINARY_STRINGS_PRINTABLE_ASCII_MAX', 0x7e);
-
-export const FRIDA_DEX_DUMP_TIMEOUT_MS = int('FRIDA_DEX_DUMP_TIMEOUT_MS', 180_000);
-export const FRIDA_DEX_DUMP_MAX_BUFFER_BYTES = int(
-  'FRIDA_DEX_DUMP_MAX_BUFFER_BYTES',
-  16 * 1024 * 1024,
-);
-export const FRIDA_DEX_DUMP_FILE_LIMIT = int('FRIDA_DEX_DUMP_FILE_LIMIT', 500);
 
 /* ================================================================== */
 /*  Mojo IPC                                                           */

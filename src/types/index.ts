@@ -9,6 +9,15 @@ export type {
   SearchQueryCategoryProfileConfig,
   SearchCjkQueryAliasConfig,
   SearchIntentToolBoostRuleConfig,
+  ReverseEngineeringConfig,
+  TransformWorkbenchConfig,
+  ReverseSessionConfig,
+  BinaryMagicConfig,
+  NativeEmulatorConfig,
+  ApkAnalysisConfig,
+  DexAnalysisConfig,
+  FridaAnalysisConfig,
+  AndroidRuntimeConfig,
 } from '@internal-types/config';
 export type { BrowserContext } from '@internal-types/browser';
 export type {
