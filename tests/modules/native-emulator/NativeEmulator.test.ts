@@ -117,7 +117,9 @@ describe('NativeEmulator facade — L7', () => {
     // get_const: movz x0, #1234 ; ret
     const code = [0x40, 0x9a, 0x80, 0xd2, 0xc0, 0x03, 0x5f, 0xd6];
     const emu = new NativeEmulator();
-    emu.loadLibrary(buildSo(code, [{ name: 'get_const', codeOffset: 0 }]));
+    const loaded = emu.loadLibrary(buildSo(code, [{ name: 'get_const', codeOffset: 0 }]));
+    expect(loaded.unresolvedImports).toEqual([]);
+    expect(loaded.constructorFaults).toEqual([]);
     expect(emu.call('get_const')).toBe(1234);
   });
 
@@ -137,6 +139,16 @@ describe('NativeEmulator facade — L7', () => {
     const emu = new NativeEmulator();
     const handle = emu.newByteArray(new Uint8Array([1, 2, 3]));
     expect(Array.from(emu.bytesOf(handle)!)).toEqual([1, 2, 3]);
+  });
+
+  it('allocates raw guest memory that can be read and patched', () => {
+    const emu = new NativeEmulator();
+    const addr = emu.allocGuestMemory(3, new Uint8Array([0x41, 0x42, 0x43]));
+    expect(addr).toBeGreaterThan(0);
+    expect(Array.from(emu.readGuestMemory(addr, 3))).toEqual([0x41, 0x42, 0x43]);
+
+    emu.writeGuestMemory(addr + 1, new Uint8Array([0x78, 0x79]));
+    expect(Array.from(emu.readGuestMemory(addr, 3))).toEqual([0x41, 0x78, 0x79]);
   });
 
   it('registers a mock Java method reachable via the JNI environment', () => {

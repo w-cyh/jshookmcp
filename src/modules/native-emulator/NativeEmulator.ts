@@ -22,8 +22,9 @@
  * The CPU is AArch64, so only lib/arm64-v8a/*.so is loadable. Other ABIs and Dart
  * AOT code are rejected by the extractor/classifier rather than silently run.
  */
-import { CpuEngine } from './CpuEngine';
+import { CpuEngine, type NativeRuntimeImportDiagnostic } from './CpuEngine';
 import { JniEnvironment, type JavaMethodImpl } from './jni';
+import { getReverseEngineeringConfig } from '@utils/reverseEngineeringConfig';
 import {
   installBionicStubs,
   createBionicLibrary,
@@ -49,16 +50,34 @@ export interface NativeEmulatorOptions {
   bionic?: BionicOptions;
 }
 
+export interface NativeLibraryLoadResult {
+  entry: number;
+  unresolvedImports: NativeRuntimeImportDiagnostic[];
+  constructorFaults: string[];
+}
+
 /**
  * Facade composing the emulator layers. `engine` and `jni` are exposed for
  * advanced callers that need the raw primitives (mapMemory, writeRegister, …);
  * the methods here cover the common load-and-call workflow.
+ *
+ * Guest memory layout:
+ *   0x00000000 … SO code/data segments (mapped by loadElf)
+ *   0x40000000 … Guest heap (nemu_alloc_memory), grows upward to 0x5FFFFFFF
+ *   0x68000000 … Import stubs (host function trampolines)
+ *   0x70000000 … TLS / TPIDR_EL0 block
+ *   0x7FFF0000 … Stack (grows down from 0x7FFF0000 + 64KB)
  */
 export class NativeEmulator {
   readonly engine: CpuEngine;
   readonly jni: JniEnvironment;
   /** Default bionic libc, auto-wired into loaded `.so` via relocations. */
   private readonly bionic: BionicLibrary;
+
+  /** Next allocation address for the guest heap. */
+  private nextAllocAddr = 0x4000_0000; // 1 GB — well above SO segments
+  /** Hard ceiling for the guest heap. */
+  private static readonly HEAP_CEIL = 0x6000_0000; // 1.5 GB
 
   constructor(options: NativeEmulatorOptions = {}) {
     this.engine = new CpuEngine();
@@ -79,8 +98,13 @@ export class NativeEmulator {
    * Dynamic relocations are applied and imported libc symbols auto-wired to the
    * bundled bionic stubs, so a real PIC `.so` is callable without manual setup.
    */
-  loadLibrary(bytes: Uint8Array): { entry: number } {
-    return this.engine.loadElf(bytes, this.bionic);
+  loadLibrary(bytes: Uint8Array): NativeLibraryLoadResult {
+    const { entry } = this.engine.loadElf(bytes, this.bionic);
+    return {
+      entry,
+      unresolvedImports: [...this.engine.unresolvedImports()],
+      constructorFaults: [...this.engine.constructorFaultLog()],
+    };
   }
 
   /**
@@ -141,6 +165,54 @@ export class NativeEmulator {
   stringOf(handle: number): string | undefined {
     const value = this.jni.valueOf(handle);
     return isStringValue(value) ? value.value : undefined;
+  }
+
+  // ── Guest memory management (raw addresses for call_symbol) ────────────
+
+  /**
+   * Allocate a chunk of raw guest memory, optionally filling it with initial
+   * data. Returns the guest address — pass it as an integer argument in
+   * `call_symbol` to give native code a buffer to read/write.
+   *
+   * Unlike `newByteArray` (which creates a JNI jbyteArray handle), this
+   * allocates **real** guest memory the CPU can address directly, suitable for
+   * `call_symbol` where the native function expects a `char*` / `void*`.
+   *
+   * @param size     Number of bytes to allocate (rounded up to 4 KB pages).
+   * @param fillBytes Optional initial data to write at the start of the region.
+   * @returns The guest address of the allocated region.
+   */
+  allocGuestMemory(size: number, fillBytes?: Uint8Array): number {
+    const pageSize = getReverseEngineeringConfig().nativeEmulator.guestPageSizeBytes;
+    const aligned = Math.ceil(size / pageSize) * pageSize;
+    if (this.nextAllocAddr + aligned > NativeEmulator.HEAP_CEIL) {
+      throw new Error(
+        `Guest heap exhausted: cannot allocate ${aligned} bytes (nextAddr=0x${this.nextAllocAddr.toString(16)}, ceil=0x${NativeEmulator.HEAP_CEIL.toString(16)})`,
+      );
+    }
+    const addr = this.nextAllocAddr;
+    this.engine.mapMemory(addr, aligned);
+    if (fillBytes && fillBytes.length > 0) {
+      this.engine.writeCode(addr, fillBytes);
+    }
+    this.nextAllocAddr += aligned;
+    return addr;
+  }
+
+  /**
+   * Read raw bytes from guest memory at a given address.
+   * Use to recover output buffers after a `call_symbol` invocation.
+   */
+  readGuestMemory(address: number, length: number): Uint8Array {
+    return this.engine.readMemory(address, length);
+  }
+
+  /**
+   * Write raw bytes into guest memory at a given address.
+   * Use to prepare input buffers before a `call_symbol` invocation.
+   */
+  writeGuestMemory(address: number, data: Uint8Array): void {
+    this.engine.writeCode(address, data);
   }
 }
 

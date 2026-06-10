@@ -20,8 +20,12 @@ import {
   neonMul,
   neonOrr,
   neonSmax,
+  neonSqadd,
+  neonSqsub,
   neonSub,
   neonUmin,
+  neonUqadd,
+  neonUqsub,
 } from '@modules/native-emulator/simd-neon';
 
 const le = (w: number): number[] => [
@@ -47,6 +51,10 @@ const CMGT_16B = 0x4e203400;
 const CMEQ_4S = 0x6ea08c00;
 const SMAX_16B = 0x4e206400;
 const UMIN_16B = 0x6e206c00;
+const SQADD_16B = 0x4e200c00;
+const UQADD_16B = 0x6e200c00;
+const SQSUB_16B = 0x4e202c00;
+const UQSUB_16B = 0x6e202c00;
 
 function runOne(setup: (e: CpuEngine) => void, insn: number): CpuEngine {
   const engine = new CpuEngine();
@@ -94,6 +102,13 @@ describe('NEON three-same primitives (simd-neon)', () => {
     expect(hex(neonCmgt(v(0x7f), v(0x80), 0, 1))).toBe(hex(v(0xff))); // 127 > -128
     expect(hex(neonSmax(v(0x80), v(0x7f), 0, 1))).toBe(hex(v(0x7f))); // max(-128,127)=127
     expect(hex(neonUmin(v(0x80), v(0x7f), 0, 1))).toBe(hex(v(0x7f))); // min(128,127)=127
+  });
+
+  it('saturating ADD/SUB clamps instead of wrapping', () => {
+    expect(hex(neonSqadd(v(0x7f), v(1), 0, 1))).toBe(hex(v(0x7f)));
+    expect(hex(neonUqadd(v(0xff), v(1), 0, 1))).toBe(hex(v(0xff)));
+    expect(hex(neonSqsub(v(0x80), v(1), 0, 1))).toBe(hex(v(0x80)));
+    expect(hex(neonUqsub(v(0), v(1), 0, 1))).toBe(hex(v(0)));
   });
 });
 
@@ -232,6 +247,55 @@ describe('NEON three-same instructions (CpuEngine) — decode + execution', () =
         ).readVReg(0),
       ).slice(0, 4),
     ).toBe(hex(neonUmin(a, b, 0, 1)).slice(0, 4));
+  });
+
+  it('SQADD/UQADD/SQSUB/UQSUB 16B execute saturating arithmetic', () => {
+    const a = v(0x7f, 0xff, 0x80, 0x00);
+    const b = v(0x01, 0x01, 0x01, 0x01);
+    expect(
+      hex(
+        runOne(
+          (e) => {
+            e.writeVReg(1, a);
+            e.writeVReg(2, b);
+          },
+          tsi(SQADD_16B, 0, 1, 2),
+        ).readVReg(0),
+      ).slice(0, 8),
+    ).toBe(hex(neonSqadd(a, b, 0, 1)).slice(0, 8));
+    expect(
+      hex(
+        runOne(
+          (e) => {
+            e.writeVReg(1, a);
+            e.writeVReg(2, b);
+          },
+          tsi(UQADD_16B, 0, 1, 2),
+        ).readVReg(0),
+      ).slice(0, 8),
+    ).toBe(hex(neonUqadd(a, b, 0, 1)).slice(0, 8));
+    expect(
+      hex(
+        runOne(
+          (e) => {
+            e.writeVReg(1, a);
+            e.writeVReg(2, b);
+          },
+          tsi(SQSUB_16B, 0, 1, 2),
+        ).readVReg(0),
+      ).slice(0, 8),
+    ).toBe(hex(neonSqsub(a, b, 0, 1)).slice(0, 8));
+    expect(
+      hex(
+        runOne(
+          (e) => {
+            e.writeVReg(1, a);
+            e.writeVReg(2, b);
+          },
+          tsi(UQSUB_16B, 0, 1, 2),
+        ).readVReg(0),
+      ).slice(0, 8),
+    ).toBe(hex(neonUqsub(a, b, 0, 1)).slice(0, 8));
   });
 
   it('does not collide with PMULL (three-different, bit10=0)', () => {

@@ -12,6 +12,21 @@
  * imports to. Only the entries present in `addrs` are registered.
  */
 import type { CpuEngine, HostContext } from './CpuEngine';
+import { getReverseEngineeringConfig } from '@utils/reverseEngineeringConfig';
+import {
+  formatGuestCString,
+  readGuestCString as readCString,
+  readGuestCStringBytes,
+  utf8ByteLength,
+  writeGuestCString,
+} from './c-strings';
+
+/** Minimal memory-mapping surface bionic needs for heap-backed libc stubs. */
+export interface BionicMemoryMapper {
+  mapMemory(addr: number, size: number): void;
+  lookupSymbol?(name: string): number | undefined;
+  bindImportStub?(name: string, fn: (ctx: HostContext) => bigint | number | void): number;
+}
 
 /** Guest addresses to bind each bionic stub to (omit any you don't need). */
 export interface BionicStubAddresses {
@@ -40,12 +55,21 @@ export interface BionicOptions {
    * discard. Lets a caller observe what a detection routine logs.
    */
   onLog?: (priority: number, tag: string, message: string) => void;
+  /** Sink for stdout-style stdio calls (`puts`, `printf`, stdout `fprintf`). */
+  onStdout?: (text: string) => void;
+  /** Sink for stderr-style stdio calls (`fprintf(stderr, ...)`). */
+  onStderr?: (text: string) => void;
 }
 
 /** Bump-allocator heap base — distinct from typical code/data vaddrs. */
 const HEAP_BASE = 0x100000;
 /** Allocation granularity (bytes); keeps returned pointers naturally aligned. */
 const HEAP_ALIGN = 16;
+/** Default emulated page size returned by libc/sysconf imports. */
+const PAGE_SIZE = getReverseEngineeringConfig().nativeEmulator.guestPageSizeBytes;
+/** Linux/Android-ish sysconf names used by common bionic callers. */
+const SC_PAGE_SIZE_NAMES = new Set([30, 47]);
+const SC_NPROCESSORS_ONLN_NAMES = new Set([84]);
 
 /**
  * A bionic libc implementation keyed by symbol name, for relocation-driven
@@ -61,19 +85,10 @@ export type BionicLibrary = Map<string, (ctx: HostContext) => bigint | number | 
  * never reclaims). The map is the source of truth both for auto-wiring and for
  * the address-keyed installBionicStubs below.
  */
-/** Read a NUL-terminated C string from guest memory via a host-call context. */
-function readCString(ctx: HostContext, addr: number): string {
-  if (addr === 0) return '';
-  const out: number[] = [];
-  for (let i = 0; ; i++) {
-    const b = ctx.read(addr + i, 1)[0] ?? 0;
-    if (b === 0) break;
-    out.push(b);
-  }
-  return new TextDecoder().decode(Uint8Array.from(out));
-}
-
-export function createBionicLibrary(engine: CpuEngine, options: BionicOptions = {}): BionicLibrary {
+export function createBionicLibrary(
+  engine: BionicMemoryMapper,
+  options: BionicOptions = {},
+): BionicLibrary {
   const lib: BionicLibrary = new Map();
   let bump = HEAP_BASE;
   // Track allocation sizes so realloc can copy the old contents forward.
@@ -92,12 +107,20 @@ export function createBionicLibrary(engine: CpuEngine, options: BionicOptions = 
   // small allocation so it's a unique, dereferenceable non-NULL pointer.
   const streams = new Map<number, { bytes: Uint8Array; pos: number }>();
   const files = options.files;
+  const dlHandles = new Map<string, number>();
+  let lastDlError = '';
+
+  const writeDlError = (ctx: HostContext): bigint => {
+    if (lastDlError.length === 0) return 0n;
+    const ptr = alloc(utf8ByteLength(lastDlError) + 1);
+    writeGuestCString(ctx, ptr, lastDlError);
+    const out = BigInt(ptr);
+    lastDlError = '';
+    return out;
+  };
 
   lib.set('strlen', (ctx) => {
-    const start = Number(ctx.x(0));
-    let len = 0;
-    while (ctx.read(start + len, 1)[0] !== 0) len++;
-    return BigInt(len);
+    return BigInt(readGuestCStringBytes(ctx, Number(ctx.x(0))).length);
   });
   lib.set('memcpy', (ctx) => {
     const dst = Number(ctx.x(0));
@@ -128,37 +151,23 @@ export function createBionicLibrary(engine: CpuEngine, options: BionicOptions = 
     return 0n;
   });
   lib.set('strcmp', (ctx) => {
-    let p = Number(ctx.x(0));
-    let q = Number(ctx.x(1));
-    for (;;) {
-      const a = ctx.read(p++, 1)[0] ?? 0;
-      const b = ctx.read(q++, 1)[0] ?? 0;
-      if (a !== b) return BigInt(a < b ? -1 : 1);
-      if (a === 0) return 0n;
-    }
+    const a = readGuestCStringBytes(ctx, Number(ctx.x(0)));
+    const b = readGuestCStringBytes(ctx, Number(ctx.x(1)));
+    return BigInt(compareCStringBytes(a, b, Math.max(a.length, b.length) + 1));
   });
   lib.set('strncmp', (ctx) => {
-    let p = Number(ctx.x(0));
-    let q = Number(ctx.x(1));
     const n = Number(ctx.x(2));
-    for (let i = 0; i < n; i++) {
-      const a = ctx.read(p++, 1)[0] ?? 0;
-      const b = ctx.read(q++, 1)[0] ?? 0;
-      if (a !== b) return BigInt(a < b ? -1 : 1);
-      if (a === 0) break;
-    }
-    return 0n;
+    if (n <= 0) return 0n;
+    const a = readGuestCStringBytes(ctx, Number(ctx.x(0)), n);
+    const b = readGuestCStringBytes(ctx, Number(ctx.x(1)), n);
+    return BigInt(compareCStringBytes(a, b, n));
   });
   lib.set('strcpy', (ctx) => {
     const dst = Number(ctx.x(0));
-    let src = Number(ctx.x(1));
-    let i = 0;
-    for (;;) {
-      const b = ctx.read(src++, 1)[0] ?? 0;
-      ctx.write(dst + i, Uint8Array.of(b));
-      i++;
-      if (b === 0) break;
-    }
+    const body = readGuestCStringBytes(ctx, Number(ctx.x(1)));
+    const out = new Uint8Array(body.length + 1);
+    out.set(body);
+    ctx.write(dst, out);
     return ctx.x(0);
   });
   lib.set('strncpy', (ctx) => {
@@ -166,11 +175,11 @@ export function createBionicLibrary(engine: CpuEngine, options: BionicOptions = 
     const dst = Number(ctx.x(0));
     const src = Number(ctx.x(1));
     const n = Number(ctx.x(2));
-    let ended = false;
-    for (let i = 0; i < n; i++) {
-      const b = ended ? 0 : (ctx.read(src + i, 1)[0] ?? 0);
-      ctx.write(dst + i, Uint8Array.of(b));
-      if (b === 0) ended = true;
+    if (n > 0) {
+      const body = readGuestCStringBytes(ctx, src, n);
+      const out = new Uint8Array(n);
+      out.set(body.subarray(0, n));
+      ctx.write(dst, out);
     }
     return ctx.x(0);
   });
@@ -179,19 +188,18 @@ export function createBionicLibrary(engine: CpuEngine, options: BionicOptions = 
     // terminating NUL is matchable, mirroring the C contract.
     const start = Number(ctx.x(0));
     const needle = Number(ctx.x(1) & 0xffn);
-    for (let i = 0; ; i++) {
-      const b = ctx.read(start + i, 1)[0] ?? 0;
-      if (b === needle) return BigInt(start + i);
-      if (b === 0) return 0n;
-    }
+    const body = readGuestCStringBytes(ctx, start);
+    if (needle === 0) return BigInt(start + body.length);
+    const index = body.indexOf(needle);
+    return index >= 0 ? BigInt(start + index) : 0n;
   });
   lib.set('strdup', (ctx) => {
     // Allocate len+1 and copy the string including its NUL terminator.
-    const src = Number(ctx.x(0));
-    let len = 0;
-    while (ctx.read(src + len, 1)[0] !== 0) len++;
-    const ptr = alloc(len + 1);
-    ctx.write(ptr, ctx.read(src, len + 1));
+    const body = readGuestCStringBytes(ctx, Number(ctx.x(0)));
+    const ptr = alloc(body.length + 1);
+    const out = new Uint8Array(body.length + 1);
+    out.set(body);
+    ctx.write(ptr, out);
     return BigInt(ptr);
   });
   lib.set('malloc', (ctx) => BigInt(alloc(Number(ctx.x(0)))));
@@ -281,7 +289,7 @@ export function createBionicLibrary(engine: CpuEngine, options: BionicOptions = 
   lib.set('__android_log_print', (ctx) => {
     const priority = Number(ctx.x(0));
     const tag = readCString(ctx, Number(ctx.x(1)));
-    const message = readCString(ctx, Number(ctx.x(2)));
+    const message = formatGuestCString(ctx, Number(ctx.x(2)), 3);
     options.onLog?.(priority, tag, message);
     return 1n;
   });
@@ -289,16 +297,113 @@ export function createBionicLibrary(engine: CpuEngine, options: BionicOptions = 
   lib.set('__cxa_atexit', () => 0n);
   lib.set('__cxa_finalize', () => undefined);
 
+  // ── Android libc/runtime imports used by packers and linkers ─────────────
+  lib.set('getpagesize', () => BigInt(PAGE_SIZE));
+  lib.set('sysconf', (ctx) => {
+    const name = Number(ctx.x(0));
+    if (SC_PAGE_SIZE_NAMES.has(name)) return BigInt(PAGE_SIZE);
+    if (SC_NPROCESSORS_ONLN_NAMES.has(name)) return 1n;
+    return BigInt(-1);
+  });
+  lib.set('mprotect', () => 0n);
+  lib.set('munmap', () => 0n);
+  lib.set('prctl', () => 0n);
+  lib.set('getpid', () => 10000n);
+  lib.set('getuid', () => 10000n);
+  lib.set('sleep', () => 0n);
+  lib.set('usleep', () => 0n);
+  lib.set('dlopen', (ctx) => {
+    const namePtr = Number(ctx.x(0));
+    const name = namePtr === 0 ? '<self>' : readCString(ctx, namePtr);
+    const key = name.length > 0 ? name : '<self>';
+    let handle = dlHandles.get(key);
+    if (handle === undefined) {
+      handle = alloc(1);
+      dlHandles.set(key, handle);
+    }
+    lastDlError = '';
+    return BigInt(handle);
+  });
+  lib.set('dlsym', (ctx) => {
+    const symbol = readCString(ctx, Number(ctx.x(1)));
+    if (!symbol) {
+      lastDlError = 'dlsym: empty symbol';
+      return 0n;
+    }
+    const exported = engine.lookupSymbol?.(symbol);
+    if (exported !== undefined) {
+      lastDlError = '';
+      return BigInt(exported);
+    }
+    const fn = lib.get(symbol);
+    const stub = fn ? engine.bindImportStub?.(symbol, fn) : undefined;
+    if (stub !== undefined) {
+      lastDlError = '';
+      return BigInt(stub);
+    }
+    lastDlError = `dlsym: symbol not found: ${symbol}`;
+    return 0n;
+  });
+  lib.set('dlerror', (ctx) => writeDlError(ctx));
+
+  // ── Generic stdio ───────────────────────────────────────────────────────
+
+  lib.set('puts', (ctx) => {
+    const text = `${readCString(ctx, Number(ctx.x(0)))}\n`;
+    options.onStdout?.(text);
+    return BigInt(utf8ByteLength(text));
+  });
+  lib.set('printf', (ctx) => {
+    const text = formatGuestCString(ctx, Number(ctx.x(0)), 1);
+    options.onStdout?.(text);
+    return BigInt(utf8ByteLength(text));
+  });
+  lib.set('fprintf', (ctx) => {
+    const text = formatGuestCString(ctx, Number(ctx.x(1)), 2);
+    if (Number(ctx.x(0)) === 2) {
+      options.onStderr?.(text);
+    } else {
+      options.onStdout?.(text);
+    }
+    return BigInt(utf8ByteLength(text));
+  });
+  lib.set('sprintf', (ctx) => {
+    const text = formatGuestCString(ctx, Number(ctx.x(1)), 2);
+    return BigInt(writeGuestCString(ctx, Number(ctx.x(0)), text));
+  });
+  lib.set('snprintf', (ctx) => {
+    const text = formatGuestCString(ctx, Number(ctx.x(2)), 3);
+    return BigInt(writeGuestCString(ctx, Number(ctx.x(0)), text, Number(ctx.x(1))));
+  });
+  lib.set('putchar', (ctx) => {
+    // int putchar(int c) — return the char
+    return ctx.x(0) & 0xffn;
+  });
+  lib.set('getchar', () => {
+    // int getchar(void) — return EOF (-1) to signal no input
+    return BigInt(-1);
+  });
+
   return lib;
+}
+
+const BIONIC_SYMBOL_PROBE: BionicMemoryMapper = { mapMemory: () => undefined };
+const SUPPORTED_BIONIC_SYMBOLS = new Set(createBionicLibrary(BIONIC_SYMBOL_PROBE).keys());
+
+/** Stable symbol catalog used by diagnostics without constructing a CpuEngine. */
+export function supportedBionicSymbols(): ReadonlySet<string> {
+  return SUPPORTED_BIONIC_SYMBOLS;
+}
+
+/** True when the built-in bionic library can auto-wire this import. */
+export function hasBionicSymbol(symbol: string): boolean {
+  return SUPPORTED_BIONIC_SYMBOLS.has(symbol);
 }
 
 export function installBionicStubs(engine: CpuEngine, addrs: BionicStubAddresses): void {
   if (addrs.strlen !== undefined) {
     engine.registerHostFunction(addrs.strlen, (ctx: HostContext) => {
-      const start = Number(ctx.x(0));
-      let len = 0;
-      while (ctx.read(start + len, 1)[0] !== 0) len++;
-      return BigInt(len);
+      return BigInt(readGuestCStringBytes(ctx, Number(ctx.x(0))).length);
     });
   }
 
@@ -338,4 +443,14 @@ export function installBionicStubs(engine: CpuEngine, addrs: BionicStubAddresses
     // The bump allocator never reclaims, so free is a no-op.
     engine.registerHostFunction(addrs.free, () => undefined);
   }
+}
+
+function compareCStringBytes(left: Uint8Array, right: Uint8Array, maxBytes: number): number {
+  for (let i = 0; i < maxBytes; i++) {
+    const a = i < left.length ? left[i]! : 0;
+    const b = i < right.length ? right[i]! : 0;
+    if (a !== b) return a < b ? -1 : 1;
+    if (a === 0) return 0;
+  }
+  return 0;
 }

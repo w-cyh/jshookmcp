@@ -4,8 +4,8 @@
  * NEON kernels (ffmpeg's `ff_*_neon` pixel/sample loops) stream rows of data
  * into consecutive V registers with LD1/ST1. The contiguous family copies N
  * whole registers (Q?16:8 bytes each) verbatim — no de-interleave — with an
- * optional post-index write-back. The de-interleaving LD2/LD3/LD4 opcodes are a
- * declared gap (the engine still reports them as an unsupported opcode).
+ * optional post-index write-back. LD2/LD3/LD4 additionally de-interleave or
+ * interleave lane structures across consecutive registers.
  *
  * Encodings computed from the ARM ARM C4.1.3 fields and cross-checked against
  * the real opcodes a probe over libijkffmpeg.so surfaced (0x4c4074c0 family).
@@ -112,11 +112,38 @@ describe('SIMD load/store — multiple structures (LD1/ST1)', () => {
     expect(engine.readRegister('x1')).toBe(0x4000 + 32);
   });
 
-  it('the de-interleaving LD2 opcode remains an honest unsupported-opcode gap', () => {
+  it('LD2 {Vt.16b,Vt+1.16b},[Xn] de-interleaves byte lanes', () => {
     const engine = new CpuEngine();
     const DATA = 0x4000;
     engine.mapMemory(DATA, 64);
-    // movz x1,#0x4000 ; LD2 {V0.16b,V1.16b},[X1]  (opcode 1000 — not modelled)
-    expect(() => run(engine, [movz(1, 0x4000), 0x4c408020])).toThrow(/[Uu]nsupported ARM64 opcode/);
+    const interleaved = Array.from({ length: 16 }, (_, i) => [0x10 + i, 0x40 + i]).flat();
+    engine.writeCode(DATA, Uint8Array.from(interleaved));
+    // movz x1,#0x4000 ; LD2 {V0.16b,V1.16b},[X1]
+    run(engine, [movz(1, 0x4000), 0x4c408020]);
+    expect([...engine.readVReg(0)]).toEqual(Array.from({ length: 16 }, (_, i) => 0x10 + i));
+    expect([...engine.readVReg(1)]).toEqual(Array.from({ length: 16 }, (_, i) => 0x40 + i));
+  });
+
+  it('ST2 {Vt.16b,Vt+1.16b},[Xn] interleaves byte lanes', () => {
+    const engine = new CpuEngine();
+    const DATA = 0x4000;
+    engine.mapMemory(DATA, 64);
+    engine.writeVReg(0, Uint8Array.from(Array.from({ length: 16 }, (_, i) => 0x20 + i)));
+    engine.writeVReg(1, Uint8Array.from(Array.from({ length: 16 }, (_, i) => 0x80 + i)));
+    // movz x1,#0x4000 ; ST2 {V0.16b,V1.16b},[X1]
+    run(engine, [movz(1, 0x4000), 0x4c008020]);
+    expect([...engine.readMemory(DATA, 32)]).toEqual(
+      Array.from({ length: 16 }, (_, i) => [0x20 + i, 0x80 + i]).flat(),
+    );
+  });
+
+  it('LD4 post-index advances by four full registers', () => {
+    const engine = new CpuEngine();
+    const DATA = 0x4000;
+    engine.mapMemory(DATA, 96);
+    const ld4Post = (0x4c400020 | (31 << 16) | (1 << 23)) >>> 0;
+    // movz x1,#0x4000 ; LD4 {V0.16b-V3.16b},[X1],#64
+    run(engine, [movz(1, 0x4000), ld4Post]);
+    expect(engine.readRegister('x1')).toBe(0x4000 + 64);
   });
 });

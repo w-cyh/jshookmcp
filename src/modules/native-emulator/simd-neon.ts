@@ -112,6 +112,62 @@ export const neonMul = (
   q: number,
 ): Uint8Array<ArrayBuffer> => mapLanes2(a, b, size, q, (x, y) => x * y);
 
+export const neonSqadd = (
+  a: Uint8Array,
+  b: Uint8Array,
+  size: number,
+  q: number,
+): Uint8Array<ArrayBuffer> => mapSignedSaturating(a, b, size, q, (x, y) => x + y);
+export const neonUqadd = (
+  a: Uint8Array,
+  b: Uint8Array,
+  size: number,
+  q: number,
+): Uint8Array<ArrayBuffer> => mapUnsignedSaturating(a, b, size, q, (x, y) => x + y);
+export const neonSqsub = (
+  a: Uint8Array,
+  b: Uint8Array,
+  size: number,
+  q: number,
+): Uint8Array<ArrayBuffer> => mapSignedSaturating(a, b, size, q, (x, y) => x - y);
+export const neonUqsub = (
+  a: Uint8Array,
+  b: Uint8Array,
+  size: number,
+  q: number,
+): Uint8Array<ArrayBuffer> => mapUnsignedSaturating(a, b, size, q, (x, y) => x - y);
+
+function mapSignedSaturating(
+  a: Uint8Array,
+  b: Uint8Array,
+  size: number,
+  q: number,
+  op: (x: bigint, y: bigint) => bigint,
+): Uint8Array<ArrayBuffer> {
+  return mapLanes2(a, b, size, q, (x, y, _mask, bytes) => {
+    const bits = BigInt(bytes * 8);
+    const min = -(1n << (bits - 1n));
+    const max = (1n << (bits - 1n)) - 1n;
+    const v = op(toSigned(x, bytes), toSigned(y, bytes));
+    const saturated = v < min ? min : v > max ? max : v;
+    return saturated < 0 ? (1n << bits) + saturated : saturated;
+  });
+}
+
+function mapUnsignedSaturating(
+  a: Uint8Array,
+  b: Uint8Array,
+  size: number,
+  q: number,
+  op: (x: bigint, y: bigint) => bigint,
+): Uint8Array<ArrayBuffer> {
+  return mapLanes2(a, b, size, q, (x, y, mask) => {
+    const v = op(x, y);
+    if (v < 0n) return 0n;
+    return v > mask ? mask : v;
+  });
+}
+
 // ── bitwise logical (size selects AND/BIC/ORR/ORN for U=0; EOR/BSL/BIT/BIF for U=1) ──
 export const neonAnd = (a: Uint8Array, b: Uint8Array, q: number): Uint8Array<ArrayBuffer> =>
   mapLanes2(a, b, 3, q, (x, y) => x & y);

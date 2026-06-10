@@ -79,7 +79,11 @@ import {
   neonOrr,
   neonSmax,
   neonSmin,
+  neonSqadd,
+  neonSqsub,
   neonSub,
+  neonUqadd,
+  neonUqsub,
   neonUmax,
   neonUmin,
 } from './simd-neon';
@@ -184,10 +188,10 @@ export function executeSimdLoadStore(ctx: SimdContext, insn: number): boolean {
  *   no-offset:   0 Q 0011000 L 000000 opcode[15:12] size[11:10] Rn Rt
  *   post-index:  0 Q 0011001 L 0  Rm[20:16] opcode[15:12] size[11:10] Rn Rt
  *
- * `opcode` gives both the access and the register count for the LD1/ST1 family:
+ * `opcode` gives both the access and the register count:
  * 0111→1 reg, 1010→2, 0110→3, 0010→4 consecutive registers, each Q?16:8 bytes,
- * copied verbatim (no de-interleave). The LD2/3/4 de-interleaving opcodes
- * (1000/0100/0000) are not modelled — returning false keeps them an honest gap.
+ * copied verbatim (no de-interleave). LD2/3/4 use opcodes 1000/0100/0000 and
+ * move interleaved elements across 2/3/4 consecutive registers.
  * Post-index write-back adds the transfer size (Rm=31) or an Xm register value.
  */
 function execMultiStructLoadStore(ctx: SimdContext, insn: number): boolean {
@@ -198,6 +202,7 @@ function execMultiStructLoadStore(ctx: SimdContext, insn: number): boolean {
   const rm = (insn >>> 16) & 0b11111;
   const rn = (insn >>> 5) & 0b11111;
   const rt = insn & 0b11111;
+  const size = (insn >>> 10) & 0b11;
 
   // LD1/ST1 contiguous: opcode → number of consecutive registers.
   const regCount =
@@ -210,31 +215,90 @@ function execMultiStructLoadStore(ctx: SimdContext, insn: number): boolean {
           : opcode === 0b0010
             ? 4
             : 0;
-  if (regCount === 0) return false; // LD2/LD3/LD4 (de-interleaving) not modelled
+  const structCount = opcode === 0b1000 ? 2 : opcode === 0b0100 ? 3 : opcode === 0b0000 ? 4 : 0;
+  if (regCount === 0 && structCount === 0) return false;
 
   const regBytes = q === 1 ? 16 : 8; // Q selects the full 128-bit or low 64-bit register
   const base = Number(ctx.gprReadSp(rn));
-  let addr = base;
-  for (let i = 0; i < regCount; i++) {
-    const reg = (rt + i) % 32;
-    if (isLoad) {
-      const data = ctx.memRead(addr, regBytes);
-      const full = new Uint8Array(16); // a 64-bit (Q=0) load zeroes the upper half
-      full.set(data.subarray(0, regBytes));
-      ctx.vSetBytes(reg, full);
-    } else {
-      ctx.memWrite(addr, ctx.vGetBytes(reg).subarray(0, regBytes));
+  const transferBytes = (regCount || structCount) * regBytes;
+
+  if (regCount > 0) {
+    let addr = base;
+    for (let i = 0; i < regCount; i++) {
+      const reg = (rt + i) % 32;
+      if (isLoad) {
+        const data = ctx.memRead(addr, regBytes);
+        const full = new Uint8Array(16); // a 64-bit (Q=0) load zeroes the upper half
+        full.set(data.subarray(0, regBytes));
+        ctx.vSetBytes(reg, full);
+      } else {
+        ctx.memWrite(addr, ctx.vGetBytes(reg).subarray(0, regBytes));
+      }
+      addr += regBytes;
     }
-    addr += regBytes;
+  } else {
+    transferInterleavedStructs(ctx, {
+      isLoad,
+      base,
+      rt,
+      structCount,
+      regBytes,
+      elementBytes: 1 << size,
+    });
   }
 
   if (isPost) {
     // Rm=31 (XZR slot here) means "immediate" write-back of the transfer size;
     // any other Rm is an index register added to the base.
-    const increment = rm === 31 ? regCount * regBytes : Number(ctx.gprRead(rm));
+    const increment = rm === 31 ? transferBytes : Number(ctx.gprRead(rm));
     ctx.gprWrite(rn, BigInt(base + increment));
   }
   return true;
+}
+
+function transferInterleavedStructs(
+  ctx: SimdContext,
+  options: {
+    isLoad: boolean;
+    base: number;
+    rt: number;
+    structCount: number;
+    regBytes: number;
+    elementBytes: number;
+  },
+): void {
+  const { isLoad, base, rt, structCount, regBytes, elementBytes } = options;
+  const lanes = regBytes / elementBytes;
+  if (!Number.isInteger(lanes) || lanes <= 0) return;
+
+  if (isLoad) {
+    const data = ctx.memRead(base, structCount * regBytes);
+    const regs = Array.from({ length: structCount }, () => new Uint8Array(16));
+    for (let lane = 0; lane < lanes; lane++) {
+      for (let member = 0; member < structCount; member++) {
+        const src = (lane * structCount + member) * elementBytes;
+        const dst = lane * elementBytes;
+        regs[member]!.set(data.subarray(src, src + elementBytes), dst);
+      }
+    }
+    for (let member = 0; member < structCount; member++) {
+      ctx.vSetBytes((rt + member) % 32, regs[member]!);
+    }
+    return;
+  }
+
+  const out = new Uint8Array(structCount * regBytes);
+  const regs = Array.from({ length: structCount }, (_, member) =>
+    ctx.vGetBytes((rt + member) % 32),
+  );
+  for (let lane = 0; lane < lanes; lane++) {
+    for (let member = 0; member < structCount; member++) {
+      const src = lane * elementBytes;
+      const dst = (lane * structCount + member) * elementBytes;
+      out.set(regs[member]!.subarray(src, src + elementBytes), dst);
+    }
+  }
+  ctx.memWrite(base, out);
 }
 
 /** Move `bytes` bytes between V[reg] (low end) and a guest address. */
@@ -798,6 +862,12 @@ function execNeonThreeSame(ctx: SimdContext, f: SimdFields): boolean {
   const b = ctx.vGetBytes(rm);
 
   switch (f.neonOpcode) {
+    case 0b00001: // SQADD (U=0) / UQADD (U=1)
+      ctx.vSetBytes(rd, u === 0 ? neonSqadd(a, b, size, q) : neonUqadd(a, b, size, q));
+      return true;
+    case 0b00101: // SQSUB (U=0) / UQSUB (U=1)
+      ctx.vSetBytes(rd, u === 0 ? neonSqsub(a, b, size, q) : neonUqsub(a, b, size, q));
+      return true;
     case 0b00011: {
       // Bitwise logical: size (and U) pick the exact operation.
       if (u === 0) {

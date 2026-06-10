@@ -66,4 +66,31 @@ describe('CpuEngine — M0 ARM64 foundation', () => {
     const engine = new CpuEngine();
     expect(() => engine.writeRegister('xbogus', 1)).toThrow(/unknown register/i);
   });
+
+  it('preserves first-mapped memory semantics when regions overlap', () => {
+    const engine = new CpuEngine();
+    engine.mapMemory(0x1000, 0x20);
+    engine.mapMemory(0x1010, 0x20);
+
+    engine.writeCode(0x1000, new Uint8Array(0x20).fill(0x11));
+    engine.writeCode(0x1020, Uint8Array.of(0x22)); // touches only the second region
+    engine.writeCode(0x1018, Uint8Array.of(0x33)); // overlap must resolve to first region
+
+    expect(engine.readMemory(0x1000, 0x20)[0x18]).toBe(0x33);
+  });
+
+  it('resolves non-overlapping memory regions mapped out of order', () => {
+    const engine = new CpuEngine();
+    engine.mapMemory(0x9000, 0x20);
+    engine.mapMemory(0x1000, 0x20);
+    engine.mapMemory(0x5000, 0x20);
+
+    engine.writeCode(0x1008, Uint8Array.of(0x11));
+    engine.writeCode(0x5008, Uint8Array.of(0x55));
+    engine.writeCode(0x9008, Uint8Array.of(0x99));
+
+    expect(engine.readMemory(0x1008, 1)[0]).toBe(0x11);
+    expect(engine.readMemory(0x5008, 1)[0]).toBe(0x55);
+    expect(engine.readMemory(0x9008, 1)[0]).toBe(0x99);
+  });
 });

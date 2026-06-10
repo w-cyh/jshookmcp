@@ -47,6 +47,28 @@ export class NullIndirectCallError extends Error {
   }
 }
 
+function relocationTypeName(type: number): string {
+  if (type === R_AARCH64_ABS64) return 'R_AARCH64_ABS64';
+  if (type === R_AARCH64_GLOB_DAT) return 'R_AARCH64_GLOB_DAT';
+  if (type === R_AARCH64_JUMP_SLOT) return 'R_AARCH64_JUMP_SLOT';
+  if (type === R_AARCH64_RELATIVE) return 'R_AARCH64_RELATIVE';
+  return `R_AARCH64_${type}`;
+}
+
+function formatUnresolvedImports(imports: readonly NativeRuntimeImportDiagnostic[]): string {
+  return imports
+    .map((item) => `${item.symbol}@GOT(0x${item.gotOffset.toString(16)}, ${item.relocationType})`)
+    .join(', ');
+}
+
+export interface NativeRuntimeImportDiagnostic {
+  symbol: string;
+  gotOffset: number;
+  relocationType: string;
+  addend: number;
+  resolution: 'unresolved';
+}
+
 const EM_AARCH64 = 183;
 const MASK64 = (1n << 64n) - 1n;
 const MASK32 = (1n << 32n) - 1n;
@@ -128,6 +150,9 @@ export class CpuEngine {
   /** PC and SP are addresses (< 2^53), kept as JS numbers to avoid BigInt churn in the fetch loop. */
   private pc = 0;
   private readonly regions: MappedRegion[] = [];
+  private readonly regionsByBase: MappedRegion[] = [];
+  private lastRegion: MappedRegion | undefined;
+  private regionFastPathSafe = true;
   /** Exported dynamic symbols (name → vaddr), populated by loadElf. */
   private symbols = new Map<string, number>();
   /** Set by branch instructions so the run loop skips its default PC increment. */
@@ -147,10 +172,14 @@ export class CpuEngine {
   private tlsBase = 0;
   /** Next free address in the import-stub region (bumped per resolved import). */
   private importStubBump = IMPORT_STUB_BASE;
+  /** Stable import-stub address per symbol, shared by relocations and dlsym. */
+  private readonly importStubsByName = new Map<string, number>();
   /** Instruction observers (trace/breakpoint). Empty ⇒ hot loop pays nothing. */
   private readonly instructionHooks: InstructionHook[] = [];
   /** NULL indirect calls swallowed while running .init_array constructors. */
   private readonly constructorFaults: string[] = [];
+  /** Undefined dynamic imports that could not be resolved to built-in stubs. */
+  private readonly unresolvedImportDiagnostics: NativeRuntimeImportDiagnostic[] = [];
   /** Set by exit/exit_group (or a host stub) to halt the run loop at once. */
   private stopRequested = false;
   /**
@@ -180,7 +209,7 @@ export class CpuEngine {
 
   /** Map a zero-filled region of guest memory. */
   mapMemory(address: number, size: number): void {
-    this.regions.push({ base: address, size, data: new Uint8Array(size) });
+    this.addRegion({ base: address, size, data: new Uint8Array(size) });
   }
 
   /** Write bytes (machine code or data) into a mapped region. */
@@ -202,8 +231,10 @@ export class CpuEngine {
     if (elf.machine !== EM_AARCH64) {
       throw new Error(`Unsupported ELF machine 0x${elf.machine.toString(16)} (expected AArch64)`);
     }
+    this.constructorFaults.length = 0;
+    this.unresolvedImportDiagnostics.length = 0;
     for (const seg of elf.loadableSegments()) {
-      this.regions.push({ base: seg.vaddr, size: seg.data.length, data: seg.data });
+      this.addRegion({ base: seg.vaddr, size: seg.data.length, data: seg.data });
     }
     this.symbols = elf.exportedSymbols();
     this.applyRelocations(elf, bionic);
@@ -278,6 +309,15 @@ export class CpuEngine {
         case R_AARCH64_ABS64:
         case R_AARCH64_GLOB_DAT:
         case R_AARCH64_JUMP_SLOT: {
+          if (this.isUnresolvedImport(rel.symbolName, rel.symbolValue, bionic)) {
+            this.unresolvedImportDiagnostics.push({
+              symbol: rel.symbolName,
+              gotOffset: rel.offset,
+              relocationType: relocationTypeName(rel.type),
+              addend: rel.addend,
+              resolution: 'unresolved',
+            });
+          }
           const resolved = this.resolveRelocSymbol(rel.symbolName, rel.symbolValue, bionic);
           this.storeValue(rel.offset, 8, BigInt(resolved + rel.addend));
           break;
@@ -300,13 +340,13 @@ export class CpuEngine {
   private resolveRelocSymbol(name: string, symbolValue: number, bionic?: BionicLibrary): number {
     if (name && this.symbols.has(name)) return this.symbols.get(name)!;
     if (name && bionic?.has(name)) {
-      const fn = bionic.get(name)!;
-      const stubAddr = this.importStubBump;
-      this.importStubBump += 8;
-      this.registerHostFunction(stubAddr, fn);
-      return stubAddr;
+      return this.bindImportStub(name, bionic.get(name)!);
     }
     return symbolValue;
+  }
+
+  private isUnresolvedImport(name: string, symbolValue: number, bionic?: BionicLibrary): boolean {
+    return name !== '' && symbolValue === 0 && !this.symbols.has(name) && !bionic?.has(name);
   }
 
   /**
@@ -330,13 +370,38 @@ export class CpuEngine {
     }
     this.gpr[30] = BigInt(RETURN_SENTINEL); // LR → halt marker
     this.sp = BigInt(this.ensureStack());
-    this.run(addr, RETURN_SENTINEL);
+    try {
+      this.run(addr, RETURN_SENTINEL);
+    } catch (e) {
+      if (e instanceof NullIndirectCallError && this.unresolvedImportDiagnostics.length > 0) {
+        throw new NullIndirectCallError(
+          `${e.message}; unresolved imports: ${formatUnresolvedImports(this.unresolvedImportDiagnostics)}`,
+        );
+      }
+      throw e;
+    }
     return Number(this.gpr[0]);
   }
 
   /** List the exported dynamic symbol names callSymbol can resolve (from loadElf). */
   exportedSymbolNames(): string[] {
     return [...this.symbols.keys()];
+  }
+
+  /** Resolve an exported dynamic symbol without invoking it. */
+  lookupSymbol(name: string): number | undefined {
+    return this.symbols.get(name);
+  }
+
+  /** Bind a named host import once and return its stable guest stub address. */
+  bindImportStub(name: string, fn: HostFunction): number {
+    const existing = this.importStubsByName.get(name);
+    if (existing !== undefined) return existing;
+    const stubAddr = this.importStubBump;
+    this.importStubBump += 8;
+    this.registerHostFunction(stubAddr, fn);
+    this.importStubsByName.set(name, stubAddr);
+    return stubAddr;
   }
 
   /**
@@ -347,6 +412,11 @@ export class CpuEngine {
    */
   constructorFaultLog(): readonly string[] {
     return this.constructorFaults;
+  }
+
+  /** Undefined dynamic imports left at NULL after relocation. */
+  unresolvedImports(): readonly NativeRuntimeImportDiagnostic[] {
+    return this.unresolvedImportDiagnostics;
   }
 
   /** Write a 64-bit value into a named register (x0..x30, sp, pc). */
@@ -1869,9 +1939,39 @@ export class CpuEngine {
 
   // ── Memory ──
 
+  private addRegion(region: MappedRegion): void {
+    if (
+      this.regionFastPathSafe &&
+      this.regions.some((existing) => regionsOverlap(existing, region.base, region.size))
+    ) {
+      this.regionFastPathSafe = false;
+      this.lastRegion = undefined;
+      this.regionsByBase.length = 0;
+    }
+    this.regions.push(region);
+    if (this.regionFastPathSafe) insertRegionByBase(this.regionsByBase, region);
+  }
+
   private findRegion(address: number, length: number): MappedRegion {
+    const cached = this.lastRegion;
+    if (
+      this.regionFastPathSafe &&
+      cached &&
+      address >= cached.base &&
+      address + length <= cached.base + cached.size
+    ) {
+      return cached;
+    }
+    if (this.regionFastPathSafe) {
+      const indexed = findRegionByBase(this.regionsByBase, address, length);
+      if (indexed) {
+        this.lastRegion = indexed;
+        return indexed;
+      }
+    }
     for (const region of this.regions) {
       if (address >= region.base && address + length <= region.base + region.size) {
+        if (this.regionFastPathSafe) this.lastRegion = region;
         return region;
       }
     }
@@ -1901,4 +2001,44 @@ export class CpuEngine {
       v >>= 8n;
     }
   }
+}
+
+function regionsOverlap(region: MappedRegion, base: number, size: number): boolean {
+  return base < region.base + region.size && region.base < base + size;
+}
+
+function insertRegionByBase(regions: MappedRegion[], region: MappedRegion): void {
+  let lo = 0;
+  let hi = regions.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (regions[mid]!.base < region.base) lo = mid + 1;
+    else hi = mid;
+  }
+  regions.splice(lo, 0, region);
+}
+
+function findRegionByBase(
+  regions: readonly MappedRegion[],
+  address: number,
+  length: number,
+): MappedRegion | undefined {
+  let lo = 0;
+  let hi = regions.length - 1;
+  let candidate: MappedRegion | undefined;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const region = regions[mid]!;
+    if (region.base <= address) {
+      candidate = region;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return candidate && containsRegion(candidate, address, length) ? candidate : undefined;
+}
+
+function containsRegion(region: MappedRegion, address: number, length: number): boolean {
+  return address >= region.base && address + length <= region.base + region.size;
 }

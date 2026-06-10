@@ -15,6 +15,8 @@
  * getpid 172, mmap 222, exit 93, exit_group 94.
  */
 import type { CpuEngine, SyscallContext } from './CpuEngine';
+import { getReverseEngineeringConfig } from '@utils/reverseEngineeringConfig';
+import { readGuestCString } from './c-strings';
 
 /** Injectable behaviour for the default syscall table. */
 export interface AndroidSyscallOptions {
@@ -66,7 +68,7 @@ const NR_GETRANDOM = 278;
 
 /** mmap hint base for MAP_ANONYMOUS allocations the emulator backs on demand. */
 const MMAP_BASE = 0x5000_0000;
-const MMAP_ALIGN = 0x1000; // page-aligned, like the real kernel.
+const MMAP_ALIGN = getReverseEngineeringConfig().nativeEmulator.guestPageSizeBytes;
 /** First fd handed out by openat (0/1/2 reserved for stdio). */
 const FD_BASE = 3;
 const ENOENT = -2; // negative errno, as the raw kernel ABI returns.
@@ -119,7 +121,7 @@ export function installAndroidSyscalls(engine: CpuEngine, opts: AndroidSyscallOp
   let mmapBump = MMAP_BASE;
   engine.registerSyscall(NR_MMAP, (ctx: SyscallContext) => {
     const length = Number(ctx.x(1));
-    const rounded = Math.max(MMAP_ALIGN, (length + MMAP_ALIGN - 1) & ~(MMAP_ALIGN - 1));
+    const rounded = Math.max(MMAP_ALIGN, Math.ceil(length / MMAP_ALIGN) * MMAP_ALIGN);
     const addr = mmapBump;
     engine.mapMemory(addr, rounded);
     mmapBump += rounded;
@@ -199,15 +201,12 @@ function deterministicRandom(length: number): Uint8Array {
 }
 
 /** Read a NUL-terminated C string from guest memory (bounded to avoid runaway). */
-function readCString(ctx: SyscallContext, addr: number, max = 4096): string {
-  if (addr === 0) return '';
-  const bytes: number[] = [];
-  for (let i = 0; i < max; i++) {
-    const b = ctx.read(addr + i, 1)[0] ?? 0;
-    if (b === 0) break;
-    bytes.push(b);
-  }
-  return new TextDecoder().decode(Uint8Array.from(bytes));
+function readCString(
+  ctx: SyscallContext,
+  addr: number,
+  max = getReverseEngineeringConfig().nativeEmulator.syscallCStringLimitBytes,
+): string {
+  return readGuestCString(ctx, addr, max);
 }
 
 /** Resolve the configured (or real) wall-clock seconds. */

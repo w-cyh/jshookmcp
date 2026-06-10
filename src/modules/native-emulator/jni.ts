@@ -17,6 +17,7 @@
  * which is the honest signal that we need to add one).
  */
 import type { CpuEngine, HostContext } from './CpuEngine';
+import { readGuestCString } from './c-strings';
 
 export const JNI_VERSION_1_6 = 0x00010006;
 
@@ -607,16 +608,7 @@ export class JniEnvironment {
   }
 
   private readCString(ctx: HostContext, addr: number): string {
-    if (addr === 0) return '';
-    const out: number[] = [];
-    let p = addr;
-    for (;;) {
-      const b = ctx.read(p, 1)[0]!;
-      if (b === 0) break;
-      out.push(b);
-      p++;
-    }
-    return new TextDecoder().decode(Uint8Array.from(out));
+    return readGuestCString(ctx, addr);
   }
 }
 

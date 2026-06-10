@@ -26,6 +26,12 @@ function makeCtx(mem: Uint8Array, regs: Array<bigint | number | void> = []): Hos
 
 const ASCII = (s: string): Uint8Array => new TextEncoder().encode(s);
 
+function readMemCString(mem: Uint8Array, addr: number): string {
+  let end = addr;
+  while (end < mem.length && mem[end] !== 0) end++;
+  return new TextDecoder().decode(mem.subarray(addr, end));
+}
+
 function libWith(options: BionicOptions = {}): ReturnType<typeof createBionicLibrary> {
   return createBionicLibrary(new CpuEngine(), options);
 }
@@ -168,5 +174,114 @@ describe('bionic C++ runtime hooks', () => {
     const mem = new Uint8Array(16);
     expect(Number(lib.get('__cxa_atexit')!(makeCtx(mem, [0n, 0n, 0n])))).toBe(0);
     expect(lib.get('__cxa_finalize')!(makeCtx(mem, [0n]))).toBeUndefined();
+  });
+});
+
+describe('bionic generic stdio stubs', () => {
+  it('formats printf/puts/fprintf output and forwards it to configured sinks', () => {
+    const onStdout = vi.fn();
+    const onStderr = vi.fn();
+    const lib = libWith({ onStdout, onStderr });
+    const mem = new Uint8Array(256);
+    mem.set(ASCII('hello\0'), 8);
+    mem.set(ASCII('pid=%d tag=%s hex=%x ptr=%p %%\0'), 32);
+    mem.set(ASCII('err=%s\0'), 96);
+
+    const formatted = 'pid=123 tag=hello hex=ab ptr=0xfeed %';
+    expect(Number(lib.get('printf')!(makeCtx(mem, [32n, 123n, 8n, 0xabn, 0xfeedn])))).toBe(
+      formatted.length,
+    );
+    expect(onStdout).toHaveBeenCalledWith(formatted);
+
+    expect(Number(lib.get('puts')!(makeCtx(mem, [8n])))).toBe('hello\n'.length);
+    expect(onStdout).toHaveBeenCalledWith('hello\n');
+
+    expect(Number(lib.get('fprintf')!(makeCtx(mem, [2n, 96n, 8n])))).toBe('err=hello'.length);
+    expect(onStderr).toHaveBeenCalledWith('err=hello');
+
+    expect(Number(lib.get('putchar')!(makeCtx(mem, [0x41n])))).toBe(0x41);
+    expect(Number(lib.get('getchar')!(makeCtx(mem)))).toBe(-1);
+  });
+
+  it('formats sprintf/snprintf buffers with C-style return and truncation semantics', () => {
+    const lib = libWith();
+    const mem = new Uint8Array(192).fill(0x41);
+    mem.set(ASCII('value=%d-%s\0'), 32);
+    mem.set(ASCII('abcdef\0'), 64);
+
+    const full = 'value=7-abcdef';
+    expect(Number(lib.get('sprintf')!(makeCtx(mem, [16n, 32n, 7n, 64n])))).toBe(full.length);
+    expect(readMemCString(mem, 16)).toBe(full);
+
+    mem.fill(0x41);
+    mem.set(ASCII('value=%d-%s\0'), 32);
+    mem.set(ASCII('abcdef\0'), 64);
+    expect(Number(lib.get('snprintf')!(makeCtx(mem, [96n, 8n, 32n, 7n, 64n])))).toBe(full.length);
+    expect(readMemCString(mem, 96)).toBe('value=7');
+
+    mem.fill(0x41);
+    mem.set(ASCII('value=%d-%s\0'), 32);
+    mem.set(ASCII('abcdef\0'), 64);
+    expect(Number(lib.get('snprintf')!(makeCtx(mem, [96n, 0n, 32n, 7n, 64n])))).toBe(full.length);
+    expect(mem[96]).toBe(0x41);
+  });
+});
+
+describe('bionic Android runtime/import stubs', () => {
+  it('models common process and memory-management imports as deterministic no-ops', () => {
+    const lib = libWith();
+    const mem = new Uint8Array(64);
+    expect(Number(lib.get('getpagesize')!(makeCtx(mem)))).toBe(4096);
+    expect(Number(lib.get('sysconf')!(makeCtx(mem, [30n])))).toBe(4096);
+    expect(Number(lib.get('sysconf')!(makeCtx(mem, [84n])))).toBe(1);
+    expect(Number(lib.get('mprotect')!(makeCtx(mem, [0x1000n, 0x1000n, 7n])))).toBe(0);
+    expect(Number(lib.get('munmap')!(makeCtx(mem, [0x1000n, 0x1000n])))).toBe(0);
+    expect(Number(lib.get('prctl')!(makeCtx(mem, [0n, 0n, 0n, 0n, 0n])))).toBe(0);
+    expect(Number(lib.get('getpid')!(makeCtx(mem)))).toBeGreaterThan(0);
+    expect(Number(lib.get('getuid')!(makeCtx(mem)))).toBeGreaterThan(0);
+  });
+
+  it('models sleep/usleep as immediate successful completion', () => {
+    const lib = libWith();
+    const mem = new Uint8Array(16);
+    expect(Number(lib.get('sleep')!(makeCtx(mem, [10n])))).toBe(0);
+    expect(Number(lib.get('usleep')!(makeCtx(mem, [10_000n])))).toBe(0);
+  });
+
+  it('models dlopen/dlsym/dlerror as a closed deterministic dynamic linker', () => {
+    const lib = libWith();
+    const mem = new Uint8Array(128);
+    mem.set(ASCII('libc.so\0'), 8);
+    mem.set(ASCII('puts\0'), 32);
+    const handle = Number(lib.get('dlopen')!(makeCtx(mem, [8n, 0n])));
+    expect(handle).toBeGreaterThan(0);
+    const puts = Number(lib.get('dlsym')!(makeCtx(mem, [BigInt(handle), 32n])));
+    expect(puts).toBeGreaterThan(0);
+    expect(Number(lib.get('dlsym')!(makeCtx(mem, [BigInt(handle), 32n])))).toBe(puts);
+    expect(Number(lib.get('dlerror')!(makeCtx(mem)))).toBe(0);
+  });
+
+  it('dlsym resolves current-library exports before bionic stubs', () => {
+    const mapper = {
+      mapMemory: vi.fn(),
+      lookupSymbol: (name: string) => (name === 'target_export' ? 0x123456 : undefined),
+      bindImportStub: vi.fn(),
+    };
+    const lib = createBionicLibrary(mapper);
+    const mem = new Uint8Array(256);
+    mem.set(ASCII('target_export\0'), 32);
+    expect(Number(lib.get('dlsym')!(makeCtx(mem, [0n, 32n])))).toBe(0x123456);
+    expect(mapper.bindImportStub).not.toHaveBeenCalled();
+  });
+
+  it('dlerror returns and clears the last dynamic-linker error', () => {
+    const lib = libWith();
+    const mem = new Uint8Array(0x102000);
+    mem.set(ASCII('missing_symbol\0'), 32);
+    expect(Number(lib.get('dlsym')!(makeCtx(mem, [0n, 32n])))).toBe(0);
+    const errPtr = Number(lib.get('dlerror')!(makeCtx(mem)));
+    expect(errPtr).toBeGreaterThan(0);
+    expect(readMemCString(mem, errPtr)).toContain('missing_symbol');
+    expect(Number(lib.get('dlerror')!(makeCtx(mem)))).toBe(0);
   });
 });
