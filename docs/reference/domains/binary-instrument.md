@@ -20,7 +20,7 @@
 - binary-instrument + memory
 - binary-instrument + process
 
-## 工具清单（34）
+## 工具清单（36）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -34,6 +34,7 @@
 | `frida_detach` | 从 Frida 会话分离并清理资源。 |
 | `frida_list_sessions` | 列出所有活跃的 Frida 会话。 |
 | `frida_dex_dump` | 以包名/进程名或 PID 运行 frida-dexdump，作为高层 Android DEX dump 助手。 |
+| `android_runtime_dump_session` | 创建或检查托管的 Android 运行时 dump 会话，基于 Frida/ADB dump 产物、DEX 文件与 /proc/PID/maps 快照。 |
 | `frida_generate_script` | 从模板（trace、intercept、replace、log）生成 Frida 拦截脚本。 |
 | `get_available_plugins` | 列出所有可用的二进制分析插件（frida、ghidra、ida、jadx）。 |
 | `ghidra_decompile` | 使用 Ghidra headless 分析反编译指定函数。 |
@@ -45,6 +46,7 @@
 | `apk_manifest_dump` | 从 APK 中提取 AndroidManifest.xml；优先返回可读 XML，二进制 AXML 会尝试通过跨平台的 JADX CLI 解码，失败时再返回原始 Base64 载荷。 |
 | `apk_manifest_query` | 返回紧凑的结构化 AndroidManifest 摘要：包名、启动 Activity、Application 类、SDK、权限、组件、Provider 以及 SDK/厂商线索。 |
 | `apk_static_triage` | 一次性 APK 静态分诊：ZIP 元数据、清单摘要、native 库、资源线索、可能的加固/保护方案，以及推荐的后续步骤。 |
+| `apk_dex_intake` | 构建一体化的 APK/DEX 取证证据包：ZIP 条目、清单摘要、DEX 头、native 库、表面提示与调用方提供的自定义提示匹配，以及后续操作建议。 |
 | `dex_scan_file` | 扫描二进制/内存 dump 文件中的 DEX 或 CompactDex 魔数，并可选择性地提取命中结果。 |
 | `binary_strings_extract` | 从二进制文件中提取可打印的 ASCII/UTF-16LE 字符串，支持正则过滤。 |
 | `apk_native_libs_list` | 列出 APK 内打包的原生共享库（.so）及其 ABI 目录。 |

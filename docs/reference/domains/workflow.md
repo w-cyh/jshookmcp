@@ -20,7 +20,7 @@
 
 - workflow + browser + network
 
-## 工具清单（8）
+## 工具清单（9）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -30,5 +30,6 @@
 | `js_bundle_search` | 抓取远程 JavaScript Bundle，并在一次调用中按多个命名正则模式搜索。 |
 | `list_extension_workflows` | 列出已安装的扩展工作流。 |
 | `run_extension_workflow` | 执行指定的扩展工作流。 |
+| `reverse_session` | 创建、检查、列出、预览或运行端到端的逆向工程工作流会话，包含产物根目录、跨域工具调用和证据引用。支持 android、native、web 等平台，按计划步骤依次执行并将结果归入可恢复的会话。 |
 | `run_macro` | 执行预设的自动化操作序列。 |
 | `list_macros` | 列出所有可用宏（内置和用户自定义），包含名称、描述、标签和步骤数。 |

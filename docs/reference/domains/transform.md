@@ -18,7 +18,7 @@ AST/字符串变换与加密实现抽取、测试、对比域。
 
 - core + transform
 
-## 工具清单（6）
+## 工具清单（7）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -28,3 +28,4 @@ AST/字符串变换与加密实现抽取、测试、对比域。
 | `crypto_extract_standalone` | 提取当前页面中的加密、签名或加密函数并生成可独立运行代码。 |
 | `crypto_test_harness` | 在 worker_threads 与 vm 沙箱中运行提取出的加密代码并返回确定性测试结果。 |
 | `crypto_compare` | 基于相同测试向量对比两套加密实现。 |
+| `transform_workbench` | 在 base64 输入上运行可复现的二进制变换工作台：base64 编解码、XOR、RC4、zlib 解压、熵分析、预览与魔数提示。 |

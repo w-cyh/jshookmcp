@@ -449,5 +449,13 @@
   "apk_manifest_query": "返回紧凑的结构化 AndroidManifest 摘要：包名、启动 Activity、Application 类、SDK、权限、组件、Provider 以及 SDK/厂商线索。",
   "apk_static_triage": "一次性 APK 静态分诊：ZIP 元数据、清单摘要、native 库、资源线索、可能的加固/保护方案，以及推荐的后续步骤。",
   "dex_scan_file": "扫描二进制/内存 dump 文件中的 DEX 或 CompactDex 魔数，并可选择性地提取命中结果。",
-  "binary_strings_extract": "从二进制文件中提取可打印的 ASCII/UTF-16LE 字符串，支持正则过滤。"
+  "binary_strings_extract": "从二进制文件中提取可打印的 ASCII/UTF-16LE 字符串，支持正则过滤。",
+  "android_runtime_dump_session": "创建或检查托管的 Android 运行时 dump 会话，基于 Frida/ADB dump 产物、DEX 文件与 /proc/PID/maps 快照。",
+  "apk_dex_intake": "构建一体化的 APK/DEX 取证证据包：ZIP 条目、清单摘要、DEX 头、native 库、表面提示与调用方提供的自定义提示匹配，以及后续操作建议。",
+  "nemu_inspect_imports": "在仿真前检查 AArch64 ELF .so 的动态导入重定位信息，列出导入符号、GOT 偏移，并标注每个导入在内置 bionic 桩中是否有支持。无需手写 readelf/Capstone 脚本即可诊断 PLT/GOT NULL 间接调用失败。",
+  "nemu_alloc_memory": "分配原始客户机内存（不是 JNI 句柄——是真正的 char* 地址）。可选通过 fillBytes（base64）填入初始数据。返回客户机地址，可作为整数参数传入 call_symbol。在会话开始时为原生解密/签名例程布置加密数据块，然后用 nemu_read_memory 读取输出。",
+  "nemu_read_memory": "从客户机内存的指定地址读取原始字节。默认返回有界预览；设置 includeDataBase64=true 可在配置上限内返回完整 base64。用于在原生例程写入输出缓冲区后取回结果。",
+  "nemu_write_memory": "通过 base64 数据向客户机内存的指定地址写入原始字节。用于在 call_symbol 调用之间更新输入缓冲区而无需重新分配，或就地修补代码/数据。",
+  "transform_workbench": "在 base64 输入上运行可复现的二进制变换工作台：base64 编解码、XOR、RC4、zlib 解压、熵分析、预览与魔数提示。",
+  "reverse_session": "创建、检查、列出、预览或运行端到端的逆向工程工作流会话，包含产物根目录、跨域工具调用和证据引用。支持 android、native、web 等平台，按计划步骤依次执行并将结果归入可恢复的会话。"
 }

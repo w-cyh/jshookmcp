@@ -20,7 +20,7 @@
 - native-emulator + binary-instrument
 - native-emulator + dart-inspector
 
-## 工具清单（16）
+## 工具清单（20）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -29,6 +29,7 @@
 | `nemu_destroy_session` | 销毁一个仿真器会话并释放其内存（已映射的库、栈、JNI 表）。 |
 | `nemu_list_sessions` | 列出活动的仿真器会话及其创建和最近使用时间。 |
 | `nemu_load_library` | 从文件路径将一个 AArch64 ELF 共享库（.so）加载进会话，映射段并解析导出符号。是 list_symbols / call_symbol / call_jni_export 的前置步骤。 |
+| `nemu_inspect_imports` | 在仿真前检查 AArch64 ELF .so 的动态导入重定位信息，列出导入符号、GOT 偏移，并标注每个导入在内置 bionic 桩中是否有支持。无需手写 readelf/Capstone 脚本即可诊断 PLT/GOT NULL 间接调用失败。 |
 | `nemu_extract_apk_libs` | 列出 APK 中可加载的 arm64-v8a native 库（.so）及其字节大小。libapp.so（Flutter Dart AOT）会被列出但无法在此执行，应交给 Dart 层。 |
 | `nemu_load_apk_library` | 按名称从 APK 中抽取指定的 arm64-v8a .so 并一步加载进会话（无临时文件）。配合 nemu_extract_apk_libs 发现库名。 |
 | `nemu_list_symbols` | 列出已加载库的导出函数符号——即可被 call_symbol / call_jni_export 调用的名字。 |
@@ -40,3 +41,6 @@
 | `nemu_read_byte_array` | 将 jbyteArray 句柄（如 native 调用的返回值）解析回字节，以 base64 加长度返回。 |
 | `nemu_trace` | 调用一个导出符号，同时记录执行的每条指令（pc、操作码、步号），可选按步快照指定寄存器。受 maxSteps 限制。用于跟踪混淆 native 函数的控制流/算法。 |
 | `nemu_disassemble` | 无需创建仿真器会话即可反汇编单条指令。支持 arm64/aarch64、x86、x64、riscv32/riscv64、mips/mips32 与 mipsel；用于提升 trace 可读性的本地轻量解码器，覆盖常见 SSE/AVX/AVX2/AVX-512 EVEX、RISC-V 和 MIPS 指令。 |
+| `nemu_alloc_memory` | 分配原始客户机内存（不是 JNI 句柄——是真正的 char* 地址）。可选通过 fillBytes（base64）填入初始数据。返回客户机地址，可作为整数参数传入 call_symbol。在会话开始时为原生解密/签名例程布置加密数据块，然后用 nemu_read_memory 读取输出。 |
+| `nemu_read_memory` | 从客户机内存的指定地址读取原始字节。默认返回有界预览；设置 includeDataBase64=true 可在配置上限内返回完整 base64。用于在原生例程写入输出缓冲区后取回结果。 |
+| `nemu_write_memory` | 通过 base64 数据向客户机内存的指定地址写入原始字节。用于在 call_symbol 调用之间更新输入缓冲区而无需重新分配，或就地修补代码/数据。 |

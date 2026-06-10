@@ -20,15 +20,16 @@ In-process, dependency-free self-built ARM64 interpreter for emulating Android `
 - native-emulator + binary-instrument
 - native-emulator + dart-inspector
 
-## Full tool list (16)
+## Full tool list (20)
 
 | Tool | Description |
 | --- | --- |
-| `nemu_capabilities` | Report native-emulator backend availability and supported features (self-built ARM64 interpreter, no external dependencies). Emulates the integer AArch64 ISA + SIMD/FP load-store + AES/SHA/PMULL crypto-extension (bit-exact vs FIPS-197/180-4/180-1) + scalar IEEE-754 floating-point + NEON integer-lane SIMD (three-same arithmetic/logical/compare/min-max, misc, DUP, MOVI, shift-by-immediate, across-lanes, permute, EXT, TBL) + ELF relocations + DT_INIT_ARRAY constructor execution + auto-wired bionic libc + JNI; long/widening and saturating NEON variants are not yet supported (declared in the response). |
+| `nemu_capabilities` | Report native-emulator backend availability, supported features, and explicit ISA/SIMD gaps. Unsupported opcodes fail loudly instead of being reported as emulated. |
 | `nemu_create_session` | Create an isolated ARM64 emulator session and return its sessionId. Each session owns its own CPU registers, guest stack, and JNI object table, so concurrent analyses never interfere. Destroy it with nemu_destroy_session when done; idle sessions auto-expire. |
 | `nemu_destroy_session` | Destroy an emulator session and free its memory (mapped library, stack, JNI tables). |
 | `nemu_list_sessions` | List active emulator sessions with their creation and last-use timestamps. |
 | `nemu_load_library` | Load an AArch64 ELF shared object (.so) from a filesystem path into a session, mapping its segments and resolving exported symbols. Prerequisite for list_symbols / call_symbol / call_jni_export. |
+| `nemu_inspect_imports` | Inspect an AArch64 ELF .so before emulation and list imported symbols from dynamic relocations, including GOT offsets and whether each import is backed by the built-in bionic stubs. Use this to diagnose PLT/GOT NULL indirect-call failures without writing ad-hoc readelf/Capstone scripts. |
 | `nemu_extract_apk_libs` | List the loadable arm64-v8a native libraries (.so) packaged inside an APK, with their byte sizes. Use nemu_load_apk_library to load one. Note: libapp.so (Flutter Dart AOT) is listed but is not executable here — route it to the Dart layer. |
 | `nemu_load_apk_library` | Extract a specific arm64-v8a .so from an APK by name and load it into a session in one step (no temp files). Pair with nemu_extract_apk_libs to discover library names. |
 | `nemu_list_symbols` | List the exported function symbols of the loaded library — the names callable via call_symbol / call_jni_export. |
@@ -40,3 +41,6 @@ In-process, dependency-free self-built ARM64 interpreter for emulating Android `
 | `nemu_read_byte_array` | Resolve a jbyteArray handle (e.g. a native call's return value) back to its bytes, returned as base64 plus length. |
 | `nemu_trace` | Invoke an exported symbol while recording every instruction executed (pc, opcode, step), optionally snapshotting named registers per step. Bounded by maxSteps. Use to follow the control flow / algorithm of an obfuscated native function. |
 | `nemu_disassemble` | Disassemble a single instruction without creating an emulator session. Supports arm64/aarch64, x86, x64, riscv32/riscv64, mips/mips32, and mipsel. This is a local lightweight decoder for trace readability, including common SSE/AVX/AVX2/AVX-512 EVEX, RISC-V, and MIPS instructions. |
+| `nemu_alloc_memory` | Allocate raw guest memory (NOT a JNI handle — a real char* address). Optionally fill with initial data via fillBytes (base64). Returns the guest address to pass as an integer arg to call_symbol. Use at the start of a session to stage encrypted blobs for a native decrypt/signing routine, then read the output with nemu_read_memory. |
+| `nemu_read_memory` | Read raw bytes from guest memory at a given address. Returns a bounded preview by default; set includeDataBase64=true for full base64 within the configured cap. |
+| `nemu_write_memory` | Write raw bytes into guest memory at a given address via base64 data. Use to update an input buffer between call_symbol invocations without re-allocating, or to patch code/data in place. |
