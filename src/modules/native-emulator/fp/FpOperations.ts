@@ -24,6 +24,18 @@ import {
   QNAN_F64,
   FPCR_RMODE,
   FPCR_FZ,
+  FPCR_IOE,
+  FPCR_DZE,
+  FPCR_OFE,
+  FPCR_UFE,
+  FPCR_IXE,
+  FPCR_IDE,
+  FPSR_IOC,
+  FPSR_DZC,
+  FPSR_OFC,
+  FPSR_UFC,
+  FPSR_IXC,
+  FPSR_IDC,
   FLOAT32_MAX,
   FLOAT32_MIN_NORMAL,
   FLOAT64_MAX,
@@ -99,25 +111,31 @@ export class FpContext {
   private checkAndSetFlags(flags: FpExceptionFlags): void {
     // Convert flags object to bitmask and update FPSR
     let bitmask = 0;
-    if (flags.ioc) bitmask |= 1;
-    if (flags.dzc) bitmask |= 2;
-    if (flags.ofc) bitmask |= 4;
-    if (flags.ufc) bitmask |= 8;
-    if (flags.ixc) bitmask |= 16;
-    if (flags.idc) bitmask |= 32;
+    if (flags.ioc) bitmask |= 1 << FPSR_IOC;
+    if (flags.dzc) bitmask |= 1 << FPSR_DZC;
+    if (flags.ofc) bitmask |= 1 << FPSR_OFC;
+    if (flags.ufc) bitmask |= 1 << FPSR_UFC;
+    if (flags.ixc) bitmask |= 1 << FPSR_IXC;
+    if (flags.idc) bitmask |= 1 << FPSR_IDC;
 
     if (bitmask !== 0) {
       this.fpsr |= bitmask;
 
-      // Check for enabled traps
-      const trapMask = (this.fpcr >> 8) & 0x3f;
-      if (bitmask & trapMask) {
-        if (flags.ioc) throw new Error('FP Invalid Operation');
-        if (flags.dzc) throw new Error('FP Divide by Zero');
-        if (flags.ofc) throw new Error('FP Overflow');
-        if (flags.ufc) throw new Error('FP Underflow');
-        if (flags.ixc) throw new Error('FP Inexact');
-        if (flags.idc) throw new Error('FP Input Denormal');
+      // Check for enabled traps in FPCR
+      const trapMask =
+        (1 << FPCR_IOE) |
+        (1 << FPCR_DZE) |
+        (1 << FPCR_OFE) |
+        (1 << FPCR_UFE) |
+        (1 << FPCR_IXE) |
+        (1 << FPCR_IDE);
+      if (this.fpcr & trapMask) {
+        if (flags.ioc && this.fpcr & (1 << FPCR_IOE)) throw new Error('FP Invalid Operation');
+        if (flags.dzc && this.fpcr & (1 << FPCR_DZE)) throw new Error('FP Divide by Zero');
+        if (flags.ofc && this.fpcr & (1 << FPCR_OFE)) throw new Error('FP Overflow');
+        if (flags.ufc && this.fpcr & (1 << FPCR_UFE)) throw new Error('FP Underflow');
+        if (flags.ixc && this.fpcr & (1 << FPCR_IXE)) throw new Error('FP Inexact');
+        if (flags.idc && this.fpcr & (1 << FPCR_IDE)) throw new Error('FP Input Denormal');
       }
     }
   }
@@ -211,7 +229,7 @@ export class FpContext {
     if (this.fastPath) {
       // Only check NaN result (IOC) - single branch
       if (Number.isNaN(result)) {
-        this.fpsr |= 1; // IOC
+        this.fpsr |= 1 << FPSR_IOC;
       }
       return result;
     }
@@ -226,11 +244,11 @@ export class FpContext {
       const minNormal = is32bit ? FLOAT32_MIN_NORMAL : FLOAT64_MIN_NORMAL;
       if (a !== 0 && Math.abs(a) < minNormal && Number.isFinite(a)) {
         a2 = Object.is(a, -0) || a < 0 ? -0 : 0;
-        flags |= 32; // IDC
+        flags |= 1 << FPSR_IDC;
       }
       if (b !== 0 && Math.abs(b) < minNormal && Number.isFinite(b)) {
         b2 = Object.is(b, -0) || b < 0 ? -0 : 0;
-        flags |= 32; // IDC
+        flags |= 1 << FPSR_IDC;
       }
     }
 
@@ -242,23 +260,23 @@ export class FpContext {
     if (Number.isNaN(result) && !Number.isNaN(a2) && !Number.isNaN(b2)) {
       if (!Number.isFinite(a2) && !Number.isFinite(b2)) {
         if ((a2 > 0 && b2 < 0) || (a2 < 0 && b2 > 0)) {
-          flags |= 1; // IOC
+          flags |= 1 << FPSR_IOC;
         }
       }
     } else if (Number.isNaN(a2) || Number.isNaN(b2)) {
-      flags |= 1; // Input NaN
+      flags |= 1 << FPSR_IOC;
     }
 
     if (flags !== 0) {
       this.fpsr |= flags;
       const trapMask = (this.fpcr >> 8) & 0x3f;
       if (flags & trapMask) {
-        if (flags & 1) throw new Error('FP Invalid Operation');
-        if (flags & 32) throw new Error('FP Input Denormal');
+        if (flags & (1 << FPSR_IOC)) throw new Error('FP Invalid Operation');
+        if (flags & (1 << FPSR_IDC)) throw new Error('FP Input Denormal');
       }
     }
 
-    if (flags & 1) return is32bit ? QNAN_F32 : QNAN_F64;
+    if (flags & (1 << FPSR_IOC)) return is32bit ? QNAN_F32 : QNAN_F64;
     return result;
   }
 
@@ -274,7 +292,7 @@ export class FpContext {
     // Fast path: minimal exception detection
     if (this.fastPath) {
       if (Number.isNaN(result)) {
-        this.fpsr |= 1; // IOC
+        this.fpsr |= 1 << FPSR_IOC;
       }
       return result;
     }
@@ -289,11 +307,11 @@ export class FpContext {
       const minNormal = is32bit ? FLOAT32_MIN_NORMAL : FLOAT64_MIN_NORMAL;
       if (a !== 0 && Math.abs(a) < minNormal && Number.isFinite(a)) {
         a2 = Object.is(a, -0) || a < 0 ? -0 : 0;
-        flags |= 32; // IDC
+        flags |= 1 << FPSR_IDC;
       }
       if (b !== 0 && Math.abs(b) < minNormal && Number.isFinite(b)) {
         b2 = Object.is(b, -0) || b < 0 ? -0 : 0;
-        flags |= 32; // IDC
+        flags |= 1 << FPSR_IDC;
       }
     }
 
@@ -305,23 +323,23 @@ export class FpContext {
     if (Number.isNaN(result) && !Number.isNaN(a2) && !Number.isNaN(b2)) {
       if (!Number.isFinite(a2) && !Number.isFinite(b2)) {
         if ((a2 > 0 && b2 > 0) || (a2 < 0 && b2 < 0)) {
-          flags |= 1; // IOC
+          flags |= 1 << FPSR_IOC;
         }
       }
     } else if (Number.isNaN(a2) || Number.isNaN(b2)) {
-      flags |= 1; // Input NaN
+      flags |= 1 << FPSR_IOC;
     }
 
     if (flags !== 0) {
       this.fpsr |= flags;
       const trapMask = (this.fpcr >> 8) & 0x3f;
       if (flags & trapMask) {
-        if (flags & 1) throw new Error('FP Invalid Operation');
-        if (flags & 32) throw new Error('FP Input Denormal');
+        if (flags & (1 << FPSR_IOC)) throw new Error('FP Invalid Operation');
+        if (flags & (1 << FPSR_IDC)) throw new Error('FP Input Denormal');
       }
     }
 
-    if (flags & 1) return is32bit ? QNAN_F32 : QNAN_F64;
+    if (flags & (1 << FPSR_IOC)) return is32bit ? QNAN_F32 : QNAN_F64;
     return result;
   }
 
@@ -338,9 +356,9 @@ export class FpContext {
     if (this.fastPath) {
       // Only check NaN and Inf (single condition)
       if (Number.isNaN(result)) {
-        this.fpsr |= 1; // IOC
+        this.fpsr |= 1 << FPSR_IOC;
       } else if (!Number.isFinite(result)) {
-        this.fpsr |= 4; // OFC
+        this.fpsr |= 1 << FPSR_OFC;
       }
       // Skip UFC check in fast path for performance
       return result;
@@ -356,11 +374,11 @@ export class FpContext {
       const minNormal = is32bit ? FLOAT32_MIN_NORMAL : FLOAT64_MIN_NORMAL;
       if (a !== 0 && Math.abs(a) < minNormal && Number.isFinite(a)) {
         a2 = Object.is(a, -0) || a < 0 ? -0 : 0;
-        flags |= 32; // IDC
+        flags |= 1 << FPSR_IDC;
       }
       if (b !== 0 && Math.abs(b) < minNormal && Number.isFinite(b)) {
         b2 = Object.is(b, -0) || b < 0 ? -0 : 0;
-        flags |= 32; // IDC
+        flags |= 1 << FPSR_IDC;
       }
     }
 
@@ -374,10 +392,10 @@ export class FpContext {
         const aIsZero = a2 === 0 || Object.is(a2, -0);
         const bIsZero = b2 === 0 || Object.is(b2, -0);
         if ((aIsZero && !Number.isFinite(b2)) || (!Number.isFinite(a2) && bIsZero)) {
-          flags |= 1; // IOC
+          flags |= 1 << FPSR_IOC;
         }
       } else {
-        flags |= 1; // Input NaN
+        flags |= 1 << FPSR_IOC;
       }
     }
 
@@ -387,13 +405,13 @@ export class FpContext {
       Number.isFinite(a2) &&
       Number.isFinite(b2)
     ) {
-      flags |= 4; // OFC
+      flags |= 1 << FPSR_OFC;
     }
 
     if (result !== 0 && !Object.is(result, -0) && Number.isFinite(result)) {
       const minNormal = is32bit ? FLOAT32_MIN_NORMAL : FLOAT64_MIN_NORMAL;
       if (Math.abs(result) < minNormal) {
-        flags |= 8; // UFC
+        flags |= 1 << FPSR_UFC;
       }
     }
 
@@ -401,15 +419,15 @@ export class FpContext {
       this.fpsr |= flags;
       const trapMask = (this.fpcr >> 8) & 0x3f;
       if (flags & trapMask) {
-        if (flags & 1) throw new Error('FP Invalid Operation');
-        if (flags & 4) throw new Error('FP Overflow');
-        if (flags & 8) throw new Error('FP Underflow');
-        if (flags & 32) throw new Error('FP Input Denormal');
+        if (flags & (1 << FPSR_IOC)) throw new Error('FP Invalid Operation');
+        if (flags & (1 << FPSR_OFC)) throw new Error('FP Overflow');
+        if (flags & (1 << FPSR_UFC)) throw new Error('FP Underflow');
+        if (flags & (1 << FPSR_IDC)) throw new Error('FP Input Denormal');
       }
     }
 
-    if (flags & 1) return is32bit ? QNAN_F32 : QNAN_F64;
-    if (flags & 4) {
+    if (flags & (1 << FPSR_IOC)) return is32bit ? QNAN_F32 : QNAN_F64;
+    if (flags & (1 << FPSR_OFC)) {
       const sign = Math.sign(a2 * b2);
       const mode = this.getRoundingMode();
       if (mode === RoundingMode.RZ) {
@@ -419,7 +437,7 @@ export class FpContext {
       }
       return sign < 0 ? -Infinity : Infinity;
     }
-    if (flags & 8) {
+    if (flags & (1 << FPSR_UFC)) {
       if (this.isFlushToZero()) {
         return Object.is(result, -0) || result < 0 ? -0 : 0;
       }
@@ -440,9 +458,9 @@ export class FpContext {
     if (this.fastPath) {
       // Only check NaN and Inf
       if (Number.isNaN(result)) {
-        this.fpsr |= 1; // IOC
+        this.fpsr |= 1 << FPSR_IOC;
       } else if (!Number.isFinite(result)) {
-        this.fpsr |= 2; // DZC
+        this.fpsr |= 1 << FPSR_DZC;
       }
       // Skip IXC check in fast path for performance
       return result;
@@ -458,11 +476,11 @@ export class FpContext {
       const minNormal = is32bit ? FLOAT32_MIN_NORMAL : FLOAT64_MIN_NORMAL;
       if (a !== 0 && Math.abs(a) < minNormal && Number.isFinite(a)) {
         a2 = Object.is(a, -0) || a < 0 ? -0 : 0;
-        flags |= 32; // IDC
+        flags |= 1 << FPSR_IDC;
       }
       if (b !== 0 && Math.abs(b) < minNormal && Number.isFinite(b)) {
         b2 = Object.is(b, -0) || b < 0 ? -0 : 0;
-        flags |= 32; // IDC
+        flags |= 1 << FPSR_IDC;
       }
     }
 
@@ -475,10 +493,10 @@ export class FpContext {
     if (bIsZero) {
       const aIsZero = a2 === 0 || Object.is(a2, -0);
       if (aIsZero || Number.isNaN(a2)) {
-        flags |= 1; // 0/0 → IOC
+        flags |= 1 << FPSR_IOC; // 0/0 → IOC
         result = NaN;
       } else {
-        flags |= 2; // x/0 → DZC
+        flags |= 1 << FPSR_DZC; // x/0 → DZC
         const signA = a2 < 0 || Object.is(a2, -0) ? -1 : 1;
         const signB = Object.is(b2, -0) ? -1 : 1;
         result = signA * signB > 0 ? Infinity : -Infinity;
@@ -486,18 +504,22 @@ export class FpContext {
     } else if (Number.isNaN(result)) {
       if (!Number.isNaN(a2) && !Number.isNaN(b2)) {
         if (!Number.isFinite(a2) && !Number.isFinite(b2)) {
-          flags |= 1; // Inf/Inf → IOC
+          flags |= 1 << FPSR_IOC; // Inf/Inf → IOC
         }
       } else {
-        flags |= 1; // Input NaN
+        flags |= 1 << FPSR_IOC;
       }
     }
 
-    if ((flags & 3) === 0 && result !== 0 && Number.isFinite(result)) {
+    if (
+      (flags & ((1 << FPSR_IOC) | (1 << FPSR_DZC))) === 0 &&
+      result !== 0 &&
+      Number.isFinite(result)
+    ) {
       const log2b = Math.log2(Math.abs(b2));
       const isPowerOf2 = Number.isInteger(log2b);
       if (!isPowerOf2) {
-        flags |= 16; // IXC
+        flags |= 1 << FPSR_IXC;
       }
     }
 
@@ -505,14 +527,14 @@ export class FpContext {
       this.fpsr |= flags;
       const trapMask = (this.fpcr >> 8) & 0x3f;
       if (flags & trapMask) {
-        if (flags & 1) throw new Error('FP Invalid Operation');
-        if (flags & 2) throw new Error('FP Divide by Zero');
-        if (flags & 16) throw new Error('FP Inexact');
-        if (flags & 32) throw new Error('FP Input Denormal');
+        if (flags & (1 << FPSR_IOC)) throw new Error('FP Invalid Operation');
+        if (flags & (1 << FPSR_DZC)) throw new Error('FP Divide by Zero');
+        if (flags & (1 << FPSR_IXC)) throw new Error('FP Inexact');
+        if (flags & (1 << FPSR_IDC)) throw new Error('FP Input Denormal');
       }
     }
 
-    if (flags & 1) return is32bit ? QNAN_F32 : QNAN_F64;
+    if (flags & (1 << FPSR_IOC)) return is32bit ? QNAN_F32 : QNAN_F64;
     return result;
   }
 
@@ -528,7 +550,7 @@ export class FpContext {
     // Fast path: minimal exception detection (skip IXC for performance)
     if (this.fastPath) {
       if (Number.isNaN(result)) {
-        this.fpsr |= 1; // IOC
+        this.fpsr |= 1 << FPSR_IOC;
       }
       // Skip IXC check in fast path for performance
       return result;
@@ -554,20 +576,20 @@ export class FpContext {
 
     if (Number.isNaN(result)) {
       if (a2 < 0 && !Object.is(a2, -0)) {
-        flags |= 1; // IOC
+        flags |= 1 << FPSR_IOC;
       } else if (Number.isNaN(a2)) {
-        flags |= 1; // Input NaN
+        flags |= 1 << FPSR_IOC;
       }
     }
 
-    if ((flags & 1) === 0 && result !== 0 && Number.isFinite(result)) {
+    if ((flags & (1 << FPSR_IOC)) === 0 && result !== 0 && Number.isFinite(result)) {
       const isInteger = Number.isInteger(result);
       if (isInteger) {
         if (result * result !== a2) {
-          flags |= 16; // IXC
+          flags |= 1 << FPSR_IXC;
         }
       } else {
-        flags |= 16; // IXC
+        flags |= 1 << FPSR_IXC;
       }
     }
 
@@ -575,13 +597,13 @@ export class FpContext {
       this.fpsr |= flags;
       const trapMask = (this.fpcr >> 8) & 0x3f;
       if (flags & trapMask) {
-        if (flags & 1) throw new Error('FP Invalid Operation');
-        if (flags & 16) throw new Error('FP Inexact');
-        if (flags & 32) throw new Error('FP Input Denormal');
+        if (flags & (1 << FPSR_IOC)) throw new Error('FP Invalid Operation');
+        if (flags & (1 << FPSR_IXC)) throw new Error('FP Inexact');
+        if (flags & (1 << FPSR_IDC)) throw new Error('FP Input Denormal');
       }
     }
 
-    if (flags & 1) return is32bit ? QNAN_F32 : QNAN_F64;
+    if (flags & (1 << FPSR_IOC)) return is32bit ? QNAN_F32 : QNAN_F64;
     return result;
   }
 
