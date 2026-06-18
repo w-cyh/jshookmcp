@@ -6,18 +6,6 @@ interface BlackboxHandlersDeps {
   debuggerManager: DebuggerManager;
 }
 
-interface AdvancedFeatureCapable {
-  ensureAdvancedFeatures: () => Promise<void>;
-}
-
-function hasEnsureAdvancedFeatures(
-  manager: DebuggerManager,
-): manager is DebuggerManager & AdvancedFeatureCapable {
-  return (
-    typeof (manager as { ensureAdvancedFeatures?: unknown }).ensureAdvancedFeatures === 'function'
-  );
-}
-
 function getErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'message' in error) {
     const message = (error as { message?: unknown }).message;
@@ -31,14 +19,8 @@ function getErrorMessage(error: unknown): string {
 export class BlackboxHandlers {
   constructor(private deps: BlackboxHandlersDeps) {}
 
-  private async ensureAdvancedFeaturesIfSupported(): Promise<void> {
-    if (hasEnsureAdvancedFeatures(this.deps.debuggerManager)) {
-      await this.deps.debuggerManager.ensureAdvancedFeatures();
-    }
-  }
-
   private async getBlackboxManager(): Promise<BlackboxManager> {
-    await this.ensureAdvancedFeaturesIfSupported();
+    await (this.deps.debuggerManager as any).ensureAdvancedFeatures?.();
     return this.deps.debuggerManager.getBlackboxManager();
   }
 

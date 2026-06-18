@@ -219,7 +219,7 @@ describe('StealthInjectionHandlers — comprehensive coverage', () => {
       resetFingerprintCacheForTesting();
     });
 
-    it('returns error when fingerprint packages are not installed', async () => {
+    it('returns partial profile when fingerprint packages are not installed', async () => {
       // FingerprintManager import will fail in test environment
       vi.resetModules();
 
@@ -239,14 +239,14 @@ describe('StealthInjectionHandlers — comprehensive coverage', () => {
         await freshHandlers.handleStealthGenerateFingerprint({}),
       );
 
-      expect(body.success).toBe(false);
-      expect(body.message).toContain('fingerprint-generator');
-      expect(body.message).toContain('fingerprint-injector');
+      expect(body.success).toBe(true); // Changed: now returns partial profile
+      expect(body.profile).toBeDefined();
+      expect((body.profile as any)._note).toContain('Basic profile without fingerprint-generator');
 
       vi.doUnmock('@modules/stealth/FingerprintManager');
     });
 
-    it('returns error when FingerprintManager is not available', async () => {
+    it('returns partial profile when FingerprintManager is not available', async () => {
       vi.resetModules();
 
       vi.doMock('@modules/stealth/FingerprintManager', () => ({
@@ -269,8 +269,9 @@ describe('StealthInjectionHandlers — comprehensive coverage', () => {
         await freshHandlers.handleStealthGenerateFingerprint({}),
       );
 
-      expect(body.success).toBe(false);
-      expect(body.message).toContain('not installed');
+      expect(body.success).toBe(true); // Changed: now returns partial profile
+      expect(body.profile).toBeDefined();
+      expect((body.profile as any)._note).toContain('Basic profile without fingerprint-generator');
 
       vi.doUnmock('@modules/stealth/FingerprintManager');
     });

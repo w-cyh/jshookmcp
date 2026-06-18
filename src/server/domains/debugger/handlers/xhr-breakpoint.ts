@@ -5,18 +5,6 @@ interface XHRBreakpointHandlersDeps {
   debuggerManager: DebuggerManager;
 }
 
-interface AdvancedFeatureCapable {
-  ensureAdvancedFeatures: () => Promise<void>;
-}
-
-function hasEnsureAdvancedFeatures(
-  manager: DebuggerManager,
-): manager is DebuggerManager & AdvancedFeatureCapable {
-  return (
-    typeof (manager as { ensureAdvancedFeatures?: unknown }).ensureAdvancedFeatures === 'function'
-  );
-}
-
 function getErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'message' in error) {
     const message = (error as { message?: unknown }).message;
@@ -30,16 +18,10 @@ function getErrorMessage(error: unknown): string {
 export class XHRBreakpointHandlers {
   constructor(private deps: XHRBreakpointHandlersDeps) {}
 
-  private async ensureAdvancedFeaturesIfSupported(): Promise<void> {
-    if (hasEnsureAdvancedFeatures(this.deps.debuggerManager)) {
-      await this.deps.debuggerManager.ensureAdvancedFeatures();
-    }
-  }
-
   async handleXHRBreakpointSet(args: Record<string, unknown>) {
     try {
       const urlPattern = argString(args, 'urlPattern', '');
-      await this.ensureAdvancedFeaturesIfSupported();
+      await (this.deps.debuggerManager as any).ensureAdvancedFeatures?.();
       const xhrManager = this.deps.debuggerManager.getXHRManager();
       const breakpointId = await xhrManager.setXHRBreakpoint(urlPattern);
 
@@ -83,7 +65,7 @@ export class XHRBreakpointHandlers {
   async handleXHRBreakpointRemove(args: Record<string, unknown>) {
     try {
       const breakpointId = argString(args, 'breakpointId', '');
-      await this.ensureAdvancedFeaturesIfSupported();
+      await (this.deps.debuggerManager as any).ensureAdvancedFeatures?.();
       const xhrManager = this.deps.debuggerManager.getXHRManager();
       const removed = await xhrManager.removeXHRBreakpoint(breakpointId);
 
@@ -125,7 +107,7 @@ export class XHRBreakpointHandlers {
 
   async handleXHRBreakpointList(_args: Record<string, unknown>) {
     try {
-      await this.ensureAdvancedFeaturesIfSupported();
+      await (this.deps.debuggerManager as any).ensureAdvancedFeatures?.();
       const xhrManager = this.deps.debuggerManager.getXHRManager();
       const breakpoints = xhrManager.getAllXHRBreakpoints();
 

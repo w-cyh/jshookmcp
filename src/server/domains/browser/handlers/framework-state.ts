@@ -281,12 +281,60 @@ export class FrameworkStateHandlers {
               const hydrationMarker = document.querySelector('[data-hk]');
               if (!hydrationMarker) return null;
 
+              // Dynamic introspection: try to find Solid internals without devtools
+              const probeSolidInternals = (): AnyObj | null => {
+                // Solid stores ownership context in a global closure
+                // Try to find it by examining window object properties
+                for (const key of Object.keys(win)) {
+                  if (key.startsWith('_$') || key.startsWith('$')) {
+                    const val = win[key];
+                    if (val && typeof val === 'object' && 'owner' in val) {
+                      return val as AnyObj;
+                    }
+                  }
+                }
+
+                // Check DOM nodes for Solid internal properties
+                const allElements = document.querySelectorAll('[data-hk]');
+                for (const el of Array.from(allElements).slice(0, 10)) {
+                  const elObj = el as unknown as AnyObj;
+                  for (const prop of Object.keys(elObj)) {
+                    if (prop.startsWith('_$') || prop.startsWith('$SOLID')) {
+                      const val = elObj[prop];
+                      if (val && typeof val === 'object') {
+                        return val as AnyObj;
+                      }
+                    }
+                  }
+                }
+
+                return null;
+              };
+
+              const internals = probeSolidInternals();
+              if (internals) {
+                // Found internal state, try to serialize it
+                states.push({
+                  component: 'SolidRoot',
+                  state: [
+                    {
+                      _source: 'probed-internals',
+                      _note: 'State extracted via dynamic introspection (no devtools)',
+                      ...safeSerialize(internals),
+                    },
+                  ],
+                });
+                return states;
+              }
+
+              // Fallback: only hydration markers detected
               states.push({
                 component: 'SolidRoot',
                 state: [
                   {
                     _note:
                       'Solid detected via hydration markers; install solid-devtools for full state extraction',
+                    _hydrationNodes: Array.from(document.querySelectorAll('[data-hk]')).length,
                   },
                 ],
               });
