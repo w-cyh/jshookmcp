@@ -6,6 +6,7 @@ import type { UnifiedProcessManager } from '@server/domains/shared/modules/nativ
 import type { MCPServerContext } from '@server/MCPServer.context';
 import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 import { handleSafe } from '@server/domains/shared/ResponseBuilder';
+import { argNumber } from '@server/domains/shared/parse-args';
 
 export class IntegrityHandlers {
   constructor(
@@ -197,14 +198,21 @@ export class IntegrityHandlers {
         );
       }
       const pid = await this.resolvePid(args.pid);
+      const maxRegions = argNumber(args, 'maxRegions', 10000);
       const result = await this.antiCheatDetector.scanGuardPages(pid);
       const { guardPages, stats } = result;
+
+      // Truncate results if exceeding maxRegions
+      const truncated = guardPages.length > maxRegions;
+      const filteredPages = truncated ? guardPages.slice(0, maxRegions) : guardPages;
+
       return {
-        guardPages,
-        count: guardPages.length,
+        guardPages: filteredPages,
+        count: filteredPages.length,
         scan: stats,
-        hint: stats.truncated
-          ? `Scan stopped after ${stats.scannedRegions} regions in ${stats.durationMs}ms to avoid hanging. Results may be partial.`
+        truncated: truncated || stats.truncated,
+        hint: (truncated || stats.truncated)
+          ? `Scan stopped after ${truncated ? maxRegions : stats.scannedRegions} regions${truncated ? ' (maxRegions limit)' : ''} in ${stats.durationMs}ms to avoid hanging. Results may be partial.`
           : guardPages.length > 0
             ? `Found ${guardPages.length} guard page regions — these may indicate anti-tampering.`
             : 'No guard pages found.',
@@ -221,21 +229,29 @@ export class IntegrityHandlers {
         );
       }
       const pid = await this.resolvePid(args.pid);
+      const maxSections = argNumber(args, 'maxSections', 100);
       const result = await this.antiCheatDetector.scanIntegrity(
         pid,
         args.moduleName as string | undefined,
       );
       const { sections, stats } = result;
       const modified = sections.filter((r) => r.isModified);
+
+      // Truncate results if exceeding maxSections
+      const truncated = sections.length > maxSections;
+      const filteredSections = truncated ? sections.slice(0, maxSections) : sections;
+      const filteredModified = filteredSections.filter((r) => r.isModified);
+
       return {
-        sections,
-        totalChecked: sections.length,
-        modifiedCount: modified.length,
+        sections: filteredSections,
+        totalChecked: filteredSections.length,
+        modifiedCount: filteredModified.length,
         scan: stats,
-        hint: stats.truncated
-          ? `Checked ${stats.scannedSections} executable section(s) across ${stats.scannedModules} module(s) before hitting safety limits. Results may be partial.`
-          : modified.length > 0
-            ? `${modified.length} section(s) modified — code may have been patched or hooked.`
+        truncated: truncated || stats.truncated,
+        hint: (truncated || stats.truncated)
+          ? `Checked ${stats.scannedSections} executable section(s)${truncated ? ` (maxSections limit: ${maxSections})` : ''} across ${stats.scannedModules} module(s) before hitting safety limits. Results may be partial.`
+          : filteredModified.length > 0
+            ? `${filteredModified.length} section(s) modified — code may have been patched or hooked.`
             : 'All checked sections match disk — no runtime modifications detected.',
       };
     });

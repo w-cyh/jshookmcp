@@ -414,6 +414,7 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
           'anti-tampering mechanisms or stack overflow detection.',
       )
       .number('pid', 'Target process ID (optional when a browser session is attached)')
+      .number('maxRegions', 'Maximum regions to scan before stopping (default: 10000)')
       .required()
       .query(),
   ),
@@ -424,6 +425,7 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
           'modifications like inline hooks or code patches.',
       )
       .number('pid', 'Target process ID (optional when a browser session is attached)')
+      .number('maxSections', 'Maximum sections to check before stopping (default: 100)')
       .required()
       .query(),
   ),
