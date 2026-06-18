@@ -62,6 +62,17 @@ export function resetFingerprintCacheForTesting(): void {
 export class StealthInjectionHandlers {
   constructor(private deps: StealthInjectionHandlersDeps) {}
 
+  private getDefaultUserAgent(os: 'windows' | 'mac' | 'linux'): string {
+    const userAgents = {
+      windows:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      mac: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      linux:
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    };
+    return userAgents[os] || userAgents.windows;
+  }
+
   async handleStealthInject(_args: Record<string, unknown>): Promise<ToolResponse> {
     try {
       if (this.deps.getActiveDriver() === 'camoufox') {
@@ -192,19 +203,34 @@ export class StealthInjectionHandlers {
       const fm = await getFingerprintManager();
 
       if (!fm?.isAvailable()) {
+        // Fallback: return basic profile without fingerprint-generator
+        const locale = argString(args, 'locale', 'en-US');
+        const os = argString(args, 'os', 'windows');
+        const browser = argString(args, 'browser', 'chrome');
+
+        const basicProfile = {
+          userAgent: this.getDefaultUserAgent(os as 'windows' | 'mac' | 'linux'),
+          acceptLanguage: locale,
+          platform: os,
+          browser,
+          _note: 'Basic profile without fingerprint-generator. Install fingerprint-generator for full profile.',
+        };
+
         const stubData = createStub({
           tool: 'stealth_generate_fingerprint',
-          stubType: 'unavailable',
-          reason: 'fingerprint-generator/fingerprint-injector packages are not installed',
-          fix: 'Install them with: pnpm add fingerprint-generator fingerprint-injector',
+          stubType: 'partial',
+          reason: 'fingerprint-generator/fingerprint-injector packages not installed, using basic profile',
+          fix: 'Install for full fingerprint: pnpm add fingerprint-generator fingerprint-injector',
           data: {
             available: false,
             capability: 'fingerprint_generator',
-            status: 'unavailable', // Keep for backward compatibility
+            status: 'partial',
+            profile: basicProfile,
           },
         });
-        return R.fail(stubData.reason as string)
+        return R.ok()
           .merge(stubData)
+          .merge({ profile: basicProfile })
           .build();
       }
 
