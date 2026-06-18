@@ -1,6 +1,7 @@
 import type { PageController } from '@server/domains/shared/modules/collector';
 import { StealthScripts } from '@server/domains/shared/modules';
 import { argString } from '@server/domains/shared/parse-args';
+import { createStub } from '@server/domains/shared/capabilities';
 import { CDPTimingProxy } from '@modules/stealth/CDPTimingProxy';
 import type { CDPTimingOptions } from '@modules/stealth/CDPTimingProxy.types';
 import { DEFAULT_TIMING_OPTIONS } from '@modules/stealth/CDPTimingProxy.types';
@@ -191,18 +192,19 @@ export class StealthInjectionHandlers {
       const fm = await getFingerprintManager();
 
       if (!fm?.isAvailable()) {
-        return R.fail(
-          'fingerprint-generator/fingerprint-injector packages are not installed. Install them with: pnpm add ' +
-            'fingerprint-generator fingerprint-injector',
-        )
-          .merge({
+        const stubData = createStub({
+          tool: 'stealth_generate_fingerprint',
+          stubType: 'unavailable',
+          reason: 'fingerprint-generator/fingerprint-injector packages are not installed',
+          fix: 'Install them with: pnpm add fingerprint-generator fingerprint-injector',
+          data: {
             available: false,
             capability: 'fingerprint_generator',
-            status: 'unavailable',
-            fix:
-              'Install fingerprint-generator and fingerprint-injector: pnpm add fingerprint-generator ' +
-              'fingerprint-injector',
-          })
+            status: 'unavailable', // Keep for backward compatibility
+          },
+        });
+        return R.fail(stubData.reason as string)
+          .merge(stubData)
           .build();
       }
 
@@ -251,16 +253,19 @@ export class StealthInjectionHandlers {
         const localeMod = await import('camoufox-js/locale');
         geo = await localeMod.getGeolocation(locale);
       } catch (err) {
-        return R.fail(
-          `Camoufox locale module unavailable: ${err instanceof Error ? err.message : String(err)}. Ensure ` +
-            `camoufox-js is installed.`,
-        )
-          .merge({
+        const stubData = createStub({
+          tool: 'camoufox_geolocation',
+          stubType: 'unavailable',
+          reason: `Camoufox locale module unavailable: ${err instanceof Error ? err.message : String(err)}. Ensure camoufox-js is installed.`,
+          fix: 'Install camoufox-js and fetch its browser assets: pnpm add camoufox-js && npx camoufox-js fetch',
+          data: {
             available: false,
             capability: 'camoufox_locale',
-            status: 'unavailable',
-            fix: 'Install camoufox-js and fetch its browser assets: pnpm add camoufox-js && npx camoufox-js fetch',
-          })
+            status: 'unavailable', // Keep for backward compatibility
+          },
+        });
+        return R.fail(stubData.reason as string)
+          .merge(stubData)
           .build();
       }
 
@@ -277,7 +282,20 @@ export class StealthInjectionHandlers {
 
       return R.ok().build({ locale, geolocation: geo, publicIp });
     } catch (e) {
-      return R.fail(e).build();
+      const stubData = createStub({
+        tool: 'camoufox_geolocation',
+        stubType: 'unavailable',
+        reason: `Camoufox locale module unavailable: ${e instanceof Error ? e.message : String(e)}`,
+        fix: 'Install camoufox-js and fetch its browser assets: pnpm add camoufox-js && npx camoufox-js fetch',
+        data: {
+          available: false,
+          capability: 'camoufox_locale',
+          status: 'unavailable', // Keep for backward compatibility
+        },
+      });
+      return R.fail(stubData.reason as string)
+        .merge(stubData)
+        .build();
     }
   }
 }

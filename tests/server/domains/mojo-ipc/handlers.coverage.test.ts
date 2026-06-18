@@ -183,7 +183,11 @@ describe('MojoIPCHandlers — coverage expansion', () => {
         interfaceCatalogSource: 'seeded-defaults',
         observedInterfaceCount: 0,
       });
-      expect((result as Record<string, unknown>)['warningMessage']).toContain('simulation mode');
+      expect((result as Record<string, unknown>)['warning']).toContain('simulation mode');
+      // Check stub format
+      expect(result).toHaveProperty('_stub', 'simulated');
+      expect(result).toHaveProperty('stubType', 'simulated');
+      expect(result).toHaveProperty('reason');
     });
   });
 
@@ -300,14 +304,20 @@ describe('MojoIPCHandlers — coverage expansion', () => {
       const result = await handlers.handleMojoListInterfaces();
       expect(result).toEqual({
         success: true,
+        tool: 'mojo_list_interfaces',
         available: true,
         active: true,
         interfaces,
         simulation: false,
         interfaceCatalogSource: 'seeded-defaults',
         observedInterfaceCount: 0,
-        warningMessage:
+        warning:
           'Interface list currently comes from the seeded default catalog; no live observed Mojo interfaces have been captured yet.',
+        _stub: 'simulated',
+        stubType: 'simulated',
+        reason:
+          'Interface list currently comes from the seeded default catalog; no live observed Mojo interfaces have been captured yet.',
+        fix: 'Install Frida and attach to a Chromium target to capture live Mojo interfaces',
       });
     });
 
@@ -359,7 +369,8 @@ describe('MojoIPCHandlers — coverage expansion', () => {
         interfaceCatalogSource: 'mixed',
         observedInterfaceCount: 2,
       });
-      expect((result as Record<string, unknown>)['warningMessage']).toBeUndefined();
+      expect((result as Record<string, unknown>)['warning']).toBeUndefined();
+      expect((result as Record<string, unknown>)['_stub']).toBeUndefined();
     });
   });
 
@@ -496,14 +507,19 @@ describe('MojoIPCHandlers — coverage expansion', () => {
         simulation: true,
       });
       const result = (await handlers.handleMojoMessagesGet({})) as Record<string, unknown>;
-      expect(result).toHaveProperty('warningMessage');
-      expect(result['warningMessage']).toContain('simulation mode');
+      expect(result).toHaveProperty('warning');
+      expect(result['warning']).toContain('simulation mode');
+      // Check stub format
+      expect(result).toHaveProperty('_stub', 'simulated');
+      expect(result).toHaveProperty('stubType', 'simulated');
+      expect(result).toHaveProperty('reason');
     });
 
     it('does not add warningMessage when not in simulation mode', async () => {
       monitor.isSimulationMode.mockReturnValue(false);
       const result = (await handlers.handleMojoMessagesGet({})) as Record<string, unknown>;
-      expect(result).not.toHaveProperty('warningMessage');
+      expect(result).not.toHaveProperty('warning');
+      expect(result).not.toHaveProperty('_stub');
       expect(result).toMatchObject({
         interfaceCatalogSource: 'seeded-defaults',
         observedInterfaceCount: 0,

@@ -109,6 +109,10 @@ describe('MojoIPCHandlers', () => {
       interfaceCatalogSource: 'seeded-defaults',
       observedInterfaceCount: 0,
     });
+    // Check stub format when using seeded-defaults
+    expect(result).toHaveProperty('_stub', 'simulated');
+    expect(result).toHaveProperty('stubType', 'simulated');
+    expect(result).toHaveProperty('reason');
   });
 
   it('gets buffered messages with the current API', async () => {

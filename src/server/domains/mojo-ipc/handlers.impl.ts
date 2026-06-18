@@ -1,5 +1,9 @@
 import { MojoDecoder, MojoMonitor } from '@modules/mojo-ipc';
-import { capabilityFailure, capabilityReport } from '@server/domains/shared/capabilities';
+import {
+  capabilityFailure,
+  capabilityReport,
+  createStub,
+} from '@server/domains/shared/capabilities';
 import { argNumber, argString } from '@server/domains/shared/parse-args';
 import type { EventBus, ServerEventMap } from '@server/EventBus';
 
@@ -114,22 +118,36 @@ export class MojoIPCHandlers {
       );
     }
 
-    const response: Record<string, unknown> = {
+    const isSimulation = monitor.isSimulationMode();
+
+    if (isSimulation) {
+      return createStub({
+        tool: 'mojo_monitor',
+        stubType: 'simulated',
+        reason: 'Real Frida-backed message capture is not active',
+        fix: 'Install Frida and attach to a Chromium target with Mojo IPC traffic',
+        data: {
+          available: true,
+          started: monitor.isActive(),
+          deviceId: monitor.getDeviceId() ?? null,
+          simulation: true, // Keep for backward compatibility
+          interfaceCatalogSource: monitor.getInterfaceCatalogSource(),
+          observedInterfaceCount: monitor.getObservedInterfaceCount(),
+        },
+        warning:
+          'Mojo IPC monitor is running in simulation mode. Real Frida-backed message capture is not active.',
+      });
+    }
+
+    return {
       success: true,
       available: true,
       started: monitor.isActive(),
       deviceId: monitor.getDeviceId() ?? null,
-      simulation: monitor.isSimulationMode(),
+      simulation: false,
       interfaceCatalogSource: monitor.getInterfaceCatalogSource(),
       observedInterfaceCount: monitor.getObservedInterfaceCount(),
     };
-
-    if (monitor.isSimulationMode()) {
-      response.warningMessage =
-        'Mojo IPC monitor is running in simulation mode. Real Frida-backed message capture is not active.';
-    }
-
-    return response;
   }
 
   async handleMojoMonitorStop(): Promise<unknown> {
@@ -179,26 +197,43 @@ export class MojoIPCHandlers {
       };
     }
 
-    const response: Record<string, unknown> = {
+    const isSimulation = monitor.isSimulationMode();
+    const catalogSource = monitor.getInterfaceCatalogSource();
+    const interfaces = await monitor.listInterfaces();
+
+    // Use stub format when in simulation or using seeded defaults
+    if (isSimulation || catalogSource === 'seeded-defaults') {
+      const reason =
+        catalogSource === 'seeded-defaults'
+          ? 'Interface list currently comes from the seeded default catalog; no live observed Mojo interfaces have been captured yet.'
+          : 'Mojo IPC monitor is running in simulation mode. Interface counts may not reflect live traffic.';
+
+      return createStub({
+        tool: 'mojo_list_interfaces',
+        stubType: 'simulated',
+        reason,
+        fix: 'Install Frida and attach to a Chromium target to capture live Mojo interfaces',
+        data: {
+          available: true,
+          active: monitor.isActive(),
+          interfaces,
+          simulation: isSimulation, // Keep for backward compatibility
+          interfaceCatalogSource: catalogSource,
+          observedInterfaceCount: monitor.getObservedInterfaceCount(),
+        },
+        warning: reason,
+      });
+    }
+
+    return {
       success: true,
       available: true,
       active: monitor.isActive(),
-      interfaces: await monitor.listInterfaces(),
-      simulation: monitor.isSimulationMode(),
-      interfaceCatalogSource: monitor.getInterfaceCatalogSource(),
+      interfaces,
+      simulation: false,
+      interfaceCatalogSource: catalogSource,
       observedInterfaceCount: monitor.getObservedInterfaceCount(),
     };
-
-    if (monitor.getInterfaceCatalogSource() === 'seeded-defaults') {
-      response.warningMessage =
-        'Interface list currently comes from the seeded default catalog; no live observed Mojo interfaces have ' +
-        'been captured yet.';
-    } else if (monitor.isSimulationMode()) {
-      response.warningMessage =
-        'Mojo IPC monitor is running in simulation mode. Interface counts may not reflect live traffic.';
-    }
-
-    return response;
   }
 
   async handleMojoMessagesGet(args: Record<string, unknown>): Promise<unknown> {
@@ -229,18 +264,6 @@ export class MojoIPCHandlers {
       simulation: boolean;
     };
 
-    const response: Record<string, unknown> = {
-      success: true,
-      available: true,
-      active: monitor.isActive(),
-      messages: result.messages,
-      totalAvailable: result.totalAvailable,
-      filtered: result.filtered,
-      simulation: result.simulation,
-      interfaceCatalogSource: monitor.getInterfaceCatalogSource(),
-      observedInterfaceCount: monitor.getObservedInterfaceCount(),
-    };
-
     if (result.messages && Array.isArray(result.messages) && result.messages.length > 0) {
       void this.eventBus?.emit('mojo:message_captured', {
         messageCount: result.messages.length,
@@ -248,13 +271,41 @@ export class MojoIPCHandlers {
       });
     }
 
-    if (monitor.isSimulationMode()) {
-      response.warningMessage =
-        'Mojo IPC is operating in simulation mode. Messages are not captured from real Frida hooks. Install Frida' +
-        ' for live IPC monitoring.';
+    const isSimulation = result.simulation || monitor.isSimulationMode();
+
+    if (isSimulation) {
+      return createStub({
+        tool: 'mojo_messages_get',
+        stubType: 'simulated',
+        reason:
+          'Mojo IPC is operating in simulation mode. Messages are not captured from real Frida hooks.',
+        fix: 'Install Frida for live IPC monitoring',
+        data: {
+          available: true,
+          active: monitor.isActive(),
+          messages: result.messages,
+          totalAvailable: result.totalAvailable,
+          filtered: result.filtered,
+          simulation: true, // Keep for backward compatibility
+          interfaceCatalogSource: monitor.getInterfaceCatalogSource(),
+          observedInterfaceCount: monitor.getObservedInterfaceCount(),
+        },
+        warning:
+          'Mojo IPC is operating in simulation mode. Messages are not captured from real Frida hooks. Install Frida for live IPC monitoring.',
+      });
     }
 
-    return response;
+    return {
+      success: true,
+      available: true,
+      active: monitor.isActive(),
+      messages: result.messages,
+      totalAvailable: result.totalAvailable,
+      filtered: result.filtered,
+      simulation: false,
+      interfaceCatalogSource: monitor.getInterfaceCatalogSource(),
+      observedInterfaceCount: monitor.getObservedInterfaceCount(),
+    };
   }
 
   private getMonitor(): MojoMonitor {
