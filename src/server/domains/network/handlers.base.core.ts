@@ -354,21 +354,21 @@ export class NetworkHandlersCore {
       );
 
       // Enrich each request with TLS security details + server address from its captured response.
-      const enriched = requests.map((req) => {
+      for (const req of requests) {
         const reqId = req.requestId;
-        if (!reqId) return req;
+        if (!reqId) continue;
         const activity = this.consoleMonitor.getNetworkActivity(reqId);
         const resp = activity?.response;
-        if (!resp) return req;
-        const { securityDetails, remoteAddress } = resp;
-        const result: Record<string, unknown> = { ...req };
-        if (securityDetails) result.securityDetails = securityDetails;
-        if (remoteAddress) result.serverAddr = remoteAddress;
-        return result as typeof req;
-      });
+        if (!resp) continue;
+        if (resp.securityDetails) {
+          (req as Record<string, unknown>).securityDetails = resp.securityDetails;
+        }
+        if (resp.remoteAddress) {
+          (req as Record<string, unknown>).serverAddr = resp.remoteAddress;
+        }
+      }
 
-      const beforeLimit = enriched.length;
-      requests = enriched.slice(offset, offset + limit) as typeof requests;
+      const beforeLimit = requests.length;
       const hasMore = offset + requests.length < beforeLimit;
 
       const filterMiss =
