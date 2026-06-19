@@ -224,7 +224,7 @@ async function ensureAllocationTracker(page: Page): Promise<void> {
  * @param page - Puppeteer page
  */
 async function ensureHookState(page: Page): Promise<void> {
-  await page.evaluateOnNewDocument(() => {
+  const hookScript = () => {
     if (typeof (window as any).webgpuHookState !== 'undefined') {
       return;
     }
@@ -238,7 +238,13 @@ async function ensureHookState(page: Page): Promise<void> {
     };
 
     (window as any).webgpuHookState = state;
-  });
+  };
+
+  // evaluateOnNewDocument for future navigations
+  await page.evaluateOnNewDocument(hookScript);
+
+  // Also evaluate immediately on the current page
+  await page.evaluate(hookScript);
 }
 
 /**

@@ -141,7 +141,7 @@ describe('CDPIntegration', () => {
 
       await cleanup();
 
-      expect(mockPage.evaluate).toHaveBeenCalledTimes(2); // install + uninstall
+      expect(mockPage.evaluate).toHaveBeenCalledTimes(3); // hookState init + install hook code + uninstall
     });
 
     it('should pass capture count to hook', async () => {
