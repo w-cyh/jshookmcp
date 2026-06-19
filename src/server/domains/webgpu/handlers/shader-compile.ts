@@ -160,28 +160,25 @@ export class ShaderCompileHandler {
           const device = await adapter.requestDevice();
 
           try {
-            // Compile and validate shader
+            // Compile and validate shader on real GPU
             device.createShaderModule({
               code,
             });
 
-            // Extract metadata from shader code
-            const metadata = extractShaderMetadata(code);
-
-            return {
-              compiled: true,
-              metadata,
-            };
+            return { compiled: true };
           } catch (err: any) {
             throw new Error(`Shader compilation failed: ${err.message}`, { cause: err });
           }
         }, shaderCode);
       });
 
-      // Cache the result
-      this.compileCache.set(shaderCode, result);
+      // Extract metadata from shader source (pure regex, no GPU needed)
+      const metadata = extractShaderMetadata(shaderCode);
 
-      return result;
+      // Cache and return combined result
+      const combined = { ...result, metadata };
+      this.compileCache.set(shaderCode, combined);
+      return combined;
     });
   }
 
