@@ -369,6 +369,7 @@ export class NetworkHandlersCore {
       }
 
       const beforeLimit = requests.length;
+      requests = requests.slice(offset, offset + limit);
       const hasMore = offset + requests.length < beforeLimit;
 
       const filterMiss =
