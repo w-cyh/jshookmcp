@@ -1,7 +1,12 @@
 import type { DomainManifest, MCPServerContext } from '@server/domains/shared/registry';
-import { defineMethodRegistrations, toolLookup } from '@server/domains/shared/registry';
+import {
+  defineMethodRegistrations,
+  ensureBrowserCore,
+  toolLookup,
+} from '@server/domains/shared/registry';
 import { webgpuTools } from '@server/domains/webgpu/definitions';
 import type { WebGPUHandlers } from '@server/domains/webgpu/index';
+import type { WebGPUDomainDependencies } from '@server/domains/webgpu/types';
 
 const DOMAIN = 'webgpu' as const;
 const DEP_KEY = 'webgpuHandlers' as const;
@@ -25,9 +30,12 @@ const registrations = defineMethodRegistrations<H, (typeof toolDefinitions)[numb
 
 async function ensure(ctx: MCPServerContext): Promise<H> {
   const { WebGPUHandlers } = await import('@server/domains/webgpu/index');
+  await ensureBrowserCore(ctx);
 
   if (!ctx.webgpuHandlers) {
-    ctx.webgpuHandlers = new WebGPUHandlers(ctx);
+    ctx.webgpuHandlers = new WebGPUHandlers(ctx, {
+      pageController: ctx.pageController as WebGPUDomainDependencies['pageController'],
+    });
   }
   return ctx.webgpuHandlers;
 }

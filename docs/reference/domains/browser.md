@@ -61,8 +61,8 @@
 | `page_set_viewport` | 设置当前页面视口尺寸。 |
 | `page_emulate_device` | 模拟移动设备环境，例如 iPhone、iPad 或 Android 机型。 |
 | `page_local_storage` | 管理 localStorage。操作：get（获取全部项）、set（需提供 key 和 value）。 |
-| `page_session_storage` | 待补充中文：Read, write, or clear sessionStorage entries for the current origin. |
-| `browser_passkey_seed` | 待补充中文：Seed a WebAuthn/Passkey credential into the browser for test automation. |
+| `page_session_storage` | 读取、写入或清空当前域名下的 sessionStorage。 |
+| `browser_passkey_seed` | 向浏览器注入 WebAuthn/Passkey 虚拟凭据，用于 FIDO2 认证自动化测试。 |
 | `page_press_key` | 模拟按下键盘按键，如 Enter、Escape 或 ArrowDown。 |
 | `captcha_detect` | 使用 AI 视觉分析检测页面上是否有 CAPTCHA 验证码。 |
 | `captcha_wait` | 等待用户手动完成 CAPTCHA 验证码。 |
