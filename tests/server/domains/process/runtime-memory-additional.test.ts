@@ -332,6 +332,28 @@ describe('ProcessToolHandlersMemory — additional coverage', () => {
       expect(body.error).toContain('PID');
     });
 
+    it('returns a JSON validation error for invalid encoding values', async () => {
+      const body = parseJson<ProcessFindResponse>(
+        await handler.handleMemoryWrite({
+          pid: 1234,
+          address: '0x2000',
+          data: 'AA',
+          encoding: 'utf8',
+        }),
+      );
+
+      expect(body.success).toBe(false);
+      expect(body.error).toContain('encoding must be "hex" or "base64"');
+      expect(state.auditEntries).toHaveLength(1);
+      expect(state.auditEntries[0]).toMatchObject({
+        operation: 'memory_write',
+        pid: 1234,
+        address: '0x2000',
+        size: 1,
+        result: 'failure',
+      });
+    });
+
     it('records audit entry on write', async () => {
       await handler.handleMemoryWrite({
         pid: 1234,

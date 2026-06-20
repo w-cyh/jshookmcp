@@ -69,18 +69,6 @@ vi.mock('@modules/collector/playwright-cdp-fallback', () => ({
   connectPlaywrightCdpFallback: (...args: any[]) => state.connectPlaywrightCdpFallback(...args),
 }));
 
-// Mock constants module with configurable ENABLE_INJECTION_TOOLS
-const mockEnableInjectionTools = { value: false };
-vi.mock(import('@src/constants'), async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    get ENABLE_INJECTION_TOOLS() {
-      return mockEnableInjectionTools.value;
-    },
-  };
-});
-
 import { ProcessToolHandlersRuntime } from '@server/domains/process/handlers.impl.core.runtime.inject';
 import { buildTestUrl } from '@tests/shared/test-urls';
 
@@ -111,7 +99,6 @@ describe('handlers.impl.core.runtime.inject', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     handler = new ProcessToolHandlersRuntime();
-    mockEnableInjectionTools.value = false;
     global.fetch = vi.fn() as typeof fetch;
     state.connect.mockResolvedValue({
       pages: state.browserPages,
@@ -126,101 +113,8 @@ describe('handlers.impl.core.runtime.inject', () => {
     state.pageEvaluate.mockReset();
   });
 
-  describe('ENABLE_INJECTION_TOOLS=false branch', () => {
-    it('handleInjectDll returns disabled error when injection tools disabled', async () => {
-      const result = await handler.handleInjectDll({ pid: 1234, dllPath: 'C:\\test.dll' });
-      const response = JSON.parse(result.content[0]!.text);
-
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('Injection tools are disabled by configuration');
-      expect(response.howToEnable).toContain('ENABLE_INJECTION_TOOLS=true');
-      expect(response.securityNotice).toBeDefined();
-
-      expect(state.injectDll).not.toHaveBeenCalled();
-      expect(state.recordMemoryAudit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          operation: 'inject_dll',
-          pid: 1234,
-          address: 'C:\\test.dll',
-          result: 'failure',
-        }),
-      );
-    });
-
-    it('handleInjectShellcode returns disabled error when injection tools disabled', async () => {
-      const result = await handler.handleInjectShellcode({
-        pid: 1234,
-        shellcode: '909090',
-        encoding: 'hex',
-      });
-      const response = JSON.parse(result.content[0]!.text);
-
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('Injection tools are disabled by configuration');
-      expect(response.howToEnable).toContain('ENABLE_INJECTION_TOOLS=true');
-
-      expect(state.injectShellcode).not.toHaveBeenCalled();
-      expect(state.recordMemoryAudit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          operation: 'inject_shellcode',
-          pid: 1234,
-          size: 3, // 3 bytes from '909090'
-          result: 'failure',
-        }),
-      );
-    });
-
-    it('handleInjectShellcode calculates base64 size correctly when disabled', async () => {
-      // 'AAAA' base64 = 3 bytes
-      const shellcode = Buffer.from([0x41, 0x41, 0x41]).toString('base64');
-      const result = await handler.handleInjectShellcode({
-        pid: 1234,
-        shellcode,
-        encoding: 'base64',
-      });
-      const response = JSON.parse(result.content[0]!.text);
-
-      expect(response.success).toBe(false);
-      expect(state.recordMemoryAudit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          size: 3,
-        }),
-      );
-    });
-
-    it('handleInjectDll handles missing pid gracefully when disabled', async () => {
-      const result = await handler.handleInjectDll({ dllPath: 'C:\\test.dll' });
-      const response = JSON.parse(result.content[0]!.text);
-
-      expect(response.success).toBe(false);
-      expect(state.recordMemoryAudit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          pid: null,
-          address: 'C:\\test.dll',
-        }),
-      );
-    });
-
-    it('handleInjectShellcode handles missing shellcode gracefully when disabled', async () => {
-      const result = await handler.handleInjectShellcode({ pid: 1234 });
-      const response = JSON.parse(result.content[0]!.text);
-
-      expect(response.success).toBe(false);
-      expect(state.recordMemoryAudit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          pid: 1234,
-          size: null,
-        }),
-      );
-    });
-  });
-
-  describe('ENABLE_INJECTION_TOOLS=true branch', () => {
-    beforeEach(() => {
-      mockEnableInjectionTools.value = true;
-    });
-
-    it('handleInjectDll delegates to memoryManager when enabled', async () => {
+  describe('injection handlers', () => {
+    it('handleInjectDll delegates to memoryManager', async () => {
       state.injectDll.mockResolvedValue({ success: true, remoteThreadId: 42 });
 
       const result = await handler.handleInjectDll({ pid: 1234, dllPath: 'C:\\test.dll' });
@@ -275,7 +169,7 @@ describe('handlers.impl.core.runtime.inject', () => {
       );
     });
 
-    it('handleInjectShellcode delegates to memoryManager when enabled', async () => {
+    it('handleInjectShellcode delegates to memoryManager', async () => {
       state.injectShellcode.mockResolvedValue({ success: true, remoteThreadId: 100 });
 
       const result = await handler.handleInjectShellcode({
@@ -313,6 +207,32 @@ describe('handlers.impl.core.runtime.inject', () => {
         'hex',
         expect.objectContaining({}),
       );
+    });
+
+    it('rejects invalid shellcode encoding values', async () => {
+      const result = await handler.handleInjectShellcode({
+        pid: 1234,
+        shellcode: '9090',
+        encoding: 'utf8',
+      });
+      const response = JSON.parse(result.content[0]!.text);
+
+      expect(response.success).toBe(false);
+      expect(response.error).toContain('encoding must be "hex" or "base64"');
+      expect(state.injectShellcode).not.toHaveBeenCalled();
+    });
+
+    it('rejects invalid validationMode overrides', async () => {
+      const result = await handler.handleInjectDll({
+        pid: 1234,
+        dllPath: 'C:\\test.dll',
+        validationMode: 'aggressive',
+      });
+      const response = JSON.parse(result.content[0]!.text);
+
+      expect(response.success).toBe(false);
+      expect(response.error).toContain('validationMode must be one of');
+      expect(state.injectDll).not.toHaveBeenCalled();
     });
   });
 

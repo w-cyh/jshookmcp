@@ -184,7 +184,7 @@ export const transportTools: Tool[] = [
     t
       .desc('Measure round-trip time to a target URL.')
       .string('url', 'Target URL to measure RTT to')
-      .string('probeType', 'Probe type: tcp, tls, or http. Default: tcp', { default: 'tcp' })
+      .enum('probeType', ['tcp', 'tls', 'http'], 'Probe type', { default: 'tcp' })
       .number('iterations', 'Number of probe iterations (1-50). Default: 5', {
         default: 5,
         minimum: 1,
@@ -197,8 +197,9 @@ export const transportTools: Tool[] = [
       })
       .object(
         'authorization',
-        { additionalProperties: { type: 'string' } },
-        'Authorization policy for network access',
+        networkAuthorizationSchema,
+        'Request-scoped authorization policy for private-network or insecure-HTTP measurement. Use exact hosts/CIDRs ' +
+          'instead of process-wide bypasses.',
       )
       .requiredOpenWorld('url'),
   ),
@@ -212,8 +213,9 @@ export const transportTools: Tool[] = [
       .number('timeoutMs', 'Per-probe timeout ms', { default: 5000, minimum: 100, maximum: 30000 })
       .object(
         'authorization',
-        { additionalProperties: { type: 'string' } },
-        'Authorization policy for network access',
+        networkAuthorizationSchema,
+        'Request-scoped authorization policy for private-network or insecure-HTTP measurement. Use exact hosts/CIDRs ' +
+          'instead of process-wide bypasses.',
       )
       .requiredOpenWorld('url'),
   ),

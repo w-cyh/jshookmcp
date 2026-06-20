@@ -76,6 +76,22 @@ describe('RawLatencyHandlers — network_latency_stats', () => {
     expect(text).toContain('Invalid probeType');
   });
 
+  it('accepts numeric strings for iterations/concurrency/timeout via shared parsing', async () => {
+    rttSpy.mockResolvedValue(25);
+
+    const res = await handler.handleNetworkLatencyStats({
+      url: 'http://example.com',
+      iterations: '6',
+      concurrency: '2',
+      timeoutMs: '1500',
+    });
+    const json = parseJson(res);
+    expect(json.success).toBe(true);
+    expect(json.iterations).toBe(6);
+    expect(json.concurrency).toBe(2);
+    expect(rttSpy).toHaveBeenCalledTimes(6);
+  });
+
   it('defaults probeType to http', async () => {
     rttSpy.mockResolvedValue(50);
 

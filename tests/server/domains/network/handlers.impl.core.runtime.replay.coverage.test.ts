@@ -27,6 +27,7 @@ import type {
 const replayRequestMock = vi.fn();
 const extractAuthMock = vi.fn();
 const buildHarMock = vi.fn();
+const writeHarToSafePathMock = vi.fn();
 
 // Node built-in mocks — vi.hoisted ensures these are the EXACT same objects
 // that vi.mock factories close over, so configureIn beforeEach works reliably.
@@ -80,6 +81,15 @@ vi.mock('@server/domains/network/har', () => ({
   buildHar: (...args: unknown[]) => buildHarMock(...args),
 }));
 
+vi.mock('@server/domains/network/handlers/replay-security', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@server/domains/network/handlers/replay-security')>();
+  return {
+    ...actual,
+    writeHarToSafePath: (...args: unknown[]) => writeHarToSafePathMock(...args),
+  };
+});
+
 vi.mock('node:fs/promises', () => ({
   writeFile: mockFsWriteFile,
   realpath: mockFsRealpath,
@@ -89,21 +99,30 @@ vi.mock('node:fs/promises', () => ({
 // The source uses `import { promises as fs } from 'node:fs'` (static) for lstat/writeFile
 // after path resolution, AFTER the dynamic import path. We mock node:fs so its .promises
 // namespace resolves to the same hoisted mocks.
-vi.mock('node:fs', () => ({
-  promises: {
-    writeFile: mockFsWriteFile,
-    realpath: mockFsRealpath,
-    lstat: mockFsLstat,
-  },
-}));
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    promises: {
+      ...actual.promises,
+      writeFile: mockFsWriteFile,
+      realpath: mockFsRealpath,
+      lstat: mockFsLstat,
+    },
+  };
+});
 
-vi.mock('node:path', () => ({
-  resolve: mockPathResolve,
-  dirname: mockPathDirname,
-  basename: mockPathBasename,
-  join: mockPathJoin,
-  sep: '/',
-}));
+vi.mock('node:path', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:path')>();
+  return {
+    ...actual,
+    resolve: mockPathResolve,
+    dirname: mockPathDirname,
+    basename: mockPathBasename,
+    join: mockPathJoin,
+    sep: '/',
+  };
+});
 
 vi.mock('node:os', () => ({
   tmpdir: mockOsTmpdir,
@@ -174,6 +193,8 @@ describe('AdvancedToolHandlersRuntime — replay.ts coverage', () => {
     mockPathBasename.mockImplementation((p: string) => p.replace(/^.*[/\\]/, ''));
     mockPathJoin.mockImplementation((...args: string[]) => args.join('/'));
     mockOsTmpdir.mockReturnValue('/mock-tmp');
+    writeHarToSafePathMock.mockReset();
+    writeHarToSafePathMock.mockResolvedValue('/mock-cwd/out.har');
 
     // Default: realpath always resolves, lstat says file doesn't exist
     mockFsRealpath.mockResolvedValue('/mock-cwd');
@@ -345,195 +366,26 @@ describe('AdvancedToolHandlersRuntime — replay.ts coverage', () => {
       buildHarMock.mockResolvedValue({ log: { entries: [{}] } });
     });
 
-    it('returns error when outputPath is outside cwd and tmpDir', async () => {
-      mockPathResolve.mockReturnValue('/some/other/path/out.har');
-      mockFsRealpath
-        .mockResolvedValueOnce('/mock-cwd') // cwd realpath
-        .mockResolvedValueOnce('/mock-tmp') // tmpDir realpath
-        .mockResolvedValueOnce('/some/other/path'); // parentDir realpath
-      mockOsTmpdir.mockReturnValue('/mock-tmp');
-      mockPathDirname.mockReturnValue('/some/other/path');
-      mockPathBasename.mockReturnValue('out.har');
-      mockPathJoin.mockReturnValue('/some/other/path/out.har');
-
+    it('delegates writes to the safe output helper', async () => {
       const result = await handler.handleNetworkExportHar({
-        outputPath: '/some/other/path/out.har',
-      });
-      const body = parseJson<NetworkExportHarResponse>(result);
-
-      expect(body.success).toBe(false);
-      expect(body.error).toContain('outputPath must be within');
-    });
-
-    it('returns error when realpath of parent dir throws', async () => {
-      mockPathResolve.mockReturnValue('/mock-cwd/subdir/out.har');
-      mockFsRealpath
-        .mockResolvedValueOnce('/mock-cwd') // cwd
-        .mockResolvedValueOnce('/mock-tmp') // tmpDir
-        .mockRejectedValueOnce(new Error('ENOENT: parentDir')); // parentDir realpath throws
-      mockOsTmpdir.mockReturnValue('/mock-tmp');
-      mockPathDirname.mockReturnValue('/mock-cwd/subdir');
-      mockPathBasename.mockReturnValue('out.har');
-      // When realpath throws, realParent falls back to the dirname value
-      mockPathJoin.mockReturnValue('/mock-cwd/subdir/out.har');
-
-      const result = await handler.handleNetworkExportHar({
-        outputPath: '/mock-cwd/subdir/out.har',
+        outputPath: '/mock-cwd/out.har',
       });
       const body = parseJson<NetworkExportHarResponse & Record<string, unknown>>(result);
 
-      // Falls back to parentDir → join gives path still within cwd → write succeeds
       expect(body.success).toBe(true);
+      expect(writeHarToSafePathMock).toHaveBeenCalledOnce();
     });
 
-    it('writes file when outputPath resolves to cwd and file does not exist', async () => {
-      mockPathResolve.mockReturnValue('/mock-cwd/out.har');
-      mockFsRealpath
-        .mockResolvedValueOnce('/mock-cwd') // cwd
-        .mockResolvedValueOnce('/mock-tmp') // tmpDir
-        .mockResolvedValueOnce('/mock-cwd'); // parentDir
-      mockOsTmpdir.mockReturnValue('/mock-tmp');
-      mockPathDirname.mockReturnValue('/mock-cwd');
-      mockPathBasename.mockReturnValue('out.har');
-      mockPathJoin.mockReturnValue('/mock-cwd/out.har');
-      // lstat: file does not exist → ENOENT
-      mockFsLstat.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
-      mockFsWriteFile.mockResolvedValueOnce(undefined);
-
-      const result = await handler.handleNetworkExportHar({ outputPath: '/mock-cwd/out.har' });
-      const body = parseJson<NetworkExportHarResponse & Record<string, unknown>>(result);
-
-      expect(body.success).toBe(true);
-      expect(body.outputPath).toBe('/mock-cwd/out.har');
-      expect(mockFsWriteFile).toHaveBeenCalledWith(
-        '/mock-cwd/out.har',
-        expect.any(String),
-        'utf-8',
+    it('returns helper failure when output path is rejected', async () => {
+      writeHarToSafePathMock.mockRejectedValueOnce(
+        new Error('outputPath must be within the project root or system temp directory.'),
       );
-    });
-
-    it('returns error when outputPath is a symbolic link', async () => {
-      mockPathResolve.mockReturnValue('/mock-cwd/link.har');
-      mockFsRealpath
-        .mockResolvedValueOnce('/mock-cwd') // cwd
-        .mockResolvedValueOnce('/mock-tmp') // tmpDir
-        .mockResolvedValueOnce('/mock-cwd'); // parentDir
-      mockOsTmpdir.mockReturnValue('/mock-tmp');
-      mockPathDirname.mockReturnValue('/mock-cwd');
-      mockPathBasename.mockReturnValue('link.har');
-      mockPathJoin.mockReturnValue('/mock-cwd/link.har');
-      // lstat: file exists and is a symlink
-      mockFsLstat.mockResolvedValueOnce({ isSymbolicLink: () => true });
-
-      const result = await handler.handleNetworkExportHar({ outputPath: '/mock-cwd/link.har' });
+      const result = await handler.handleNetworkExportHar({
+        outputPath: '/outside/out.har',
+      });
       const body = parseJson<NetworkExportHarResponse>(result);
-
       expect(body.success).toBe(false);
-      expect(body.error).toContain('symbolic link');
-    });
-
-    it('writes file when outputPath is a regular file that already exists', async () => {
-      mockPathResolve.mockReturnValue('/mock-cwd/existing.har');
-      mockFsRealpath
-        .mockResolvedValueOnce('/mock-cwd') // cwd
-        .mockResolvedValueOnce('/mock-tmp') // tmpDir
-        .mockResolvedValueOnce('/mock-cwd'); // parentDir
-      mockOsTmpdir.mockReturnValue('/mock-tmp');
-      mockPathDirname.mockReturnValue('/mock-cwd');
-      mockPathBasename.mockReturnValue('existing.har');
-      mockPathJoin.mockReturnValue('/mock-cwd/existing.har');
-      // lstat: regular file (not symlink)
-      mockFsLstat.mockResolvedValueOnce({ isSymbolicLink: () => false });
-      mockFsWriteFile.mockResolvedValueOnce(undefined);
-
-      const result = await handler.handleNetworkExportHar({ outputPath: '/mock-cwd/existing.har' });
-      const body = parseJson<NetworkExportHarResponse & Record<string, unknown>>(result);
-
-      expect(body.success).toBe(true);
-      expect(mockFsWriteFile).toHaveBeenCalledWith(
-        '/mock-cwd/existing.har',
-        expect.any(String),
-        'utf-8',
-      );
-    });
-
-    it('writes file when outputPath resolves to tmpDir', async () => {
-      mockPathResolve.mockReturnValue('/mock-tmp/capture.har');
-      mockFsRealpath
-        .mockResolvedValueOnce('/mock-cwd') // cwd
-        .mockResolvedValueOnce('/mock-tmp') // tmpDir
-        .mockResolvedValueOnce('/mock-tmp'); // parentDir
-      mockOsTmpdir.mockReturnValue('/mock-tmp');
-      mockPathDirname.mockReturnValue('/mock-tmp');
-      mockPathBasename.mockReturnValue('capture.har');
-      mockPathJoin.mockReturnValue('/mock-tmp/capture.har');
-      mockFsLstat.mockRejectedValueOnce(new Error('ENOENT'));
-      mockFsWriteFile.mockResolvedValueOnce(undefined);
-
-      const result = await handler.handleNetworkExportHar({ outputPath: '/mock-tmp/capture.har' });
-      const body = parseJson<NetworkExportHarResponse & Record<string, unknown>>(result);
-
-      expect(body.success).toBe(true);
-      expect(mockFsWriteFile).toHaveBeenCalled();
-    });
-
-    it('returns error when fs.writeFile throws', async () => {
-      mockPathResolve.mockReturnValue('/mock-cwd/fail.har');
-      mockFsRealpath
-        .mockResolvedValueOnce('/mock-cwd') // cwd
-        .mockResolvedValueOnce('/mock-tmp') // tmpDir
-        .mockResolvedValueOnce('/mock-cwd'); // parentDir
-      mockOsTmpdir.mockReturnValue('/mock-tmp');
-      mockPathDirname.mockReturnValue('/mock-cwd');
-      mockPathBasename.mockReturnValue('fail.har');
-      mockPathJoin.mockReturnValue('/mock-cwd/fail.har');
-      mockFsLstat.mockRejectedValueOnce(new Error('ENOENT'));
-      mockFsWriteFile.mockRejectedValueOnce(new Error('disk full'));
-
-      const result = await handler.handleNetworkExportHar({ outputPath: '/mock-cwd/fail.har' });
-      const body = parseJson<NetworkExportHarResponse>(result);
-
-      expect(body.success).toBe(false);
-      expect(body.error).toBe('disk full');
-    });
-
-    it('writes file when outputPath resolves exactly to cwd (no subdirectory)', async () => {
-      // realPath === cwd (exactly equal, not startsWith)
-      mockPathResolve.mockReturnValue('/mock-cwd');
-      mockFsRealpath
-        .mockResolvedValueOnce('/mock-cwd') // cwd
-        .mockResolvedValueOnce('/mock-tmp') // tmpDir
-        .mockResolvedValueOnce('/mock-cwd'); // parentDir
-      mockOsTmpdir.mockReturnValue('/mock-tmp');
-      mockPathDirname.mockReturnValue('/mock-cwd');
-      mockPathBasename.mockReturnValue('');
-      mockPathJoin.mockReturnValue('/mock-cwd');
-      mockFsLstat.mockRejectedValueOnce(new Error('ENOENT'));
-      mockFsWriteFile.mockResolvedValueOnce(undefined);
-
-      const result = await handler.handleNetworkExportHar({ outputPath: '/mock-cwd' });
-      const body = parseJson<NetworkExportHarResponse & Record<string, unknown>>(result);
-
-      expect(body.success).toBe(true);
-    });
-
-    it('writes file when outputPath resolves exactly to tmpDir (no subdirectory)', async () => {
-      mockPathResolve.mockReturnValue('/mock-tmp');
-      mockFsRealpath
-        .mockResolvedValueOnce('/mock-cwd') // cwd
-        .mockResolvedValueOnce('/mock-tmp') // tmpDir
-        .mockResolvedValueOnce('/mock-tmp'); // parentDir
-      mockOsTmpdir.mockReturnValue('/mock-tmp');
-      mockPathDirname.mockReturnValue('/mock-tmp');
-      mockPathBasename.mockReturnValue('');
-      mockPathJoin.mockReturnValue('/mock-tmp');
-      mockFsLstat.mockRejectedValueOnce(new Error('ENOENT'));
-      mockFsWriteFile.mockResolvedValueOnce(undefined);
-
-      const result = await handler.handleNetworkExportHar({ outputPath: '/mock-tmp' });
-      const body = parseJson<NetworkExportHarResponse & Record<string, unknown>>(result);
-
-      expect(body.success).toBe(true);
+      expect(String(body.error)).toContain('outputPath must be within');
     });
   });
 
@@ -642,6 +494,22 @@ describe('AdvancedToolHandlersRuntime — replay.ts coverage', () => {
           dryRun: false,
         }),
       );
+    });
+
+    it('rejects blocked replay headers before reaching replayRequest', async () => {
+      mockGetNetworkRequests.mockReturnValue([
+        { requestId: 'req-1', url: withPath(TEST_URLS.api, 'data'), method: 'POST' },
+      ]);
+
+      const result = await handler.handleNetworkReplayRequest({
+        requestId: 'req-1',
+        headerPatch: { Host: 'evil.test' },
+      });
+      const body = parseJson<NetworkReplayResponse>(result);
+
+      expect(body.success).toBe(false);
+      expect(String(body.error)).toContain('headerPatch.Host is not allowed');
+      expect(replayRequestMock).not.toHaveBeenCalled();
     });
 
     it('handles replayRequest throwing an Error', async () => {

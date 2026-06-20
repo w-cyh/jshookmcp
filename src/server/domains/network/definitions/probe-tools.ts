@@ -1,4 +1,5 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { networkAuthorizationSchema } from '@server/domains/network/authorization-schema';
 import { tool } from '@server/registry/tool-builder';
 
 export const probeTools: Tool[] = [
@@ -21,6 +22,12 @@ export const probeTools: Tool[] = [
         minimum: 8,
         maximum: 65500,
       })
+      .object(
+        'authorization',
+        networkAuthorizationSchema,
+        'Request-scoped authorization policy for private-network traceroute. Use exact hosts/CIDRs ' +
+          'instead of process-wide bypasses.',
+      )
       .required('target')
       .query(),
   ),
@@ -43,6 +50,12 @@ export const probeTools: Tool[] = [
         minimum: 100,
         maximum: 30000,
       })
+      .object(
+        'authorization',
+        networkAuthorizationSchema,
+        'Request-scoped authorization policy for private-network ICMP probes. Use exact hosts/CIDRs ' +
+          'instead of process-wide bypasses.',
+      )
       .required('target')
       .query(),
   ),

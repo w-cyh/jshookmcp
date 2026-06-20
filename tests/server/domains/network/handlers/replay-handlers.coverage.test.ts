@@ -8,6 +8,16 @@ vi.mock('@server/domains/network/replay', () => ({
   replayRequest: (...args: unknown[]) => mockReplayRequest(...args),
 }));
 
+const writeHarToSafePathMock = vi.fn();
+vi.mock('@server/domains/network/handlers/replay-security', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@server/domains/network/handlers/replay-security')>();
+  return {
+    ...actual,
+    writeHarToSafePath: (...args: unknown[]) => writeHarToSafePathMock(...args),
+  };
+});
+
 function parseBody(r: unknown) {
   return JSON.parse((r as { content: [{ text: string }] }).content[0]!.text);
 }
@@ -28,6 +38,8 @@ describe('ReplayHandlers', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    writeHarToSafePathMock.mockReset();
+    writeHarToSafePathMock.mockResolvedValue('D:/coding/reverse/jshookmcp/artifacts/test.har');
     // Re-configure mock after clearAllMocks wipes the implementation
     mockReplayRequest.mockResolvedValue({
       dryRun: true,
@@ -109,6 +121,20 @@ describe('ReplayHandlers', () => {
       expect(parseBody(r).har).toBeDefined();
     });
 
+    it('writes HAR via safe output helper when outputPath is provided', async () => {
+      deps.consoleMonitor.getNetworkRequests.mockReturnValue([
+        { requestId: 'r1', url: testUrls.TEST_URLS.a, method: 'GET' },
+      ]);
+      deps.consoleMonitor.getNetworkActivity.mockReturnValue({
+        response: { status: 200, headers: {} },
+      });
+
+      const r = await handlers.handleNetworkExportHar({ outputPath: './artifacts/test.har' });
+      const body = parseBody(r);
+      expect(body.success).toBe(true);
+      expect(writeHarToSafePathMock).toHaveBeenCalledOnce();
+    });
+
     it('handles error', async () => {
       deps.consoleMonitor.getNetworkRequests.mockImplementation(() => {
         throw new Error('fail');
@@ -139,6 +165,36 @@ describe('ReplayHandlers', () => {
       const body = parseBody(r);
       expect(body.dryRun).toBe(true);
       expect(body.preview).toBeDefined();
+    });
+
+    it('rejects blocked header overrides before calling replay', async () => {
+      deps.consoleMonitor.getNetworkRequests.mockReturnValue([
+        { requestId: 'r1', url: testUrls.TEST_URLS.a, method: 'GET', headers: {} },
+      ]);
+
+      const r = await handlers.handleNetworkReplayRequest({
+        requestId: 'r1',
+        headerPatch: { Host: 'evil.test' },
+      });
+      const body = parseBody(r);
+      expect(body.success).toBe(false);
+      expect(String(body.error)).toContain('headerPatch.Host is not allowed');
+      expect(mockReplayRequest).not.toHaveBeenCalled();
+    });
+
+    it('rejects malformed sessionProfile before calling replay', async () => {
+      deps.consoleMonitor.getNetworkRequests.mockReturnValue([
+        { requestId: 'r1', url: testUrls.TEST_URLS.a, method: 'GET', headers: {} },
+      ]);
+
+      const r = await handlers.handleNetworkReplayRequest({
+        requestId: 'r1',
+        sessionProfile: { cookies: [{ value: 'missing-name' }] },
+      });
+      const body = parseBody(r);
+      expect(body.success).toBe(false);
+      expect(String(body.error)).toContain('sessionProfile.cookies[0].name is required');
+      expect(mockReplayRequest).not.toHaveBeenCalled();
     });
 
     it('handles replay error', async () => {

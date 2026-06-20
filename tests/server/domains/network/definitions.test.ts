@@ -175,6 +175,24 @@ describe('network tool definitions', () => {
     expect(props.maxResponseBytes).toBeDefined();
   });
 
+  it('network_rtt_measure and network_latency_stats expose structured authorization inputs', async () => {
+    for (const name of ['network_rtt_measure', 'network_latency_stats']) {
+      const tool = findTool(name);
+      const props = getProperties(tool);
+      expect(props.authorization).toBeDefined();
+      expect(props.authorization?.type).toBe('object');
+    }
+  });
+
+  it('network_traceroute and network_icmp_probe expose structured authorization inputs', async () => {
+    for (const name of ['network_traceroute', 'network_icmp_probe']) {
+      const tool = findTool(name);
+      const props = getProperties(tool);
+      expect(props.authorization).toBeDefined();
+      expect(props.authorization?.type).toBe('object');
+    }
+  });
+
   it('console_inject requires type', async () => {
     const tool = findTool('console_inject');
     expect(tool.inputSchema.required).toContain('type');

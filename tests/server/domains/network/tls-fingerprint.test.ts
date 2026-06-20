@@ -69,6 +69,16 @@ describe('TlsBotHandlers — TLS/HTTP fingerprint/Bot behavioral tests', () => {
       const json = parseJson<Record<string, unknown>>(res);
       expect(json.success).toBe(false);
     });
+
+    it('rejects non-array TLS inputs instead of silently treating them as empty', async () => {
+      const res = await handlers.handleNetworkTlsFingerprint({
+        mode: 'compute_tls',
+        ciphers: '0x1301',
+      });
+      const json = parseJson<Record<string, unknown>>(res);
+      expect(json.success).toBe(false);
+      expect(String(json.error)).toContain('ciphers');
+    });
   });
 
   describe('compute_http', () => {
@@ -127,6 +137,16 @@ describe('TlsBotHandlers — TLS/HTTP fingerprint/Bot behavioral tests', () => {
       });
       const json = parseJson<Record<string, unknown>>(res);
       expect(json.success).toBe(false);
+    });
+
+    it('rejects non-array httpHeaders values', async () => {
+      const res = await handlers.handleNetworkTlsFingerprint({
+        mode: 'compute_http',
+        httpHeaders: 'Host',
+      });
+      const json = parseJson<Record<string, unknown>>(res);
+      expect(json.success).toBe(false);
+      expect(String(json.error)).toContain('httpHeaders');
     });
   });
 
@@ -351,6 +371,27 @@ describe('TlsBotHandlers — TLS/HTTP fingerprint/Bot behavioral tests', () => {
       const json = parseJson<Record<string, unknown>>(res);
       const irc = json.interRequestConsistency as Record<string, unknown>;
       expect(Number(irc.consistencyScore)).toBeGreaterThanOrEqual(0);
+    });
+
+    it('clamps limit into the supported range', async () => {
+      const requests = Array.from({ length: 3 }, (_, i) => ({
+        requestId: `r${i}`,
+        url: withPath(TEST_URLS.root, `${i}`),
+        method: 'GET',
+        headers: { 'user-agent': 'Mozilla/5.0 Chrome/120', accept: '*/*' },
+      }));
+      const monitor = createConsoleMonitorMock({ getNetworkRequests: (() => requests) as any });
+      const h = new TlsBotHandlers({ consoleMonitor: monitor as any });
+
+      const low = parseJson<Record<string, unknown>>(
+        await h.handleNetworkBotDetectAnalyze({ limit: -10 }),
+      );
+      const high = parseJson<Record<string, unknown>>(
+        await h.handleNetworkBotDetectAnalyze({ limit: 9999 }),
+      );
+
+      expect(low.analyzed).toBe(1);
+      expect(high.analyzed).toBe(3);
     });
   });
 

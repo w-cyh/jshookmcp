@@ -1,10 +1,27 @@
 import type { ConsoleMonitor } from '@server/domains/shared/modules/collector';
 import { R } from '@server/domains/shared/ResponseBuilder';
+import {
+  argBool,
+  argEnum,
+  argNumber,
+  argString,
+  argStringArray,
+  argStringRequired,
+} from '@server/domains/shared/parse-args';
 import { BOT_DETECT_LIMIT_DEFAULT } from '@src/constants';
 import { toHex4, isGrease } from './fingerprint-utils';
 import { computeTlsFingerprint } from './tls-fingerprint';
 import { computeHttpFingerprint, normalizeObservedHttpVersion } from './http-fingerprint';
 import { detectBotSignals } from './bot-detection';
+
+const TLS_FINGERPRINT_MODES = new Set(['compute_tls', 'compute_http', 'analyze_request'] as const);
+const TLS_PROTOCOLS = new Set(['tls', 'quic', 'dtls'] as const);
+
+function getSecurityDetails(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
 
 export class TlsBotHandlers {
   private consoleMonitor: ConsoleMonitor;
@@ -14,28 +31,30 @@ export class TlsBotHandlers {
   }
 
   async handleNetworkTlsFingerprint(args: Record<string, unknown>) {
-    const mode = args['mode'] as string;
-    const includeAnalysis = args['includeAnalysis'] !== false;
+    const modeRaw = argString(args, 'mode');
+    const includeAnalysis = argBool(args, 'includeAnalysis', true);
 
-    const validModes = ['compute_tls', 'compute_http', 'analyze_request'];
-    if (!mode || !validModes.includes(mode)) {
-      return R.fail(`Invalid mode: "${mode}". Expected one of: ${validModes.join(', ')}`).json();
+    if (
+      !modeRaw ||
+      !TLS_FINGERPRINT_MODES.has(
+        modeRaw as typeof TLS_FINGERPRINT_MODES extends Set<infer T> ? T : never,
+      )
+    ) {
+      return R.fail(
+        `Invalid mode: "${String(args['mode'])}". Expected one of: ${[...TLS_FINGERPRINT_MODES].join(', ')}`,
+      ).json();
     }
+    const mode = modeRaw;
 
     try {
       if (mode === 'compute_tls') {
-        const tlsVersions = (args['tlsVersions'] as string[]) || [];
-        const ciphers = (args['ciphers'] as string[]) || [];
-        const extensions = (args['extensions'] as string[]) || [];
-        const signatureAlgorithms = (args['signatureAlgorithms'] as string[]) || [];
-        const protocol =
-          (args['protocol'] as string) === 'quic'
-            ? 'quic'
-            : (args['protocol'] as string) === 'dtls'
-              ? 'dtls'
-              : 'tls';
-        const sni = args['sni'] !== false;
-        const alpn = (args['alpn'] as string) || '';
+        const tlsVersions = argStringArray(args, 'tlsVersions');
+        const ciphers = argStringArray(args, 'ciphers');
+        const extensions = argStringArray(args, 'extensions');
+        const signatureAlgorithms = argStringArray(args, 'signatureAlgorithms');
+        const protocol = argEnum(args, 'protocol', TLS_PROTOCOLS, 'tls');
+        const sni = argBool(args, 'sni', true);
+        const alpn = argString(args, 'alpn', '');
 
         if (ciphers.length === 0) {
           return R.fail('ciphers array is required for compute_tls mode').json();
@@ -79,12 +98,12 @@ export class TlsBotHandlers {
       }
 
       if (mode === 'compute_http') {
-        const headers = (args['httpHeaders'] as string[]) || [];
-        const ua = (args['userAgent'] as string) || '';
-        const method = (args['httpMethod'] as string) || 'GET';
-        const httpVersion = (args['httpVersion'] as string) || '1.1';
-        const cookieHeader = (args['cookieHeader'] as string) || '';
-        const acceptLanguage = (args['acceptLanguage'] as string) || '';
+        const headers = argStringArray(args, 'httpHeaders');
+        const ua = argString(args, 'userAgent', '');
+        const method = argString(args, 'httpMethod', 'GET');
+        const httpVersion = argString(args, 'httpVersion', '1.1');
+        const cookieHeader = argString(args, 'cookieHeader', '');
+        const acceptLanguage = argString(args, 'acceptLanguage', '');
 
         if (headers.length === 0) {
           return R.fail('httpHeaders array is required for compute_http mode').json();
@@ -119,10 +138,7 @@ export class TlsBotHandlers {
       }
 
       // mode === 'analyze_request' (fallthrough after compute_* early returns)
-      const requestId = args['requestId'] as string;
-      if (!requestId) {
-        return R.fail('requestId is required for analyze_request mode').json();
-      }
+      const requestId = argStringRequired(args, 'requestId');
       const requests = this.consoleMonitor.getNetworkRequests();
       const req = requests.find((r: { requestId?: string }) => r.requestId === requestId);
       if (!req) {
@@ -143,9 +159,7 @@ export class TlsBotHandlers {
         acceptLanguage,
       );
 
-      const secDetails = (req as unknown as Record<string, unknown>)['securityDetails'] as
-        | Record<string, unknown>
-        | undefined;
+      const secDetails = getSecurityDetails((req as Record<string, unknown>)['securityDetails']);
       const tlsSignalsForBot =
         secDetails && typeof secDetails === 'object'
           ? {
@@ -196,8 +210,11 @@ export class TlsBotHandlers {
   }
 
   async handleNetworkBotDetectAnalyze(args: Record<string, unknown>) {
-    const limit = typeof args['limit'] === 'number' ? args['limit'] : BOT_DETECT_LIMIT_DEFAULT;
-    const includeDetails = args['includeDetails'] === true;
+    const limit = Math.max(
+      1,
+      Math.min(500, argNumber(args, 'limit', BOT_DETECT_LIMIT_DEFAULT) ?? BOT_DETECT_LIMIT_DEFAULT),
+    );
+    const includeDetails = argBool(args, 'includeDetails', false);
 
     const requests = this.consoleMonitor.getNetworkRequests();
     const sample = requests.slice(0, limit);
@@ -234,9 +251,7 @@ export class TlsBotHandlers {
       const acceptLanguage = headers['accept-language'] || headers['Accept-Language'] || '';
       const httpVersion = normalizeObservedHttpVersion(req.httpVersion);
 
-      const secDetails = (req as unknown as Record<string, unknown>)['securityDetails'] as
-        | Record<string, unknown>
-        | undefined;
+      const secDetails = getSecurityDetails((req as Record<string, unknown>)['securityDetails']);
       const tlsSignalsForBot =
         secDetails && typeof secDetails === 'object'
           ? {

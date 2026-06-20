@@ -72,14 +72,6 @@ vi.mock('@modules/collector/playwright-cdp-fallback', () => ({
   connectPlaywrightCdpFallback: (...args: any[]) => state.connectPlaywrightCdpFallback(...args),
 }));
 
-vi.mock(import('@src/constants'), async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    ENABLE_INJECTION_TOOLS: false,
-  };
-});
-
 import { ProcessToolHandlersRuntime } from '@server/domains/process/handlers.impl.core.runtime.inject';
 import { buildTestUrl } from '@tests/shared/test-urls';
 

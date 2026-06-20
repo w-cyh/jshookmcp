@@ -48,28 +48,6 @@ describe('constants env parsing', () => {
     ).toBe(2.25);
   });
 
-  it('parses boolean env values for ENABLE_INJECTION_TOOLS', async () => {
-    expect(
-      (await loadConstants({ ENABLE_INJECTION_TOOLS: undefined })).ENABLE_INJECTION_TOOLS,
-    ).toBe(true);
-    expect((await loadConstants({ ENABLE_INJECTION_TOOLS: '' })).ENABLE_INJECTION_TOOLS).toBe(true);
-    expect((await loadConstants({ ENABLE_INJECTION_TOOLS: '1' })).ENABLE_INJECTION_TOOLS).toBe(
-      true,
-    );
-    expect((await loadConstants({ ENABLE_INJECTION_TOOLS: ' TRUE ' })).ENABLE_INJECTION_TOOLS).toBe(
-      true,
-    );
-    expect((await loadConstants({ ENABLE_INJECTION_TOOLS: '0' })).ENABLE_INJECTION_TOOLS).toBe(
-      false,
-    );
-    expect((await loadConstants({ ENABLE_INJECTION_TOOLS: 'false' })).ENABLE_INJECTION_TOOLS).toBe(
-      false,
-    );
-    expect((await loadConstants({ ENABLE_INJECTION_TOOLS: 'maybe' })).ENABLE_INJECTION_TOOLS).toBe(
-      true,
-    );
-  });
-
   it('parses string env values with fallback semantics', async () => {
     expect((await loadConstants({ GHIDRA_BRIDGE_URL: undefined })).GHIDRA_BRIDGE_ENDPOINT).toBe(
       'http://127.0.0.1:18080',

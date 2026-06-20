@@ -16,6 +16,26 @@ import {
 import { emitEvent, parseNumberArg } from './shared';
 import { icmpProbe, traceroute, isIcmpAvailable } from '@native/IcmpProbe';
 
+const PROBE_TYPE_VALUES = ['tcp', 'tls', 'http'] as const;
+type ProbeType = (typeof PROBE_TYPE_VALUES)[number];
+
+function parseProbeType(rawValue: unknown, fallback: ProbeType): ProbeType {
+  const value = parseOptionalString(rawValue, 'probeType') ?? fallback;
+  if (value === 'tcp' || value === 'tls' || value === 'http') {
+    return value;
+  }
+  throw new Error('probeType must be one of: tcp, tls, http');
+}
+
+function isLookupAllOptions(value: unknown): value is { all: true } {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'all' in value &&
+    (value as { all?: unknown }).all === true
+  );
+}
+
 type PinnedLookupOneCallback = (
   error: NodeJS.ErrnoException | null,
   address: string,
@@ -36,13 +56,7 @@ export class RawLatencyHandlers {
       throw new Error('url is required');
     }
 
-    const probeType = (parseOptionalString(args.probeType, 'probeType') ?? 'tcp') as
-      | 'tcp'
-      | 'tls'
-      | 'http';
-    if (!['tcp', 'tls', 'http'].includes(probeType)) {
-      throw new Error('probeType must be one of: tcp, tls, http');
-    }
+    const probeType = parseProbeType(args.probeType, 'tcp');
 
     const iterations = clamp(
       args.iterations !== undefined
@@ -132,10 +146,24 @@ export class RawLatencyHandlers {
         const message = err instanceof Error ? err.message : String(err);
         return R.fail(message).json();
       }
-      const maxHops = clamp(args.maxHops !== undefined ? Number(args.maxHops) : 30, 1, 64);
-      const timeout = clamp(args.timeout !== undefined ? Number(args.timeout) : 5000, 100, 30000);
+      const maxHops = clamp(
+        args.maxHops !== undefined
+          ? parseNumberArg(args.maxHops, { defaultValue: 30, min: 1, integer: true })
+          : 30,
+        1,
+        64,
+      );
+      const timeout = clamp(
+        args.timeout !== undefined
+          ? parseNumberArg(args.timeout, { defaultValue: 5000, min: 100, integer: true })
+          : 5000,
+        100,
+        30000,
+      );
       const packetSize = clamp(
-        args.packetSize !== undefined ? Number(args.packetSize) : 32,
+        args.packetSize !== undefined
+          ? parseNumberArg(args.packetSize, { defaultValue: 32, min: 8, integer: true })
+          : 32,
         8,
         65500,
       );
@@ -156,12 +184,16 @@ export class RawLatencyHandlers {
       return R.text('url is required', true);
     }
 
-    const probeType = (parseOptionalString(args.probeType, 'probeType') ?? 'http') as
-      | 'tcp'
-      | 'tls'
-      | 'http';
-    if (!['tcp', 'tls', 'http'].includes(probeType)) {
-      return R.text(`Invalid probeType: "${probeType}". Expected one of: tcp, tls, http`, true);
+    let probeType: ProbeType;
+    try {
+      probeType = parseProbeType(args.probeType, 'http');
+    } catch (error) {
+      return R.text(
+        error instanceof Error
+          ? `Invalid probeType: "${String(args.probeType)}". Expected one of: tcp, tls, http`
+          : 'Invalid probeType',
+        true,
+      );
     }
 
     const iterations = clamp(
@@ -253,10 +285,24 @@ export class RawLatencyHandlers {
         const message = err instanceof Error ? err.message : String(err);
         return R.fail(message).json();
       }
-      const ttl = clamp(args.ttl !== undefined ? Number(args.ttl) : 128, 1, 255);
-      const timeout = clamp(args.timeout !== undefined ? Number(args.timeout) : 5000, 100, 30000);
+      const ttl = clamp(
+        args.ttl !== undefined
+          ? parseNumberArg(args.ttl, { defaultValue: 128, min: 1, integer: true })
+          : 128,
+        1,
+        255,
+      );
+      const timeout = clamp(
+        args.timeout !== undefined
+          ? parseNumberArg(args.timeout, { defaultValue: 5000, min: 100, integer: true })
+          : 5000,
+        100,
+        30000,
+      );
       const packetSize = clamp(
-        args.packetSize !== undefined ? Number(args.packetSize) : 32,
+        args.packetSize !== undefined
+          ? parseNumberArg(args.packetSize, { defaultValue: 32, min: 8, integer: true })
+          : 32,
         8,
         65500,
       );
@@ -300,12 +346,7 @@ export class RawLatencyHandlers {
       if (!callback) {
         return;
       }
-      if (
-        optionsOrCallback &&
-        typeof optionsOrCallback === 'object' &&
-        'all' in (optionsOrCallback as Record<string, unknown>) &&
-        (optionsOrCallback as { all?: boolean }).all
-      ) {
+      if (isLookupAllOptions(optionsOrCallback)) {
         (callback as PinnedLookupAllCallback)(null, [{ address, family }]);
         return;
       }
