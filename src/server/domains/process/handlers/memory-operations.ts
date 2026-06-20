@@ -10,8 +10,10 @@ import {
   normalizePatternType,
   getOptionalPid,
   getOptionalString,
+  getOptionalBinaryEncoding,
   getOptionalPositiveNumber,
   getWriteSize,
+  normalizeBinaryEncoding,
 } from '../handlers.base.types';
 import { resolvePidOrAttachedRenderer } from '@server/runtime/renderer-pid';
 
@@ -103,7 +105,7 @@ export class MemoryOperationHandlers {
       const pid = await this.resolvePid(args.pid);
       const address = requireString(args.address, 'address');
       const data = requireString(args.data, 'data');
-      const encoding = this.normalizeEncoding(args.encoding, 'encoding') ?? 'hex';
+      const encoding = normalizeBinaryEncoding(args.encoding, 'encoding') ?? 'hex';
       const size = getWriteSize(data, encoding);
 
       const availability = await this.memoryManager.checkAvailability();
@@ -145,7 +147,7 @@ export class MemoryOperationHandlers {
     } catch (error) {
       logger.error('Memory write failed:', error);
       const data = getOptionalString(args.data);
-      const encoding = this.normalizeEncoding(args.encoding, 'encoding') ?? 'hex';
+      const encoding = getOptionalBinaryEncoding(args.encoding) ?? 'hex';
       return this.auditedExceptionResponse({
         operation: 'memory_write',
         pid: getOptionalPid(args.pid) ?? null,
@@ -484,23 +486,13 @@ export class MemoryOperationHandlers {
       }
 
       const patch = entry as Record<string, unknown>;
-      const encoding = this.normalizeEncoding(patch.encoding, `patches[${index}].encoding`);
+      const encoding = normalizeBinaryEncoding(patch.encoding, `patches[${index}].encoding`);
       return {
         address: requireString(patch.address, `patches[${index}].address`),
         data: requireString(patch.data, `patches[${index}].data`),
         ...(encoding ? { encoding } : {}),
       };
     });
-  }
-
-  private normalizeEncoding(value: unknown, fieldName: string): 'hex' | 'base64' | undefined {
-    if (value === undefined) {
-      return undefined;
-    }
-    if (value === 'hex' || value === 'base64') {
-      return value;
-    }
-    throw new Error(`${fieldName} must be "hex" or "base64"`);
   }
 
   private ensureRelativeOutputPath(outputPath: string): void {

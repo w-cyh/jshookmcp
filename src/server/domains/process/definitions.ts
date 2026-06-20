@@ -172,7 +172,7 @@ export const processToolDefinitions: Tool[] = [
   tool('inject_dll', (t) =>
     t
       .desc(
-        'Inject a DLL into a target process. Requires elevated privileges and ENABLE_INJECTION_TOOLS=true. Target process and payload are validated before injection.',
+        'Inject a DLL into a target process. Requires elevated privileges. Target process and payload are validated before injection.',
       )
       .number('pid', 'Target process ID')
       .string('dllPath', 'Full path to the DLL file to inject')
@@ -191,7 +191,7 @@ export const processToolDefinitions: Tool[] = [
   tool('inject_shellcode', (t) =>
     t
       .desc(
-        'Allocate and execute raw shellcode in a target process. Requires elevated privileges and ENABLE_INJECTION_TOOLS=true. Target process and payload are validated before injection.',
+        'Allocate and execute raw shellcode in a target process. Requires elevated privileges. Target process and payload are validated before injection.',
       )
       .number('pid', 'Target process ID')
       .string('shellcode', 'Shellcode bytes (hex string or base64)')

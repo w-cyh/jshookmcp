@@ -3,7 +3,7 @@
  * Prefixes: MEMORY_*, SCAN_*, POINTER_*, STRUCT_*, HEAP_*, BREAKPOINT_*, CODE_CAVE_*, FREEZE_*, WRITE_*, USERSPACE_*, NATIVE_*
  */
 
-import { int, bool } from './helpers.js';
+import { int } from './helpers.js';
 
 /* ================================================================== */
 /*  Memory operations                                                  */
@@ -26,7 +26,6 @@ export const MEMORY_ENUM_REGIONS_MAX_BUFFER_BYTES = int(
 );
 export const MEMORY_VMMAP_MAX_BUFFER_BYTES = int('MEMORY_VMMAP_MAX_BUFFER_BYTES', 5 * 1024 * 1024);
 export const MEMORY_INJECT_TIMEOUT_MS = int('MEMORY_INJECT_TIMEOUT_MS', 30_000);
-export const ENABLE_INJECTION_TOOLS = bool('ENABLE_INJECTION_TOOLS', true);
 export const MEMORY_MONITOR_INTERVAL_MS = int('MEMORY_MONITOR_INTERVAL_MS', 1_000);
 
 export const MEMORY_VMMAP_TIMEOUT_MS = int('MEMORY_VMMAP_TIMEOUT_MS', 15_000);

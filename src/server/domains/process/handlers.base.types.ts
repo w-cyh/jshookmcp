@@ -57,6 +57,8 @@ export interface MemoryDiagnostics {
 }
 
 export type MemoryPatternType = 'hex' | 'int32' | 'int64' | 'float' | 'double' | 'string';
+export type BinaryEncoding = 'hex' | 'base64';
+export type InjectionValidationModeOverride = 'strict' | 'balanced' | 'permissive' | 'disabled';
 
 export const MEMORY_PATTERN_TYPES: Set<MemoryPatternType> = new Set([
   'hex',
@@ -65,6 +67,14 @@ export const MEMORY_PATTERN_TYPES: Set<MemoryPatternType> = new Set([
   'float',
   'double',
   'string',
+]);
+
+export const BINARY_ENCODINGS: Set<BinaryEncoding> = new Set(['hex', 'base64']);
+export const INJECTION_VALIDATION_MODES: Set<InjectionValidationModeOverride> = new Set([
+  'strict',
+  'balanced',
+  'permissive',
+  'disabled',
 ]);
 
 /** Validate an arg is a positive integer PID. */
@@ -89,6 +99,16 @@ export function requirePositiveNumber(value: unknown, name: string): number {
   return n;
 }
 
+export function parseOptionalStringArg(value: unknown, name: string): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new Error(`${name} must be a string`);
+  }
+  return value.length > 0 ? value : undefined;
+}
+
 export function normalizePatternType(value: unknown): MemoryPatternType {
   if (typeof value === 'string' && MEMORY_PATTERN_TYPES.has(value as MemoryPatternType)) {
     return value as MemoryPatternType;
@@ -105,12 +125,47 @@ export function getOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+export function getOptionalBinaryEncoding(value: unknown): BinaryEncoding | undefined {
+  return value === 'hex' || value === 'base64' ? value : undefined;
+}
+
 export function getOptionalPositiveNumber(value: unknown): number | undefined {
   const size = Number(value);
   return Number.isFinite(size) && size > 0 ? size : undefined;
 }
 
-export function getWriteSize(data: string, encoding: 'hex' | 'base64'): number {
+export function normalizeBinaryEncoding(
+  value: unknown,
+  fieldName: string,
+): BinaryEncoding | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === 'hex' || value === 'base64') {
+    return value;
+  }
+  throw new Error(`${fieldName} must be "hex" or "base64"`);
+}
+
+export function normalizeInjectionValidationMode(
+  value: unknown,
+  fieldName: string,
+): InjectionValidationModeOverride | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === 'strict' ||
+    value === 'balanced' ||
+    value === 'permissive' ||
+    value === 'disabled'
+  ) {
+    return value;
+  }
+  throw new Error(`${fieldName} must be one of: strict, balanced, permissive, disabled`);
+}
+
+export function getWriteSize(data: string, encoding: BinaryEncoding): number {
   if (encoding === 'hex') {
     const normalized = data.replace(/\s+/g, '');
     return Math.ceil(normalized.length / 2);

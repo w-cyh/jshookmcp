@@ -3,36 +3,21 @@
  */
 
 import { logger } from '@utils/logger';
-import { ENABLE_INJECTION_TOOLS } from '@src/constants';
 import { connectPlaywrightCdpFallback } from '@modules/collector/playwright-cdp-fallback';
 import type { ProcessHandlerDeps } from './shared-types';
 import type { ProcessManagementHandlers } from './process-management';
-import { validatePid, requireString } from '../handlers.base.types';
+import {
+  validatePid,
+  requireString,
+  getOptionalPid,
+  getOptionalString,
+  getOptionalBinaryEncoding,
+  getWriteSize,
+  normalizeBinaryEncoding,
+  normalizeInjectionValidationMode,
+  parseOptionalStringArg,
+} from '../handlers.base.types';
 import { validateExpression, sanitizeErrorMessage } from './expression-validator';
-
-const INJECTION_TOOLS_DISABLED_ERROR =
-  'Injection tools are disabled by configuration. Set ENABLE_INJECTION_TOOLS=true before starting the server to ' +
-  'enable DLL and shellcode injection.';
-
-const INJECTION_TOOLS_ENABLE_GUIDANCE =
-  'Set ENABLE_INJECTION_TOOLS=true before starting the server.';
-
-const INJECTION_TOOLS_SECURITY_NOTICE =
-  'Injection tools can destabilize target processes; review impact before use.';
-
-function buildInjectionDisabledPayload() {
-  return {
-    success: false,
-    error: INJECTION_TOOLS_DISABLED_ERROR,
-    howToEnable: INJECTION_TOOLS_ENABLE_GUIDANCE,
-    securityNotice: INJECTION_TOOLS_SECURITY_NOTICE,
-  };
-}
-
-function getOptionalPid(value: unknown): number | null {
-  const pid = Number(value);
-  return Number.isInteger(pid) && pid > 0 ? pid : null;
-}
 
 function formatUnknownError(error: unknown): string {
   if (error instanceof Error) {
@@ -46,18 +31,6 @@ function formatUnknownError(error: unknown): string {
     }
   }
   return String(error);
-}
-
-function getOptionalString(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function getShellcodeSize(shellcode: string, encoding: 'hex' | 'base64'): number {
-  if (encoding === 'hex') {
-    const normalized = shellcode.replace(/\s+/g, '');
-    return Math.ceil(normalized.length / 2);
-  }
-  return Buffer.from(shellcode, 'base64').length;
 }
 
 const ELECTRON_ATTACH_CONNECT_TIMEOUT_MS =
@@ -137,34 +110,15 @@ export class InjectionHandlers {
   async handleInjectDll(args: Record<string, unknown>) {
     const startedAt = Date.now();
 
-    if (!ENABLE_INJECTION_TOOLS) {
-      this.processMgmt.recordMemoryAudit({
-        operation: 'inject_dll',
-        pid: getOptionalPid(args.pid),
-        address: getOptionalString(args.dllPath),
-        size: null,
-        result: 'failure',
-        error: INJECTION_TOOLS_DISABLED_ERROR,
-        durationMs: Date.now() - startedAt,
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(buildInjectionDisabledPayload(), null, 2),
-          },
-        ],
-      };
-    }
-
     try {
       const pid = validatePid(args.pid);
       const dllPath = requireString(args.dllPath, 'dllPath');
       const confirmed = typeof args.confirmed === 'boolean' ? args.confirmed : undefined;
-      const payloadHash = typeof args.payloadHash === 'string' ? args.payloadHash : undefined;
-      const validationMode =
-        typeof args.validationMode === 'string' ? args.validationMode : undefined;
+      const payloadHash = parseOptionalStringArg(args.payloadHash, 'payloadHash');
+      const validationMode = normalizeInjectionValidationMode(
+        args.validationMode,
+        'validationMode',
+      );
 
       const result = await this.memoryManager.injectDll(pid, dllPath, {
         confirmed,
@@ -190,8 +144,8 @@ export class InjectionHandlers {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.processMgmt.recordMemoryAudit({
         operation: 'inject_dll',
-        pid: getOptionalPid(args.pid),
-        address: getOptionalString(args.dllPath),
+        pid: getOptionalPid(args.pid) ?? null,
+        address: getOptionalString(args.dllPath) ?? null,
         size: null,
         result: 'failure',
         error: errorMessage,
@@ -211,37 +165,16 @@ export class InjectionHandlers {
   async handleInjectShellcode(args: Record<string, unknown>) {
     const startedAt = Date.now();
 
-    if (!ENABLE_INJECTION_TOOLS) {
-      const shellcode = getOptionalString(args.shellcode);
-      const encoding = (args.encoding as 'hex' | 'base64') || 'hex';
-      this.processMgmt.recordMemoryAudit({
-        operation: 'inject_shellcode',
-        pid: getOptionalPid(args.pid),
-        address: null,
-        size: shellcode ? getShellcodeSize(shellcode, encoding) : null,
-        result: 'failure',
-        error: INJECTION_TOOLS_DISABLED_ERROR,
-        durationMs: Date.now() - startedAt,
-      });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(buildInjectionDisabledPayload(), null, 2),
-          },
-        ],
-      };
-    }
-
     try {
       const pid = validatePid(args.pid);
       const shellcode = requireString(args.shellcode, 'shellcode');
-      const encoding = (args.encoding as 'hex' | 'base64') || 'hex';
+      const encoding = normalizeBinaryEncoding(args.encoding, 'encoding') ?? 'hex';
       const confirmed = typeof args.confirmed === 'boolean' ? args.confirmed : undefined;
-      const validationMode =
-        typeof args.validationMode === 'string' ? args.validationMode : undefined;
-      const size = getShellcodeSize(shellcode, encoding);
+      const validationMode = normalizeInjectionValidationMode(
+        args.validationMode,
+        'validationMode',
+      );
+      const size = getWriteSize(shellcode, encoding);
 
       const result = await this.memoryManager.injectShellcode(pid, shellcode, encoding, {
         confirmed,
@@ -265,12 +198,12 @@ export class InjectionHandlers {
       logger.error('Shellcode injection failed:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       const shellcode = getOptionalString(args.shellcode);
-      const encoding = (args.encoding as 'hex' | 'base64') || 'hex';
+      const encoding = getOptionalBinaryEncoding(args.encoding) ?? 'hex';
       this.processMgmt.recordMemoryAudit({
         operation: 'inject_shellcode',
-        pid: getOptionalPid(args.pid),
+        pid: getOptionalPid(args.pid) ?? null,
         address: null,
-        size: shellcode ? getShellcodeSize(shellcode, encoding) : null,
+        size: shellcode ? getWriteSize(shellcode, encoding) : null,
         result: 'failure',
         error: errorMessage,
         durationMs: Date.now() - startedAt,
@@ -387,9 +320,9 @@ export class InjectionHandlers {
         ],
       };
     }
-    const wsEndpointArg = (args.wsEndpoint as string | undefined) ?? '';
-    const evaluateExpr = (args.evaluate as string | undefined) ?? '';
-    const pageUrl = (args.pageUrl as string | undefined) ?? '';
+    const wsEndpointArg = parseOptionalStringArg(args.wsEndpoint, 'wsEndpoint') ?? '';
+    const evaluateExpr = parseOptionalStringArg(args.evaluate, 'evaluate') ?? '';
+    const pageUrl = parseOptionalStringArg(args.pageUrl, 'pageUrl') ?? '';
 
     try {
       const baseUrl = `http://127.0.0.1:${port}`;
