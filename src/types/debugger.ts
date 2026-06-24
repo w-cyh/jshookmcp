@@ -43,6 +43,7 @@ export interface DebuggerSession {
       columnNumber?: number;
     };
     condition?: string;
+    logMessage?: string;
     enabled: boolean;
   }>;
   pauseOnExceptions: 'none' | 'uncaught' | 'all';

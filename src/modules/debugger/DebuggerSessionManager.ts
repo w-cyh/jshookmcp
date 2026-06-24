@@ -161,6 +161,7 @@ export class DebuggerSessionManager {
             lineNumber: bp.location.lineNumber,
             columnNumber: bp.location.columnNumber,
             condition: bp.condition,
+            logMessage: bp.logMessage,
           });
           successCount++;
         } else {

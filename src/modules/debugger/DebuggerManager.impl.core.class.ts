@@ -60,6 +60,7 @@ export interface BreakpointInfo {
     columnNumber?: number;
   };
   condition?: string;
+  logMessage?: string;
   enabled: boolean;
   hitCount: number;
   createdAt: number;
@@ -417,6 +418,7 @@ export class DebuggerManager {
     lineNumber: number;
     columnNumber?: number;
     condition?: string;
+    logMessage?: string;
   }): Promise<BreakpointInfo> {
     return setBreakpointByUrlCore(this, params);
   }
@@ -426,6 +428,7 @@ export class DebuggerManager {
     lineNumber: number;
     columnNumber?: number;
     condition?: string;
+    logMessage?: string;
   }): Promise<BreakpointInfo> {
     return setBreakpointCore(this, params);
   }
