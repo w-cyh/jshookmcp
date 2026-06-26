@@ -159,7 +159,9 @@ export class TlsBotHandlers {
         acceptLanguage,
       );
 
-      const secDetails = getSecurityDetails((req as Record<string, unknown>)['securityDetails']);
+      const secDetails = getSecurityDetails(
+        (req as unknown as Record<string, unknown>)['securityDetails'],
+      );
       const tlsSignalsForBot =
         secDetails && typeof secDetails === 'object'
           ? {
@@ -251,7 +253,9 @@ export class TlsBotHandlers {
       const acceptLanguage = headers['accept-language'] || headers['Accept-Language'] || '';
       const httpVersion = normalizeObservedHttpVersion(req.httpVersion);
 
-      const secDetails = getSecurityDetails((req as Record<string, unknown>)['securityDetails']);
+      const secDetails = getSecurityDetails(
+        (req as unknown as Record<string, unknown>)['securityDetails'],
+      );
       const tlsSignalsForBot =
         secDetails && typeof secDetails === 'object'
           ? {

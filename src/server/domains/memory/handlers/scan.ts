@@ -11,7 +11,9 @@ import type { MCPServerContext } from '@server/MCPServer.context';
 import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 import { handleSafe } from '@server/domains/shared/ResponseBuilder';
 import { argBool, argEnum, argNumber, argObject } from '@server/domains/shared/parse-args';
-import { validateHexAddress, requireStringArg } from './validation';
+import { logger } from '@utils/logger';
+import { MemoryAuditTrail } from '@modules/process/memory/AuditTrail';
+import { validateHexAddress, requireStringArg, validateValueForType } from './validation';
 
 // Mirror of ScanValueTypeOptions in definitions.ts — kept in sync so handler-layer
 // validation rejects unknown value types before reaching the native scanner.
@@ -49,24 +51,47 @@ const TOOL_NEXT_SCAN = 'memory_next_scan';
 const TOOL_UNKNOWN_SCAN = 'memory_unknown_scan';
 const TOOL_GROUP_SCAN = 'memory_group_scan';
 
+/** Upper bound on group-scan pattern entries — more is almost always a mistake
+ * and makes the scan extremely slow. */
+const GROUP_SCAN_MAX_PATTERN = 64;
+
 function capMaxResults(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value) || value <= 0) return MEMORY_SCAN_MAX_RESULTS;
   return Math.min(value, MEMORY_SCAN_MAX_RESULTS);
 }
 
 export class ScanHandlers {
+  private readonly auditTrail: MemoryAuditTrail | null;
+
   constructor(
     private readonly scanner: MemoryScanner,
     private readonly eventBus?: EventBus<ServerEventMap>,
     private readonly processManager?: UnifiedProcessManager,
     private readonly ctx?: MCPServerContext,
-  ) {}
+    auditTrail?: MemoryAuditTrail | null,
+  ) {
+    this.auditTrail = auditTrail ?? null;
+  }
 
   private async resolvePid(value: unknown): Promise<number> {
-    if (!this.processManager) {
-      return value as number;
-    }
     return await resolveMemoryDomainPid(value, this.processManager, this.ctx);
+  }
+
+  private recordAudit(entry: {
+    operation: string;
+    pid: number | null;
+    address: string | null;
+    size: number | null;
+    result: 'success' | 'failure';
+    error?: string;
+    durationMs: number;
+  }): void {
+    if (!this.auditTrail) return;
+    try {
+      this.auditTrail.record(entry);
+    } catch (auditError) {
+      logger.warn('Memory audit trail recording failed:', auditError);
+    }
   }
 
   async handleFirstScan(args: Record<string, unknown>) {
@@ -79,12 +104,24 @@ export class ScanHandlers {
           `${TOOL_FIRST_SCAN}: missing or invalid required argument "valueType" (expected one of: ${[...SCAN_VALUE_TYPES].join(', ')}), got: ${JSON.stringify(args.valueType)}`,
         );
       }
+      // Early-reject gross value/type mismatches (e.g. "abc" + int32) so they
+      // surface here rather than as a cryptic native FFI error.
+      validateValueForType(value, valueType, TOOL_FIRST_SCAN);
       const alignment = argNumber(args, 'alignment');
       const maxResults = capMaxResults(argNumber(args, 'maxResults'));
       const regionFilter = argObject(args, 'regionFilter') as ScanOptions['regionFilter'];
       const onProgress = args.onProgress as ((p: number, t?: number) => void) | undefined;
       const options: ScanOptions = { valueType, alignment, maxResults, regionFilter, onProgress };
+      const start = Date.now();
       const result = await this.scanner.firstScan(pid, value, options);
+      this.recordAudit({
+        operation: 'first_scan',
+        pid,
+        address: null,
+        size: result.totalMatches ?? 0,
+        result: 'success',
+        durationMs: Date.now() - start,
+      });
       void this.eventBus?.emit('memory:scan_completed', {
         scanType: 'first',
         resultCount: result.totalMatches ?? 0,
@@ -111,6 +148,15 @@ export class ScanHandlers {
       }
       const value = typeof args.value === 'string' ? args.value : undefined;
       const value2 = typeof args.value2 === 'string' ? args.value2 : undefined;
+      // "between" requires both bounds — enforce here so the native layer never
+      // receives an undefined upper bound and produce a cryptic comparator error.
+      if (mode === 'between') {
+        if (!value || !value2) {
+          throw new Error(
+            `${TOOL_NEXT_SCAN}: mode "between" requires both "value" (lower bound) and "value2" (upper bound)`,
+          );
+        }
+      }
       const result = await this.scanner.nextScan(sessionId, mode, value, value2);
       return {
         ...result,
@@ -166,7 +212,13 @@ export class ScanHandlers {
           `${TOOL_GROUP_SCAN}: missing or invalid required argument "pattern" (expected non-empty array of {offset, value, type}), got: ${JSON.stringify(rawPattern)}`,
         );
       }
+      if (rawPattern.length > GROUP_SCAN_MAX_PATTERN) {
+        throw new Error(
+          `${TOOL_GROUP_SCAN}: pattern has ${rawPattern.length} entries, exceeds maximum ${GROUP_SCAN_MAX_PATTERN}. Split into multiple group scans.`,
+        );
+      }
       const pattern: Array<{ offset: number; value: string; type: ScanValueType }> = [];
+      const seenOffsets = new Set<number>();
       for (let i = 0; i < rawPattern.length; i += 1) {
         const entry = rawPattern[i] as Record<string, unknown> | undefined;
         if (!entry || typeof entry !== 'object') {
@@ -182,6 +234,12 @@ export class ScanHandlers {
             `${TOOL_GROUP_SCAN}: pattern element at index ${i} has invalid "offset" (expected number), got: ${JSON.stringify(offset)}`,
           );
         }
+        if (seenOffsets.has(offset)) {
+          throw new Error(
+            `${TOOL_GROUP_SCAN}: duplicate offset ${offset} at pattern index ${i} — each entry must target a distinct offset`,
+          );
+        }
+        seenOffsets.add(offset);
         if (typeof value !== 'string' || value.length === 0) {
           throw new Error(
             `${TOOL_GROUP_SCAN}: pattern element at index ${i} has invalid "value" (expected non-empty string), got: ${JSON.stringify(value)}`,

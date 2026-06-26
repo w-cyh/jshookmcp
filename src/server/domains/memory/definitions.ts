@@ -307,20 +307,31 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
   tool('memory_speedhack', (t) =>
     t
       .desc(
-        `Hook time APIs to scale process time. Actions: apply (hook + set speed), set (adjust speed).`,
+        `Hook time APIs (GetTickCount64/GetTickCount/QueryPerformanceCounter) to scale process ` +
+          `time via an in-process SSE2 trampoline. Actions: apply (hook + set speed), set (adjust ` +
+          `speed without re-hooking), restore (unhook and restore original functions). Speed range ` +
+          `0.01–100x; values outside this range are rejected to avoid destabilising the target.`,
       )
-      .enum('action', ['apply', 'set'], 'Speedhack action')
+      .enum('action', ['apply', 'set', 'restore'], 'Speedhack action')
       .number('pid', 'Target process ID (optional when a browser session is attached)')
-      .number('speed', 'Speed multiplier')
-      .required('action', 'speed')
+      .number('speed', 'Speed multiplier (0.01–100)')
+      .required('action')
       .destructive(),
   ),
 
   // History Tools
   tool('memory_write_history', (t) =>
     t
-      .desc('Undo or redo the last memory write operation.')
+      .desc(
+        'Undo or redo the last memory write operation. Pass pid to scope the operation to a ' +
+          "specific process — per-PID undo prevents reverting an unrelated process's write when " +
+          'multiple processes are being edited concurrently.',
+      )
       .enum('action', ['undo', 'redo'], 'History action')
+      .number(
+        'pid',
+        'Target process ID — scopes undo/redo to this process (optional; omit for global)',
+      )
       .required('action')
       .destructive()
       .openWorld(),
@@ -386,11 +397,17 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
   tool('memory_inline_hook_detect', (t) =>
     t
       .desc(
-        'Detect inline hooks by comparing the first 16 bytes of each exported function on disk vs in memory. ' +
-          'Identifies JMP rel32, JMP abs64, PUSH+RET hooks and decodes jump targets.',
+        'Detect hooks in process modules. scanMode "inline" (default) compares the first 16 ' +
+          'bytes of each exported function disk-vs-memory and recognises 8 hook patterns ' +
+          '(JMP/CALL/short-jmp/MOV+JMP/MOV+CALL/PUSH+RET/INT3/padding). scanMode "iat" detects ' +
+          'Import Address Table hooks (entries redirected outside their source module — evades ' +
+          'inline detection, used by EasyHook/MinHook/Detours). scanMode "both" runs both scans.',
       )
       .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('moduleName', 'Module name filter (optional — scans all modules if omitted)')
+      .enum('scanMode', ['inline', 'iat', 'both'], 'Hook scan mode (default: inline)', {
+        default: 'inline',
+      })
       .required()
       .query(),
   ),

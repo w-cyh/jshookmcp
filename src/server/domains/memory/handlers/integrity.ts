@@ -7,15 +7,37 @@ import type { MCPServerContext } from '@server/MCPServer.context';
 import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 import { handleSafe } from '@server/domains/shared/ResponseBuilder';
 import { argEnum, argNumber, argString } from '@server/domains/shared/parse-args';
-import { requirePositiveNumberArg, validateHexAddress } from './validation';
+import { logger } from '@utils/logger';
+import { MemoryAuditTrail } from '@modules/process/memory/AuditTrail';
+import { requireNumberInRangeArg, validateHexAddress } from './validation';
+
+import { createPlatformProvider } from '@native/platform/factory';
+import type { PlatformMemoryAPI } from '@native/platform/PlatformMemoryAPI';
+import { scanGuardPages as crossPlatformScanGuardPages } from '@native/platform/GuardPageScanner';
+import { scanIntegrity as crossPlatformScanIntegrity } from '@native/platform/IntegrityScanner';
 
 const TOOL_SPEEDHACK = 'memory_speedhack';
 const TOOL_GUARD_PAGES = 'memory_guard_pages';
 const TOOL_INTEGRITY_CHECK = 'memory_integrity_check';
 
+/** Speedhack multiplier bounds — outside this range the target process can hang or crash. */
+const SPEEDHACK_MIN_SPEED = 0.01;
+const SPEEDHACK_MAX_SPEED = 100;
+
 const PE_TABLE_OPTIONS = new Set<'imports' | 'exports' | 'both'>(['imports', 'exports', 'both']);
+const HOOK_SCAN_MODES = new Set<'inline' | 'iat' | 'both'>(['inline', 'iat', 'both']);
+
+function getPlatformApi(): PlatformMemoryAPI | null {
+  try {
+    return createPlatformProvider();
+  } catch {
+    return null;
+  }
+}
 
 export class IntegrityHandlers {
+  private readonly auditTrail: MemoryAuditTrail | null;
+
   constructor(
     private readonly speedhackEngine: Speedhack | null,
     private readonly heapAnalyzer: HeapAnalyzer | null,
@@ -23,13 +45,30 @@ export class IntegrityHandlers {
     private readonly antiCheatDetector: AntiCheatDetector | null,
     private readonly processManager?: UnifiedProcessManager,
     private readonly ctx?: MCPServerContext,
-  ) {}
+    auditTrail?: MemoryAuditTrail | null,
+  ) {
+    this.auditTrail = auditTrail ?? null;
+  }
 
   private async resolvePid(value: unknown): Promise<number> {
-    if (!this.processManager) {
-      return value as number;
-    }
     return await resolveMemoryDomainPid(value, this.processManager, this.ctx);
+  }
+
+  private recordAudit(entry: {
+    operation: string;
+    pid: number | null;
+    address: string | null;
+    size: number | null;
+    result: 'success' | 'failure';
+    error?: string;
+    durationMs: number;
+  }): void {
+    if (!this.auditTrail) return;
+    try {
+      this.auditTrail.record(entry);
+    } catch (auditError) {
+      logger.warn('Memory audit trail recording failed:', auditError);
+    }
   }
 
   async handleSpeedhackApply(args: Record<string, unknown>) {
@@ -41,12 +80,40 @@ export class IntegrityHandlers {
         );
       }
       const pid = await this.resolvePid(args.pid);
-      const speed = requirePositiveNumberArg(args.speed, 'speed', TOOL_SPEEDHACK);
-      const result = await this.speedhackEngine.apply(pid, speed);
-      return {
-        ...result,
-        hint: `Speedhack active (${speed}x). Use memory_speedhack({ action: 'set' }) to adjust.`,
-      };
+      const speed = requireNumberInRangeArg(
+        args.speed,
+        'speed',
+        TOOL_SPEEDHACK,
+        SPEEDHACK_MIN_SPEED,
+        SPEEDHACK_MAX_SPEED,
+      );
+      const start = Date.now();
+      try {
+        const result = await this.speedhackEngine.apply(pid, speed);
+        this.recordAudit({
+          operation: 'speedhack_apply',
+          pid,
+          address: null,
+          size: null,
+          result: 'success',
+          durationMs: Date.now() - start,
+        });
+        return {
+          ...result,
+          hint: `Speedhack active (${speed}x). Use memory_speedhack({ action: 'set' }) to adjust, or action: 'restore' to unhook.`,
+        };
+      } catch (e) {
+        this.recordAudit({
+          operation: 'speedhack_apply',
+          pid,
+          address: null,
+          size: null,
+          result: 'failure',
+          error: e instanceof Error ? e.message : String(e),
+          durationMs: Date.now() - start,
+        });
+        throw e;
+      }
     });
   }
 
@@ -59,24 +126,85 @@ export class IntegrityHandlers {
         );
       }
       const pid = await this.resolvePid(args.pid);
-      const speed = requirePositiveNumberArg(args.speed, 'speed', TOOL_SPEEDHACK);
-      return {
-        updated: await this.speedhackEngine.setSpeed(pid, speed),
-        newSpeed: speed,
-      };
+      const speed = requireNumberInRangeArg(
+        args.speed,
+        'speed',
+        TOOL_SPEEDHACK,
+        SPEEDHACK_MIN_SPEED,
+        SPEEDHACK_MAX_SPEED,
+      );
+      const start = Date.now();
+      try {
+        const updated = await this.speedhackEngine.setSpeed(pid, speed);
+        this.recordAudit({
+          operation: 'speedhack_set',
+          pid,
+          address: null,
+          size: null,
+          result: 'success',
+          durationMs: Date.now() - start,
+        });
+        return { updated, newSpeed: speed };
+      } catch (e) {
+        this.recordAudit({
+          operation: 'speedhack_set',
+          pid,
+          address: null,
+          size: null,
+          result: 'failure',
+          error: e instanceof Error ? e.message : String(e),
+          durationMs: Date.now() - start,
+        });
+        throw e;
+      }
+    });
+  }
+
+  async handleSpeedhackRestore(args: Record<string, unknown>) {
+    return handleSafe(async () => {
+      if (!this.speedhackEngine) {
+        throw new Error(
+          'Speedhack tools (memory_speedhack) are only supported on Windows. ' +
+            'This tool requires Win32 timer manipulation APIs.',
+        );
+      }
+      const pid = await this.resolvePid(args.pid);
+      const start = Date.now();
+      try {
+        const restored = await this.speedhackEngine.restore(pid);
+        this.recordAudit({
+          operation: 'speedhack_restore',
+          pid,
+          address: null,
+          size: null,
+          result: 'success',
+          durationMs: Date.now() - start,
+        });
+        return {
+          restored,
+          hint: restored
+            ? 'Speedhack removed and original time APIs restored.'
+            : 'No active speedhack for this process.',
+        };
+      } catch (e) {
+        this.recordAudit({
+          operation: 'speedhack_restore',
+          pid,
+          address: null,
+          size: null,
+          result: 'failure',
+          error: e instanceof Error ? e.message : String(e),
+          durationMs: Date.now() - start,
+        });
+        throw e;
+      }
     });
   }
 
   async handleHeapEnumerate(args: Record<string, unknown>) {
     return handleSafe(async () => {
-      if (!this.heapAnalyzer) {
-        throw new Error(
-          'Heap analysis tools (memory_heap_*) are only supported on Windows. ' +
-            'This tool requires Win32 Toolhelp32 heap enumeration APIs.',
-        );
-      }
       const pid = await this.resolvePid(args.pid);
-      const result = await this.heapAnalyzer.enumerateHeaps(pid);
+      const result = await this.heapAnalyzer!.enumerateHeaps(pid);
       return {
         ...result,
         hint: `Enumerated ${result.heaps.length} heaps. Use memory_heap_stats for statistics or memory_heap_anomalies to check for issues.`,
@@ -86,27 +214,15 @@ export class IntegrityHandlers {
 
   async handleHeapStats(args: Record<string, unknown>) {
     return handleSafe(async () => {
-      if (!this.heapAnalyzer) {
-        throw new Error(
-          'Heap analysis tools (memory_heap_*) are only supported on Windows. ' +
-            'This tool requires Win32 Toolhelp32 heap enumeration APIs.',
-        );
-      }
       const pid = await this.resolvePid(args.pid);
-      return { ...(await this.heapAnalyzer.getStats(pid)) };
+      return { ...(await this.heapAnalyzer!.getStats(pid)) };
     });
   }
 
   async handleHeapAnomalies(args: Record<string, unknown>) {
     return handleSafe(async () => {
-      if (!this.heapAnalyzer) {
-        throw new Error(
-          'Heap analysis tools (memory_heap_*) are only supported on Windows. ' +
-            'This tool requires Win32 Toolhelp32 heap enumeration APIs.',
-        );
-      }
       const pid = await this.resolvePid(args.pid);
-      const anomalies = await this.heapAnalyzer.detectAnomalies(pid);
+      const anomalies = await this.heapAnalyzer!.detectAnomalies(pid);
       return {
         anomalies,
         count: anomalies.length,
@@ -128,7 +244,18 @@ export class IntegrityHandlers {
       }
       const pid = await this.resolvePid(args.pid);
       const moduleBase = validateHexAddress(args.moduleBase, 'moduleBase');
-      return { ...(await this.peAnalyzer.parseHeaders(pid, moduleBase)) };
+      // Return headers + section table so callers can see section names, RVAs,
+      // sizes and permissions without a separate memory_pe_imports_exports call.
+      // listSections is best-effort — a failure to enumerate sections does not
+      // invalidate the header parse.
+      const headers = await this.peAnalyzer.parseHeaders(pid, moduleBase);
+      let sections: unknown[] = [];
+      try {
+        sections = await this.peAnalyzer.listSections(pid, moduleBase);
+      } catch {
+        // best-effort: section enumeration failure does not invalidate headers
+      }
+      return { ...headers, sections };
     });
   }
 
@@ -164,47 +291,71 @@ export class IntegrityHandlers {
       }
       const pid = await this.resolvePid(args.pid);
       const moduleName = argString(args, 'moduleName');
-      const hooks = await this.peAnalyzer.detectInlineHooks(pid, moduleName);
+      const scanMode = argEnum(args, 'scanMode', HOOK_SCAN_MODES, 'inline');
+
+      // inline mode: compare export prologues disk-vs-memory.
+      // iat mode: compare IAT entries against source-module ranges.
+      // both: run the two scans (independent — no shared state).
+      const inlineHooks =
+        scanMode === 'iat' ? [] : await this.peAnalyzer.detectInlineHooks(pid, moduleName);
+      const iatHooks =
+        scanMode === 'inline' ? [] : await this.peAnalyzer.detectIATHooks(pid, moduleName);
+
+      const total = inlineHooks.length + iatHooks.length;
       return {
-        hooks,
-        count: hooks.length,
+        inlineHooks,
+        iatHooks,
+        count: total,
+        scanMode,
         hint:
-          hooks.length > 0
-            ? `Detected ${hooks.length} inline hooks — check hookType and jumpTarget for each.`
-            : 'No inline hooks detected — exports match disk bytes.',
+          total > 0
+            ? `Detected ${inlineHooks.length} inline + ${iatHooks.length} IAT hooks. Check hookType/jumpTarget (inline) and actualModule (IAT) for each.`
+            : `No hooks detected (scanMode=${scanMode}). Exports match disk and IAT entries resolve within their source modules.`,
       };
     });
   }
 
   async handleAntiCheatDetect(args: Record<string, unknown>) {
     return handleSafe(async () => {
-      if (!this.antiCheatDetector) {
-        throw new Error(
-          'Anti-cheat detection tools (memory_anticheat_*, memory_guard_pages, memory_integrity_check) are only supported on Windows. ' +
-            'These tools require Win32 process introspection APIs.',
-        );
-      }
       const pid = await this.resolvePid(args.pid);
-      const detections = await this.antiCheatDetector.detect(pid);
+
+      // Windows fast path
+      if (this.antiCheatDetector) {
+        const detections = await this.antiCheatDetector.detect(pid);
+        return {
+          detections,
+          count: detections.length,
+          limitations: [
+            'Import-only API detection: anti-debug resolved at runtime via GetModuleHandle+GetProcAddress or manual syscalls is not surfaced by the import scan (the RDTSC instruction pass mitigates this partially).',
+            'Kernel-mode anti-cheat drivers are NOT enumerated — this scanner is user-mode only and cannot inspect driver callbacks.',
+            'Direct PEB.BeingDebugged / PEB.NtGlobalFlag reads without calling the corresponding API are not detected.',
+          ],
+          hint:
+            detections.length > 0
+              ? `Found ${detections.length} anti-debug mechanisms. Each includes a bypassSuggestion. See "limitations" for detection boundaries.`
+              : 'No anti-debug mechanisms detected in imports or timing instructions. See "limitations" for what this scanner cannot catch.',
+        };
+      }
+
+      // Cross-platform fallback
       return {
-        detections,
-        count: detections.length,
-        hint:
-          detections.length > 0
-            ? `Found ${detections.length} anti-debug mechanisms. Each includes a bypassSuggestion.`
-            : 'No anti-debug mechanisms detected in imports.',
+        detections: [],
+        count: 0,
+        platformNote:
+          `Anti-cheat import scanning is Windows-only (current platform: ${process.platform}). ` +
+          'The import-table analysis requires PE parsing of loaded modules; use memory_region_enumerate and memory_integrity_check for cross-platform code inspection.',
+        limitations: [
+          'Anti-cheat detection on non-Windows platforms is limited to memory-integrity checks (memory_integrity_check) and guard-page scanning (memory_guard_pages) — both work on Linux and macOS.',
+          'Import-table analysis (kernel32/ntdll API enumeration) is Windows-only.',
+          'Kernel driver enumeration and ETW provider inspection are out of scope for a user-mode tool.',
+        ],
+        hint: 'On this platform use memory_integrity_check to compare code sections against disk, and memory_guard_pages to detect anti-tamper guards. Import-table scans require Windows.',
       };
     });
   }
 
   async handleGuardPages(args: Record<string, unknown>) {
     return handleSafe(async () => {
-      if (!this.antiCheatDetector) {
-        throw new Error(
-          'Anti-cheat detection tools (memory_anticheat_*, memory_guard_pages, memory_integrity_check) are only supported on Windows. ' +
-            'These tools require Win32 process introspection APIs.',
-        );
-      }
       const pid = await this.resolvePid(args.pid);
       const maxRegions = argNumber(args, 'maxRegions', 10000);
       if (!Number.isFinite(maxRegions) || maxRegions <= 0) {
@@ -212,36 +363,53 @@ export class IntegrityHandlers {
           `${TOOL_GUARD_PAGES}: argument "maxRegions" must be a positive number, got: ${JSON.stringify(args.maxRegions)}`,
         );
       }
-      const result = await this.antiCheatDetector.scanGuardPages(pid);
+
+      // Win32 fast path — AntiCheatDetector (koffi/VirtualQueryEx)
+      if (this.antiCheatDetector) {
+        const result = await this.antiCheatDetector.scanGuardPages(pid);
+        const { guardPages, stats } = result;
+        const truncated = guardPages.length > maxRegions;
+        const filtered = truncated ? guardPages.slice(0, maxRegions) : guardPages;
+        return {
+          guardPages: filtered,
+          count: filtered.length,
+          scan: stats,
+          truncated: truncated || stats.truncated,
+          hint:
+            truncated || stats.truncated
+              ? `Scan stopped after ${truncated ? maxRegions : stats.scannedRegions} regions${truncated ? ' (maxRegions limit)' : ''} in ${stats.durationMs}ms to avoid hanging. Results may be partial.`
+              : guardPages.length > 0
+                ? `Found ${guardPages.length} guard page regions — these may indicate anti-tampering.`
+                : 'No guard pages found.',
+        };
+      }
+
+      // Cross-platform fallback — PlatformMemoryAPI (works on Linux/macOS too)
+      const api = getPlatformApi();
+      if (!api) {
+        throw new Error(
+          `${TOOL_GUARD_PAGES}: no platform memory provider is available on ${process.platform}. ` +
+            'This tool requires a native memory backend.',
+        );
+      }
+      const result = await crossPlatformScanGuardPages(api, pid, maxRegions, 2000);
       const { guardPages, stats } = result;
-
-      // Truncate results if exceeding maxRegions
-      const truncated = guardPages.length > maxRegions;
-      const filteredPages = truncated ? guardPages.slice(0, maxRegions) : guardPages;
-
       return {
-        guardPages: filteredPages,
-        count: filteredPages.length,
+        guardPages,
+        count: guardPages.length,
         scan: stats,
-        truncated: truncated || stats.truncated,
+        truncated: stats.truncated,
+        platformNote: `Platform: ${api.platform}. Guard-page detection uses VirtualQueryEx / /proc/pid/maps / mach_vm_region (vendor-specific PAGE_GUARD flags are Windows-only).`,
         hint:
-          truncated || stats.truncated
-            ? `Scan stopped after ${truncated ? maxRegions : stats.scannedRegions} regions${truncated ? ' (maxRegions limit)' : ''} in ${stats.durationMs}ms to avoid hanging. Results may be partial.`
-            : guardPages.length > 0
-              ? `Found ${guardPages.length} guard page regions — these may indicate anti-tampering.`
-              : 'No guard pages found.',
+          guardPages.length > 0
+            ? `Found ${guardPages.length} guard-page regions.`
+            : `No guard pages found (platform: ${api.platform}). System-level guard pages on non-Windows platforms are rare — most anti-tampering uses mprotect or mach_vm_protect directly.`,
       };
     });
   }
 
   async handleIntegrityCheck(args: Record<string, unknown>) {
     return handleSafe(async () => {
-      if (!this.antiCheatDetector) {
-        throw new Error(
-          'Anti-cheat detection tools (memory_anticheat_*, memory_guard_pages, memory_integrity_check) are only supported on Windows. ' +
-            'These tools require Win32 process introspection APIs.',
-        );
-      }
       const pid = await this.resolvePid(args.pid);
       const maxSections = argNumber(args, 'maxSections', 100);
       if (!Number.isFinite(maxSections) || maxSections <= 0) {
@@ -250,26 +418,54 @@ export class IntegrityHandlers {
         );
       }
       const moduleName = argString(args, 'moduleName');
-      const result = await this.antiCheatDetector.scanIntegrity(pid, moduleName);
+
+      // Win32 fast path — AntiCheatDetector (PE comparison, koffi)
+      if (this.antiCheatDetector) {
+        const result = await this.antiCheatDetector.scanIntegrity(pid, moduleName);
+        const { sections, stats } = result;
+        const truncated = sections.length > maxSections;
+        const filtered = truncated ? sections.slice(0, maxSections) : sections;
+        const filteredModified = filtered.filter((r) => r.isModified);
+        return {
+          sections: filtered,
+          totalChecked: filtered.length,
+          modifiedCount: filteredModified.length,
+          scan: stats,
+          truncated: truncated || stats.truncated,
+          hint:
+            truncated || stats.truncated
+              ? `Checked ${stats.scannedSections} executable section(s)${truncated ? ` (maxSections limit: ${maxSections})` : ''} across ${stats.scannedModules} module(s) before hitting safety limits. Results may be partial.`
+              : filteredModified.length > 0
+                ? `${filteredModified.length} section(s) modified — code may have been patched or hooked.`
+                : 'All checked sections match disk — no runtime modifications detected.',
+        };
+      }
+
+      // Cross-platform fallback — ELF/Mach-O vs memory comparison
+      const api = getPlatformApi();
+      if (!api) {
+        throw new Error(
+          `${TOOL_INTEGRITY_CHECK}: no platform memory provider is available on ${process.platform}.`,
+        );
+      }
+      const result = await crossPlatformScanIntegrity(api, pid, moduleName);
       const { sections, stats } = result;
-
-      // Truncate results if exceeding maxSections
       const truncated = sections.length > maxSections;
-      const filteredSections = truncated ? sections.slice(0, maxSections) : sections;
-      const filteredModified = filteredSections.filter((r) => r.isModified);
-
+      const filtered = truncated ? sections.slice(0, maxSections) : sections;
+      const filteredModified = filtered.filter((r) => r.isModified);
       return {
-        sections: filteredSections,
-        totalChecked: filteredSections.length,
+        sections: filtered,
+        totalChecked: filtered.length,
         modifiedCount: filteredModified.length,
         scan: stats,
         truncated: truncated || stats.truncated,
+        platformNote: `Platform: ${api.platform}. Integrity comparison uses on-disk ELF (Linux) or Mach-O (macOS) section headers vs in-memory bytes read via PlatformMemoryAPI.`,
         hint:
-          truncated || stats.truncated
-            ? `Checked ${stats.scannedSections} executable section(s)${truncated ? ` (maxSections limit: ${maxSections})` : ''} across ${stats.scannedModules} module(s) before hitting safety limits. Results may be partial.`
-            : filteredModified.length > 0
-              ? `${filteredModified.length} section(s) modified — code may have been patched or hooked.`
-              : 'All checked sections match disk — no runtime modifications detected.',
+          filteredModified.length > 0
+            ? `${filteredModified.length} section(s) modified — code may have been patched or hooked.`
+            : sections.length > 0
+              ? 'All checked sections match disk — no runtime modifications detected.'
+              : `No loadable sections found to compare (platform: ${api.platform}). Use memory_region_enumerate to inspect loaded code segments.`,
       };
     });
   }

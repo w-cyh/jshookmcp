@@ -111,7 +111,12 @@ export const coreTools: Tool[] = [
       t
         .desc('Run webcrack-powered JavaScript deobfuscation with bundle unpacking.')
         .string('code', 'Obfuscated JavaScript source')
-        .enum('engine', ['auto', 'webcrack'], 'Deobfuscation engine', { default: 'auto' })
+        .enum(
+          'engine',
+          ['auto', 'webcrack', 'jscrambler', 'packer', 'vm'],
+          'Deobfuscation engine',
+          { default: 'auto' },
+        )
         .enum('llm', ['gpt-4', 'claude'], 'Preferred LLM for analysis', { default: 'gpt-4' })
         .boolean('detectOnly', 'Detect only without transformation (webcrack engine)', {
           default: false,

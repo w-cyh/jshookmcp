@@ -137,7 +137,7 @@ function parseSessionProfileCookie(value: unknown, index: number): SessionProfil
     cookie.sameSite,
     `sessionProfile.cookies[${index}].sameSite`,
   );
-  if (sameSite && !CLIENT_HINT_SAME_SITE.has(sameSite as SessionProfileCookie['sameSite'])) {
+  if (sameSite && !CLIENT_HINT_SAME_SITE.has(sameSite as 'Strict' | 'Lax' | 'None')) {
     throw new Error(`sessionProfile.cookies[${index}].sameSite is invalid`);
   }
 
@@ -147,7 +147,7 @@ function parseSessionProfileCookie(value: unknown, index: number): SessionProfil
   );
   if (
     sourceScheme &&
-    !CLIENT_HINT_SOURCE_SCHEME.has(sourceScheme as SessionProfileCookie['sourceScheme'])
+    !CLIENT_HINT_SOURCE_SCHEME.has(sourceScheme as 'Secure' | 'Unset' | 'NonSecure')
   ) {
     throw new Error(`sessionProfile.cookies[${index}].sourceScheme is invalid`);
   }
@@ -165,8 +165,8 @@ function parseSessionProfileCookie(value: unknown, index: number): SessionProfil
     httpOnly: parseOptionalBoolean(cookie.httpOnly, `sessionProfile.cookies[${index}].httpOnly`),
     secure: parseOptionalBoolean(cookie.secure, `sessionProfile.cookies[${index}].secure`),
     session: parseOptionalBoolean(cookie.session, `sessionProfile.cookies[${index}].session`),
-    sameSite: sameSite as SessionProfileCookie['sameSite'],
-    sourceScheme: sourceScheme as SessionProfileCookie['sourceScheme'],
+    sameSite: sameSite as 'Strict' | 'Lax' | 'None' | undefined,
+    sourceScheme: sourceScheme as 'Secure' | 'Unset' | 'NonSecure' | undefined,
   };
 }
 
@@ -239,10 +239,8 @@ function decodeAuthorizationCapability(
     throw new Error('authorizationCapability must be valid base64url-encoded JSON');
   }
 
-  const payload = expectRecord(
-    parsed,
-    'authorizationCapability payload',
-  ) as ReplayAuthorizationCapabilityPayload;
+  const raw = expectRecord(parsed, 'authorizationCapability payload');
+  const payload = raw as unknown as ReplayAuthorizationCapabilityPayload;
   if (payload.version !== undefined && payload.version !== 1) {
     throw new Error(`authorizationCapability version ${String(payload.version)} is not supported`);
   }
@@ -268,23 +266,30 @@ export function parseReplayAuthorization(
   if (authorizationArg !== undefined) {
     source = expectRecord(authorizationArg, 'authorization');
   } else if (capabilityArg !== undefined) {
-    source = decodeAuthorizationCapability(capabilityArg, requestId);
+    source = decodeAuthorizationCapability(capabilityArg, requestId) as unknown as Record<
+      string,
+      unknown
+    >;
   } else {
     return undefined;
   }
 
-  const allowedHosts = parseStringArray(source.allowedHosts, 'authorization.allowedHosts');
-  const allowedCidrs = parseStringArray(source.allowedCidrs, 'authorization.allowedCidrs');
+  // TS cannot prove that source is always assigned here (the early-return exhausts
+  // the undefined case), so assign to a new variable to close the analysis gap.
+  const auth = source!;
+
+  const allowedHosts = parseStringArray(auth.allowedHosts, 'authorization.allowedHosts');
+  const allowedCidrs = parseStringArray(auth.allowedCidrs, 'authorization.allowedCidrs');
   const allowPrivateNetwork = parseOptionalBoolean(
-    source.allowPrivateNetwork,
+    auth.allowPrivateNetwork,
     'authorization.allowPrivateNetwork',
   );
   const allowInsecureHttp = parseOptionalBoolean(
-    source.allowInsecureHttp,
+    auth.allowInsecureHttp,
     'authorization.allowInsecureHttp',
   );
-  const expiresAt = parseOptionalString(source.expiresAt, 'authorization.expiresAt');
-  const reason = parseOptionalString(source.reason, 'authorization.reason');
+  const expiresAt = parseOptionalString(auth.expiresAt, 'authorization.expiresAt');
+  const reason = parseOptionalString(auth.reason, 'authorization.reason');
 
   const authorization: NetworkAuthorizationInput = {};
   if (allowedHosts.length > 0) authorization.allowedHosts = allowedHosts;

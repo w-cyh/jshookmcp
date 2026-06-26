@@ -20,6 +20,12 @@ const TOOL_PATCH_NOP = 'memory_patch_nop';
 const TOOL_PATCH_UNDO = 'memory_patch_undo';
 const TOOL_CODE_CAVES = 'memory_code_caves';
 
+/** x64 exposes only 4 hardware debug registers (DR0-DR3). */
+const HW_BREAKPOINT_MAX = 4;
+/** NOP patches beyond this size are likely mistakes — reject to avoid zeroing
+ * large executable ranges. Use memory_patch_bytes for intentional large writes. */
+const PATCH_NOP_MAX_COUNT = 1024;
+
 const BREAKPOINT_ACCESS = new Set<BreakpointAccess>(['read', 'write', 'readwrite', 'execute']);
 const BREAKPOINT_SIZES = new Set<BreakpointSize>([1, 2, 4, 8] as unknown as BreakpointSize[]);
 
@@ -41,9 +47,6 @@ export class HookHandlers {
   }
 
   private async resolvePid(value: unknown): Promise<number> {
-    if (!this.processManager) {
-      return value as number;
-    }
     return await resolveMemoryDomainPid(value, this.processManager, this.ctx);
   }
 
@@ -68,6 +71,16 @@ export class HookHandlers {
     return handleSafe(async () => {
       if (!this.bpEngine) {
         throw new Error(WIN32_UNSUPPORTED_MSG);
+      }
+      // DR exhaustion guard: x64 has only 4 hardware debug registers (DR0-DR3).
+      // Surface this as a clear error instead of letting the native layer fail
+      // cryptically when no DR slot is available.
+      const active = this.bpEngine.listBreakpoints();
+      if (active.length >= HW_BREAKPOINT_MAX) {
+        throw new Error(
+          `${TOOL_BREAKPOINT}: all ${HW_BREAKPOINT_MAX} hardware debug registers (DR0-DR3) are in use. ` +
+            `Remove an existing breakpoint (memory_breakpoint action=remove) before setting a new one.`,
+        );
       }
       const pid = await this.resolvePid(args.pid);
       const address = validateHexAddress(args.address, 'address');
@@ -113,6 +126,14 @@ export class HookHandlers {
     return handleSafe(async () => {
       if (!this.bpEngine) {
         throw new Error(WIN32_UNSUPPORTED_MSG);
+      }
+      // Trace sets a breakpoint internally — same DR exhaustion constraint.
+      const active = this.bpEngine.listBreakpoints();
+      if (active.length >= HW_BREAKPOINT_MAX) {
+        throw new Error(
+          `${TOOL_BREAKPOINT}: all ${HW_BREAKPOINT_MAX} hardware debug registers (DR0-DR3) are in use. ` +
+            `Remove an existing breakpoint before tracing.`,
+        );
       }
       const pid = await this.resolvePid(args.pid);
       const address = validateHexAddress(args.address, 'address');
@@ -176,6 +197,12 @@ export class HookHandlers {
       const pid = await this.resolvePid(args.pid);
       const address = validateHexAddress(args.address, 'address');
       const count = requirePositiveIntArg(args.count, 'count', TOOL_PATCH_NOP);
+      if (count > PATCH_NOP_MAX_COUNT) {
+        throw new Error(
+          `${TOOL_PATCH_NOP}: count ${count} exceeds maximum ${PATCH_NOP_MAX_COUNT} bytes. ` +
+            `NOP-ing huge ranges risks corrupting control flow; use memory_patch_bytes for large intentional writes.`,
+        );
+      }
       const start = Date.now();
       try {
         const patch = await this.injector.nopBytes(pid, address, count);

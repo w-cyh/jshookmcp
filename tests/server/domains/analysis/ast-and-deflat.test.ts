@@ -11,6 +11,9 @@ import type {
 import type { CodeCollector } from '@server/domains/shared/modules/collector';
 import type { ScriptManager } from '@server/domains/shared/modules';
 import type { LLMSamplingBridge } from '@server/LLMSamplingBridge';
+import type { JScramberDeobfuscator } from '@modules/deobfuscator/JScramblerDeobfuscator';
+import type { UniversalUnpacker } from '@modules/deobfuscator/PackerDeobfuscator';
+import type { VMDeobfuscator } from '@modules/deobfuscator/VMDeobfuscator';
 
 function parseJson(response: {
   content: Array<{ type: string; text?: string }>;
@@ -34,6 +37,12 @@ const stubDeps = {
     isSamplingSupported: vi.fn().mockReturnValue(false),
     sampleText: vi.fn(),
   } as unknown as LLMSamplingBridge,
+  jscramblerDeobfuscator: { deobfuscate: vi.fn() } as unknown as JScramberDeobfuscator,
+  packerDeobfuscator: { deobfuscate: vi.fn() } as unknown as UniversalUnpacker,
+  vmDeobfuscator: {
+    detectVMProtection: vi.fn(),
+    deobfuscateVM: vi.fn(),
+  } as unknown as VMDeobfuscator,
 };
 
 const handler = new CoreAnalysisHandlers(stubDeps);

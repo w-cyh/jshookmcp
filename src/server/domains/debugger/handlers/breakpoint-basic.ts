@@ -16,6 +16,7 @@ export class BreakpointBasicHandlers {
     const lineNumber = argNumber(args, 'lineNumber', 0);
     const columnNumber = argNumber(args, 'columnNumber');
     const condition = argString(args, 'condition');
+    const logMessage = argString(args, 'logMessage');
 
     let breakpoint;
 
@@ -25,6 +26,7 @@ export class BreakpointBasicHandlers {
         lineNumber,
         columnNumber,
         condition,
+        logMessage,
       });
     } else if (scriptId) {
       breakpoint = await this.deps.debuggerManager.setBreakpoint({
@@ -32,6 +34,7 @@ export class BreakpointBasicHandlers {
         lineNumber,
         columnNumber,
         condition,
+        logMessage,
       });
     } else {
       throw new Error('Either url or scriptId must be provided');
@@ -54,6 +57,7 @@ export class BreakpointBasicHandlers {
                 breakpointId: breakpoint.breakpointId,
                 location: breakpoint.location,
                 condition: breakpoint.condition,
+                logMessage: breakpoint.logMessage,
                 enabled: breakpoint.enabled,
               },
             },
@@ -101,6 +105,7 @@ export class BreakpointBasicHandlers {
                 breakpointId: bp.breakpointId,
                 location: bp.location,
                 condition: bp.condition,
+                logMessage: bp.logMessage,
                 enabled: bp.enabled,
                 hitCount: bp.hitCount,
               })),

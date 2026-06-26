@@ -1,4 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
+import os from 'node:os';
+import path from 'node:path';
 
 export type SyscallBackend = 'etw' | 'strace' | 'dtrace';
 
@@ -44,7 +46,7 @@ const SYNTHETIC_EVENT_SEEDS: Readonly<Record<SyscallBackend, ReadonlyArray<Synth
   etw: [
     {
       syscall: 'NtCreateFile',
-      args: ['C:\\Windows\\Temp\\jshookmcp.log', 'GENERIC_READ'],
+      args: [path.join(os.tmpdir(), 'jshookmcp.log'), 'GENERIC_READ'],
       returnValue: 0,
       duration: 0.7,
     },

@@ -10,6 +10,9 @@ import type { ToolArgs, ToolResponse } from '@server/types';
 import type { DeobfuscateMappingRule } from '@internal-types/deobfuscator';
 import { derotateStringArray } from '@modules/deobfuscator/AdvancedDeobfuscator.ast';
 import { runWebcrack } from '@modules/deobfuscator/webcrack';
+import { JScramberDeobfuscator } from '@modules/deobfuscator/JScramblerDeobfuscator';
+import { UniversalUnpacker } from '@modules/deobfuscator/PackerDeobfuscator';
+import { VMDeobfuscator } from '@modules/deobfuscator/VMDeobfuscator';
 import { parseCode, traverseAst, generateCode, t } from '../shared/ast-utils';
 import type { NodePath } from '@babel/traverse';
 
@@ -60,6 +63,9 @@ export async function handleDeobfuscate(
   args: ToolArgs,
   deobfuscator: Deobfuscator,
   advancedDeobfuscator: AdvancedDeobfuscator,
+  jscramblerDeobfuscator: JScramberDeobfuscator,
+  packerDeobfuscator: UniversalUnpacker,
+  vmDeobfuscator: VMDeobfuscator,
 ): Promise<ToolResponse> {
   const code = requireCodeArg(args, 'deobfuscate');
   if (!code) {
@@ -69,7 +75,41 @@ export async function handleDeobfuscate(
     });
   }
 
-  const engine = argEnum(args, 'engine', new Set(['auto', 'webcrack'] as const), 'auto');
+  const engine = argEnum(
+    args,
+    'engine',
+    new Set(['auto', 'webcrack', 'jscrambler', 'packer', 'vm'] as const),
+    'auto',
+  );
+
+  // jscrambler engine
+  if (engine === 'jscrambler') {
+    const result = await jscramblerDeobfuscator.deobfuscate({ code });
+    return asJsonResponse(result);
+  }
+
+  // packer engine (UniversalUnpacker auto-detects Dean Edwards/AAEncode/URLEncode)
+  if (engine === 'packer') {
+    const result = await packerDeobfuscator.deobfuscate(code);
+    return asJsonResponse(result);
+  }
+
+  // vm engine
+  if (engine === 'vm') {
+    const detection = vmDeobfuscator.detectVMProtection(code);
+    if (!detection.detected) {
+      return asJsonResponse({
+        success: false,
+        error: 'No VM protection detected in the provided code',
+        detection,
+      });
+    }
+    const result = await vmDeobfuscator.deobfuscateVM(code, {
+      type: detection.type,
+      instructionCount: detection.instructionCount,
+    });
+    return asJsonResponse({ ...result, detection });
+  }
 
   // webcrack engine = former advanced_deobfuscate path
   if (engine === 'webcrack') {

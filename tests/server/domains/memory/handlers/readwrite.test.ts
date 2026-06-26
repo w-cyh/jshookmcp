@@ -22,6 +22,8 @@ describe('ReadWriteHandlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.keys(mockmemCtrl).forEach((key) => delete mockmemCtrl[key]);
+    // Default: no active freezes — freeze-concurrency guard passes.
+    mockmemCtrl.listFreezes = vi.fn().mockReturnValue([]);
     auditTrail = new MemoryAuditTrail();
     handlers = new ReadWriteHandlers(mockmemCtrl, undefined, undefined, auditTrail);
   });

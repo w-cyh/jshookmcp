@@ -14,6 +14,9 @@ import { PersistentCache } from '@utils/cache/PersistentCache';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync, rmSync } from 'fs';
+import { JScramberDeobfuscator } from '@modules/deobfuscator/JScramblerDeobfuscator';
+import { UniversalUnpacker } from '@modules/deobfuscator/PackerDeobfuscator';
+import { VMDeobfuscator } from '@modules/deobfuscator/VMDeobfuscator';
 import type { ToolResponse } from '@server/types';
 import type { LLMSamplingBridge } from '@server/LLMSamplingBridge';
 
@@ -90,6 +93,9 @@ describe('DeobfuscateCache Integration', () => {
       cryptoDetector: new CryptoDetector(),
       hookManager: new HookManager(),
       samplingBridge: createMockSamplingBridge(),
+      jscramblerDeobfuscator: new JScramberDeobfuscator(),
+      packerDeobfuscator: new UniversalUnpacker(),
+      vmDeobfuscator: new VMDeobfuscator(),
     });
   };
 

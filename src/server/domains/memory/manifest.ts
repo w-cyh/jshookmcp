@@ -40,6 +40,7 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
     structureAnalyzer,
     codeInjector,
     memoryController,
+    heapAnalyzerMod,
   ] = await Promise.all([
     import('@native/MemoryScanner'),
     import('@native/MemoryScanSession'),
@@ -47,6 +48,7 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
     import('@native/StructureAnalyzer'),
     import('@native/CodeInjector'),
     import('@native/MemoryController'),
+    import('@native/HeapAnalyzer'),
   ]);
   if (!globalProcessManager) {
     globalProcessManager = new UnifiedProcessManager();
@@ -54,14 +56,12 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
 
   if (IS_WIN32) {
     // Lazy-load Win32-only engines — only load on Windows
-    const [hardwareBreakpointEngine, speedhack, heapAnalyzer, peAnalyzer, antiCheatDetector] =
-      await Promise.all([
-        import('@native/HardwareBreakpoint'),
-        import('@native/Speedhack'),
-        import('@native/HeapAnalyzer'),
-        import('@native/PEAnalyzer'),
-        import('@native/AntiCheatDetector'),
-      ]);
+    const [hardwareBreakpointEngine, speedhack, peAnalyzer, antiCheatDetector] = await Promise.all([
+      import('@native/HardwareBreakpoint'),
+      import('@native/Speedhack'),
+      import('@native/PEAnalyzer'),
+      import('@native/AntiCheatDetector'),
+    ]);
 
     ctxAny[DEP_KEY] = new MemoryScanHandlers(
       memoryScanner.memoryScanner,
@@ -72,7 +72,7 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
       codeInjector.codeInjector,
       memoryController.memoryController,
       speedhack.speedhack,
-      heapAnalyzer.heapAnalyzer,
+      heapAnalyzerMod.heapAnalyzer,
       peAnalyzer.peAnalyzer,
       antiCheatDetector.antiCheatDetector,
       ctx.eventBus,
@@ -80,7 +80,8 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
       ctx,
     );
   } else {
-    // macOS/Linux: Win32-only engines not available — pass null
+    // macOS/Linux: Win32-only engines not available — pass null.
+    // heapAnalyzer is always wired (cross-platform region-based fallback).
     ctxAny[DEP_KEY] = new MemoryScanHandlers(
       memoryScanner.memoryScanner,
       scanSessionManager.scanSessionManager,
@@ -90,7 +91,7 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
       codeInjector.codeInjector,
       memoryController.memoryController,
       null, // speedhack
-      null, // heapAnalyzer
+      heapAnalyzerMod.heapAnalyzer, // heapAnalyzer — cross-platform
       null, // peAnalyzer
       null, // antiCheatDetector
       ctx.eventBus,

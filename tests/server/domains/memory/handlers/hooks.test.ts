@@ -30,6 +30,8 @@ describe('HookHandlers', () => {
     vi.clearAllMocks();
     Object.keys(mockbpEngine).forEach((key) => delete mockbpEngine[key]);
     Object.keys(mockinjector).forEach((key) => delete mockinjector[key]);
+    // Default: no active breakpoints — DR-exhaustion guard passes.
+    mockbpEngine.listBreakpoints = vi.fn().mockReturnValue([]);
     auditTrail = new MemoryAuditTrail();
     handlers = new HookHandlers(mockbpEngine, mockinjector, undefined, undefined, auditTrail);
   });

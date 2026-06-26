@@ -580,8 +580,6 @@ function defaultGhidraDiscoveryRoots(): string[] {
   if (process.platform === 'win32') {
     add(process.env['ProgramFiles']);
     add(process.env['ProgramFiles(x86)']);
-    add('D:\\coding\\security');
-    add('D:\\tools');
     add('C:\\tools');
   } else {
     add('/opt');

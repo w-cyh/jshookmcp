@@ -30,7 +30,7 @@ Actions:
 - list: List active breakpoints of the given type.
 
 Types & params:
-- code: lineNumber (required), scriptId?, columnNumber?, condition?
+- code: lineNumber (required), scriptId?, columnNumber?, condition?, logMessage? (logpoint: logs without pausing)
 - xhr: urlPattern (required for set)
 - event: eventName (required for set), targetName?
 - event_category: category (required for set)
@@ -48,6 +48,10 @@ Types & params:
       .number('lineNumber', 'Line number 0-based (type=code, action=set)')
       .number('columnNumber', 'Column number 0-based (type=code)')
       .string('condition', 'Conditional expression (type=code)')
+      .string(
+        'logMessage',
+        'Log message template for logpoints e.g. "x={x}" (type=code, logs without pausing)',
+      )
       .string('urlPattern', 'URL pattern with wildcards (type=xhr, action=set)')
       .string('eventName', 'Event name e.g. "click" (type=event, action=set)')
       .string('targetName', 'Target name e.g. "WebSocket" (type=event)')

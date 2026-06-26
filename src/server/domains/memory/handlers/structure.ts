@@ -5,6 +5,8 @@ import type { MCPServerContext } from '@server/MCPServer.context';
 import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 import { handleSafe } from '@server/domains/shared/ResponseBuilder';
 import { argBool, argNumber, argString, argStringArray } from '@server/domains/shared/parse-args';
+import { logger } from '@utils/logger';
+import { MemoryAuditTrail } from '@modules/process/memory/AuditTrail';
 import { parseJsonArg } from './validation';
 import { parseAddressFormula } from './address-formula';
 
@@ -12,6 +14,10 @@ const TOOL_STRUCTURE_ANALYZE = 'memory_structure_analyze';
 const TOOL_VTABLE_PARSE = 'memory_vtable_parse';
 const TOOL_STRUCTURE_EXPORT_C = 'memory_structure_export_c';
 const TOOL_STRUCTURE_COMPARE = 'memory_structure_compare';
+
+/** Upper bound for structure analysis/compare sizes — reading megabytes into
+ * the structure inferencer is almost always a mistake and risks huge reads. */
+const STRUCTURE_MAX_SIZE = 64 * 1024;
 
 const FIELD_TYPE_ALIASES: Record<string, FieldType> = {
   int8_t: 'int8',
@@ -76,17 +82,36 @@ function normalizeStructureForExport(raw: unknown): InferredStruct {
 }
 
 export class StructureHandlers {
+  private readonly auditTrail: MemoryAuditTrail | null;
+
   constructor(
     private readonly structAnalyzer: StructureAnalyzer,
     private readonly processManager?: UnifiedProcessManager,
     private readonly ctx?: MCPServerContext,
-  ) {}
+    auditTrail?: MemoryAuditTrail | null,
+  ) {
+    this.auditTrail = auditTrail ?? null;
+  }
 
   private async resolvePid(value: unknown): Promise<number> {
-    if (!this.processManager) {
-      return value as number;
-    }
     return await resolveMemoryDomainPid(value, this.processManager, this.ctx);
+  }
+
+  private recordAudit(entry: {
+    operation: string;
+    pid: number | null;
+    address: string | null;
+    size: number | null;
+    result: 'success' | 'failure';
+    error?: string;
+    durationMs: number;
+  }): void {
+    if (!this.auditTrail) return;
+    try {
+      this.auditTrail.record(entry);
+    } catch (auditError) {
+      logger.warn('Memory audit trail recording failed:', auditError);
+    }
   }
 
   async handleStructureAnalyze(args: Record<string, unknown>) {
@@ -109,12 +134,26 @@ export class StructureHandlers {
           `${TOOL_STRUCTURE_ANALYZE}: argument "size" must be a positive number, got: ${JSON.stringify(args.size)}`,
         );
       }
+      if (size !== undefined && size > STRUCTURE_MAX_SIZE) {
+        throw new Error(
+          `${TOOL_STRUCTURE_ANALYZE}: size ${size} exceeds maximum ${STRUCTURE_MAX_SIZE} bytes (64KB). Analyze a smaller region or narrow the address first.`,
+        );
+      }
       const otherInstances = argStringArray(args, 'otherInstances');
       const parseRtti = argBool(args, 'parseRtti', true);
+      const start = Date.now();
       const result = await this.structAnalyzer.analyzeStructure(pid, address, {
         size,
         otherInstances,
         parseRtti,
+      });
+      this.recordAudit({
+        operation: 'structure_analyze',
+        pid,
+        address,
+        size: result.fields?.length ?? 0,
+        result: 'success',
+        durationMs: Date.now() - start,
       });
       return {
         ...result,
@@ -140,6 +179,14 @@ export class StructureHandlers {
         throw new Error(`${TOOL_VTABLE_PARSE}: ${formula.error}`);
       }
       const vtableAddress = formula.address;
+      // x64 vtables must be pointer-aligned (8 bytes). A misaligned address
+      // produces garbage entries or a fault — reject before the native read.
+      const vtableBig = BigInt(`0x${vtableAddress.toLowerCase().replace(/^0x/, '')}`);
+      if (vtableBig % 8n !== 0n) {
+        throw new Error(
+          `${TOOL_VTABLE_PARSE}: vtableAddress ${vtableAddress} is not 8-byte aligned. x64 vtables must be pointer-aligned (address divisible by 8).`,
+        );
+      }
       return { ...(await this.structAnalyzer.parseVtable(pid, vtableAddress)) };
     });
   }
@@ -186,6 +233,11 @@ export class StructureHandlers {
       if (size !== undefined && (!Number.isFinite(size) || size <= 0)) {
         throw new Error(
           `${TOOL_STRUCTURE_COMPARE}: argument "size" must be a positive number, got: ${JSON.stringify(args.size)}`,
+        );
+      }
+      if (size !== undefined && size > STRUCTURE_MAX_SIZE) {
+        throw new Error(
+          `${TOOL_STRUCTURE_COMPARE}: size ${size} exceeds maximum ${STRUCTURE_MAX_SIZE} bytes (64KB). Compare a smaller region.`,
         );
       }
       const result = await this.structAnalyzer.compareInstances(pid, address1, address2, size);

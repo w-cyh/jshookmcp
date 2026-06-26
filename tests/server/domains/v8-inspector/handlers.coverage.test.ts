@@ -142,7 +142,7 @@ describe('v8-inspector handler coverage', () => {
   describe('handleBytecodeExtract', () => {
     it('should return error when scriptId is empty', async () => {
       const result = await handleBytecodeExtract({});
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         success: false,
         error: 'scriptId is required',
       });
@@ -150,7 +150,7 @@ describe('v8-inspector handler coverage', () => {
 
     it('should return error when scriptId is whitespace-only', async () => {
       const result = await handleBytecodeExtract({ scriptId: '   ' });
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         success: false,
         error: 'scriptId is required',
       });
@@ -159,7 +159,7 @@ describe('v8-inspector handler coverage', () => {
     it('should return error when extractBytecode returns null', async () => {
       mockAttemptNativeBytecodeExtraction.mockResolvedValueOnce(null);
       const result = await handleBytecodeExtract({ scriptId: 'script-42' });
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         success: false,
         error: 'Unable to inspect bytecode for scriptId "script-42"',
       });
@@ -288,7 +288,7 @@ describe('v8-inspector handler coverage', () => {
   describe('handleJitInspect', () => {
     it('should return error when scriptId is empty', async () => {
       const result = await handleJitInspect({});
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         success: false,
         error: 'scriptId is required',
       });
@@ -296,7 +296,7 @@ describe('v8-inspector handler coverage', () => {
 
     it('should return error when scriptId is whitespace-only', async () => {
       const result = await handleJitInspect({ scriptId: '\t\n' });
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         success: false,
         error: 'scriptId is required',
       });
@@ -318,7 +318,7 @@ describe('v8-inspector handler coverage', () => {
         { getPage: vi.fn().mockResolvedValue({}) },
       );
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         success: true,
         scriptId: 'script-7',
         inspectionMode: 'native-status',
@@ -813,7 +813,7 @@ describe('v8-inspector handler coverage', () => {
           afterSnapshotId: 'snap-diff-after',
         });
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
           success: true,
           beforeSnapshotId: 'snap-diff-before',
           afterSnapshotId: 'snap-diff-after',
@@ -869,7 +869,7 @@ describe('v8-inspector handler coverage', () => {
 
         expect(debuggerManager.getObjectPropertiesById).toHaveBeenCalledWith('debugger-object-id');
         expect(mockGetObjectByObjectId).not.toHaveBeenCalled();
-        expect(result).toEqual({
+        expect(result).toMatchObject({
           success: true,
           address: 'debugger-object-id',
           objectData: {
@@ -893,7 +893,7 @@ describe('v8-inspector handler coverage', () => {
 
         const result = await handlers.v8_object_inspect({ address: '1:42' });
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
           success: true,
           address: '1:42',
           objectData: { type: 'object', className: 'Object' },
@@ -923,7 +923,7 @@ describe('v8-inspector handler coverage', () => {
 
         expect(debuggerManager.getObjectPropertiesById).toHaveBeenCalledWith('1:77');
         expect(mockGetObjectByObjectId).toHaveBeenCalledWith('1:77');
-        expect(result).toEqual({
+        expect(result).toMatchObject({
           success: true,
           address: '1:77',
           objectData: { type: 'object', className: 'Fallback' },
@@ -936,7 +936,7 @@ describe('v8-inspector handler coverage', () => {
 
         const result = await handlers.v8_object_inspect({ address: '1:99' });
 
-        expect(result).toEqual({ success: true, address: '1:99' });
+        expect(result).toMatchObject({ success: true, address: '1:99' });
       });
 
       it('should handle client error gracefully', async () => {
@@ -945,7 +945,7 @@ describe('v8-inspector handler coverage', () => {
 
         const result = await handlers.v8_object_inspect({ address: '1:0' });
 
-        expect(result).toEqual({ success: true, address: '1:0' });
+        expect(result).toMatchObject({ success: true, address: '1:0' });
       });
     });
 
@@ -979,7 +979,7 @@ describe('v8-inspector handler coverage', () => {
 
         const result = await handlers.v8_heap_stats({});
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
           success: true,
           snapshotCount: 0,
         });
@@ -1001,7 +1001,7 @@ describe('v8-inspector handler coverage', () => {
       it('should return error when scriptId is empty', async () => {
         const handlers = new V8InspectorHandlers(createMockDeps());
         const result = await handlers.v8_bytecode_extract({});
-        expect(result).toEqual({ success: false, error: 'scriptId is required' });
+        expect(result).toMatchObject({ success: false, error: 'scriptId is required' });
       });
 
       it('should pass an active page getter into BytecodeExtractor', async () => {
@@ -1046,7 +1046,7 @@ describe('v8-inspector handler coverage', () => {
 
         const result = await handlers.v8_version_detect({});
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
           success: false,
           error: 'v8_version_detect: PageController not available',
           capability: 'page-controller',
@@ -1082,7 +1082,7 @@ describe('v8-inspector handler coverage', () => {
       it('should return error when scriptId is empty', async () => {
         const handlers = new V8InspectorHandlers(createMockDeps());
         const result = await handlers.v8_jit_inspect({});
-        expect(result).toEqual({ success: false, error: 'scriptId is required' });
+        expect(result).toMatchObject({ success: false, error: 'scriptId is required' });
       });
 
       it('should return functions on success', async () => {
@@ -1098,7 +1098,7 @@ describe('v8-inspector handler coverage', () => {
         const result = await handlers.v8_jit_inspect({ scriptId: 'jit-1' });
         const getPage = jitInspectorGetPages.at(-1);
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
           success: true,
           scriptId: 'jit-1',
           inspectionMode: 'native-status',

@@ -25,6 +25,7 @@ export const v8InspectorTools: Tool[] = [
       .desc('Compare two heap snapshots to find allocation changes.')
       .string('beforeSnapshotId', 'Baseline snapshot ID')
       .string('afterSnapshotId', 'Updated snapshot ID')
+      .number('topN', 'Number of top added/removed nodes to return (default: 50)')
       .required('beforeSnapshotId', 'afterSnapshotId')
       .query(),
   ),

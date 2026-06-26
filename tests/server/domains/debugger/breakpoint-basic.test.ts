@@ -82,6 +82,35 @@ describe('BreakpointBasicHandlers', () => {
     );
   });
 
+  it('sets a breakpoint with logMessage (logpoint)', async () => {
+    debuggerManager.setBreakpointByUrl.mockResolvedValueOnce({
+      breakpointId: 'bp-log',
+      location: { url: 'app.js', lineNumber: 15 },
+      condition: undefined,
+      logMessage: 'x={x}, y={y}',
+      enabled: true,
+    });
+    const handlers = new BreakpointBasicHandlers({ debuggerManager } as any);
+
+    const body = parseJson<any>(
+      await handlers.handleBreakpointSet({
+        url: 'app.js',
+        lineNumber: 15,
+        logMessage: 'x={x}, y={y}',
+      }),
+    );
+
+    expect(debuggerManager.setBreakpointByUrl).toHaveBeenCalledWith({
+      url: 'app.js',
+      lineNumber: 15,
+      columnNumber: undefined,
+      condition: undefined,
+      logMessage: 'x={x}, y={y}',
+    });
+    expect(body.breakpoint.logMessage).toBe('x={x}, y={y}');
+    expect(body.success).toBe(true);
+  });
+
   it('removes a breakpoint by id', async () => {
     const handlers = new BreakpointBasicHandlers({ debuggerManager } as any);
 
@@ -115,6 +144,7 @@ describe('BreakpointBasicHandlers', () => {
           breakpointId: 'bp-1',
           location: { url: 'app.js', lineNumber: 3 },
           condition: 'ready',
+          logMessage: undefined,
           enabled: true,
           hitCount: 7,
         },

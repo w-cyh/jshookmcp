@@ -34,7 +34,7 @@ const SPIRV_MAGIC = 0x07230203;
 /** Header length in words. */
 const HEADER_WORD_COUNT = 5;
 
-// ─── Opcodes (subset relevant to reflection) ─────────────────────────────────
+// ─── Opcodes (subset relevant to reflection + disassembly) ────────────────────
 
 const OpEntryPoint = 15;
 const OpName = 19;
@@ -56,6 +56,58 @@ const OpTypeFunction = 33;
 const OpVariable = 59;
 const OpDecorate = 71;
 const OpMemberDecorate = 72;
+const OpFunction = 54;
+const OpFunctionEnd = 56;
+const OpLabel = 248;
+const OpReturn = 253;
+const OpBranch = 252;
+const OpLoopMerge = 246;
+const OpSelectionMerge = 247;
+const OpLoad = 55;
+const OpStore = 62;
+const OpAccessChain = 65;
+const OpImageSample = 80;
+const OpMemoryBarrier = 226;
+const OpControlBarrier = 227;
+const OpExtInst = 11;
+
+/** Opcode → human-readable name (used by disassembler). */
+export const OPCODE_NAMES: Record<number, string> = {
+  [OpEntryPoint]: 'OpEntryPoint',
+  [OpName]: 'OpName',
+  [OpMemberName]: 'OpMemberName',
+  [OpTypeVoid]: 'OpTypeVoid',
+  [OpTypeBool]: 'OpTypeBool',
+  [OpTypeInt]: 'OpTypeInt',
+  [OpTypeFloat]: 'OpTypeFloat',
+  [OpTypeVector]: 'OpTypeVector',
+  [OpTypeMatrix]: 'OpTypeMatrix',
+  [OpTypeImage]: 'OpTypeImage',
+  [OpTypeSampler]: 'OpTypeSampler',
+  [OpTypeSampledImage]: 'OpTypeSampledImage',
+  [OpTypeArray]: 'OpTypeArray',
+  [OpTypeRuntimeArray]: 'OpTypeRuntimeArray',
+  [OpTypeStruct]: 'OpTypeStruct',
+  [OpTypePointer]: 'OpTypePointer',
+  [OpTypeFunction]: 'OpTypeFunction',
+  [OpVariable]: 'OpVariable',
+  [OpDecorate]: 'OpDecorate',
+  [OpMemberDecorate]: 'OpMemberDecorate',
+  [OpFunction]: 'OpFunction',
+  [OpFunctionEnd]: 'OpFunctionEnd',
+  [OpLabel]: 'OpLabel',
+  [OpReturn]: 'OpReturn',
+  [OpBranch]: 'OpBranch',
+  [OpLoopMerge]: 'OpLoopMerge',
+  [OpSelectionMerge]: 'OpSelectionMerge',
+  [OpLoad]: 'OpLoad',
+  [OpStore]: 'OpStore',
+  [OpAccessChain]: 'OpAccessChain',
+  [OpImageSample]: 'OpImageSample',
+  [OpMemoryBarrier]: 'OpMemoryBarrier',
+  [OpControlBarrier]: 'OpControlBarrier',
+  [OpExtInst]: 'OpExtInst',
+};
 
 // ─── Decoration enum values (SPIR-V spec) ────────────────────────────────────
 
@@ -135,20 +187,22 @@ export interface SpirvStruct {
   fields: Array<{ name: string; type: string }>;
 }
 
-/** Full reflection result. */
+/**
+ * Full reflection result + raw instructions for disassembly.
+ */
 export interface SpirvReflectResult {
   magic: number;
   versionMajor: number;
   versionMinor: number;
   generator: number;
-  /** ID bound — one past the highest ID used in the module. */
   bound: number;
   entryPoints: SpirvEntryPoint[];
   bindings: SpirvBinding[];
   locations: SpirvLocation[];
   structs: SpirvStruct[];
-  /** Non-fatal warnings (malformed input, truncation, bad magic, etc.). */
   warnings: string[];
+  /** Raw decoded instructions for instruction-level disassembly. */
+  instructions?: Instruction[];
 }
 
 // ─── Input decoding ──────────────────────────────────────────────────────────
@@ -365,6 +419,7 @@ export function parseSpirv(data: Uint8Array): SpirvReflectResult {
       locations: [],
       structs: [],
       warnings,
+      instructions: [],
     };
   }
 
@@ -557,6 +612,7 @@ export function parseSpirv(data: Uint8Array): SpirvReflectResult {
     locations,
     structs,
     warnings,
+    instructions,
   };
 }
 

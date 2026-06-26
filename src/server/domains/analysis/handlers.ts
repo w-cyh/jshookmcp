@@ -36,6 +36,9 @@ import { handleManageHooks } from './handlers/hooks';
 import { handleWebpackEnumerate } from './handlers/webpack';
 import { handleAiSuggestExploits } from './handlers/exploit-suggestion';
 import { JSVMPDeobfuscator } from '@modules/deobfuscator/JSVMPDeobfuscator';
+import { JScramberDeobfuscator } from '@modules/deobfuscator/JScramblerDeobfuscator';
+import { UniversalUnpacker } from '@modules/deobfuscator/PackerDeobfuscator';
+import { VMDeobfuscator } from '@modules/deobfuscator/VMDeobfuscator';
 import type { LLMSamplingBridge } from '@server/LLMSamplingBridge';
 
 interface CoreAnalysisHandlerDeps {
@@ -48,6 +51,9 @@ interface CoreAnalysisHandlerDeps {
   cryptoDetector: CryptoDetector;
   hookManager: HookManager;
   samplingBridge: LLMSamplingBridge;
+  jscramblerDeobfuscator: JScramberDeobfuscator;
+  packerDeobfuscator: UniversalUnpacker;
+  vmDeobfuscator: VMDeobfuscator;
 }
 
 export class CoreAnalysisHandlers {
@@ -61,6 +67,9 @@ export class CoreAnalysisHandlers {
   private readonly hookManager: HookManager;
   private readonly samplingBridge: LLMSamplingBridge;
   private readonly jsvmpDeobfuscator: JSVMPDeobfuscator;
+  private readonly jscramblerDeobfuscator: JScramberDeobfuscator;
+  private readonly packerDeobfuscator: UniversalUnpacker;
+  private readonly vmDeobfuscator: VMDeobfuscator;
   private readonly collectionHandlers: CollectionHandlers;
   private readonly dataManagementHandlers: DataManagementHandlers;
 
@@ -75,6 +84,9 @@ export class CoreAnalysisHandlers {
     this.hookManager = deps.hookManager;
     this.samplingBridge = deps.samplingBridge;
     this.jsvmpDeobfuscator = new JSVMPDeobfuscator();
+    this.jscramblerDeobfuscator = deps.jscramblerDeobfuscator;
+    this.packerDeobfuscator = deps.packerDeobfuscator;
+    this.vmDeobfuscator = deps.vmDeobfuscator;
     this.collectionHandlers = new CollectionHandlers({
       collector: this.collector,
       scriptManager: this.scriptManager,
@@ -100,7 +112,14 @@ export class CoreAnalysisHandlers {
 
   // Deobfuscation
   async handleDeobfuscate(args: ToolArgs): Promise<ToolResponse> {
-    return handleDeobfuscate(args, this.deobfuscator, this.advancedDeobfuscator);
+    return handleDeobfuscate(
+      args,
+      this.deobfuscator,
+      this.advancedDeobfuscator,
+      this.jscramblerDeobfuscator,
+      this.packerDeobfuscator,
+      this.vmDeobfuscator,
+    );
   }
 
   async handleWebcrackUnpack(args: ToolArgs): Promise<ToolResponse> {

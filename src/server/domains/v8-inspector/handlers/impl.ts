@@ -235,6 +235,12 @@ export class V8InspectorHandlers {
     beforeSnapshotId: string;
     afterSnapshotId: string;
     sizeDeltaBytes: number;
+    sizeDelta: number;
+    addedCount: number;
+    removedCount: number;
+    added: Array<{ id: number; name: string; selfSize: number; type: string }>;
+    removed: Array<{ id: number; name: string; selfSize: number; type: string }>;
+    parseTimeMs: number;
   }> {
     const beforeSnapshotId =
       typeof args.beforeSnapshotId === 'string' ? args.beforeSnapshotId : undefined;
@@ -255,11 +261,46 @@ export class V8InspectorHandlers {
       throw new Error(`Snapshot ${afterSnapshotId} not found`);
     }
 
+    const topN = typeof args.topN === 'number' && args.topN > 0 ? args.topN : 50;
+
+    // Lazy-load parser and run structural diff
+    const { HeapSnapshotParser } = await import('@modules/v8-inspector/HeapSnapshotParser');
+    const startTime = Date.now();
+
+    const beforeParser = new HeapSnapshotParser();
+    beforeParser.feedChunk(beforeSnapshot.chunks);
+
+    const afterParser = new HeapSnapshotParser();
+    afterParser.feedChunk(afterSnapshot.chunks);
+
+    const diffResult = beforeParser.diff(afterParser);
+    const parseTimeMs = Date.now() - startTime;
+
+    // Sort by selfSize descending for topN slicing
+    const addedSorted = [...diffResult.added].toSorted((a, b) => b.selfSize - a.selfSize);
+    const removedSorted = [...diffResult.removed].toSorted((a, b) => b.selfSize - a.selfSize);
+
     return {
       success: true,
       beforeSnapshotId,
       afterSnapshotId,
       sizeDeltaBytes: afterSnapshot.sizeBytes - beforeSnapshot.sizeBytes,
+      sizeDelta: diffResult.sizeDelta,
+      addedCount: diffResult.added.length,
+      removedCount: diffResult.removed.length,
+      added: addedSorted.slice(0, topN).map((n) => ({
+        id: n.id,
+        name: n.name,
+        selfSize: n.selfSize,
+        type: n.type,
+      })),
+      removed: removedSorted.slice(0, topN).map((n) => ({
+        id: n.id,
+        name: n.name,
+        selfSize: n.selfSize,
+        type: n.type,
+      })),
+      parseTimeMs,
     };
   }
 

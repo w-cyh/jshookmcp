@@ -63,10 +63,10 @@ export class MemoryScanHandlers {
     processManager?: UnifiedProcessManager,
     ctx?: MCPServerContext,
   ) {
-    this.sessions = new SessionHandlers(sessionManager);
-    this.scans = new ScanHandlers(scanner, eventBus, processManager, ctx);
-    this.ptrChains = new PointerChainHandlers(ptrEngine, processManager, ctx);
-    this.structures = new StructureHandlers(structAnalyzer, processManager, ctx);
+    this.sessions = new SessionHandlers(sessionManager, this.auditTrail);
+    this.scans = new ScanHandlers(scanner, eventBus, processManager, ctx, this.auditTrail);
+    this.ptrChains = new PointerChainHandlers(ptrEngine, processManager, ctx, this.auditTrail);
+    this.structures = new StructureHandlers(structAnalyzer, processManager, ctx, this.auditTrail);
     this.hooks = new HookHandlers(bpEngine, injector, processManager, ctx, this.auditTrail);
     this.readwrite = new ReadWriteHandlers(memCtrl, processManager, ctx, this.auditTrail);
     this.integrity = new IntegrityHandlers(
@@ -76,6 +76,7 @@ export class MemoryScanHandlers {
       antiCheatDetector,
       processManager,
       ctx,
+      this.auditTrail,
     );
   }
 
@@ -187,11 +188,14 @@ export class MemoryScanHandlers {
   handleSpeedhackDispatch(args: Record<string, unknown>) {
     const action = String(args['action'] ?? '');
     if (action === 'set') return this.integrity.handleSpeedhackSet(args);
+    if (action === 'restore') return this.integrity.handleSpeedhackRestore(args);
     return this.integrity.handleSpeedhackApply(args);
   }
   handleSpeedhackApply = (args: Record<string, unknown>) =>
     this.integrity.handleSpeedhackApply(args);
   handleSpeedhackSet = (args: Record<string, unknown>) => this.integrity.handleSpeedhackSet(args);
+  handleSpeedhackRestore = (args: Record<string, unknown>) =>
+    this.integrity.handleSpeedhackRestore(args);
   handleHeapEnumerate = (args: Record<string, unknown>) => this.integrity.handleHeapEnumerate(args);
   handleHeapStats = (args: Record<string, unknown>) => this.integrity.handleHeapStats(args);
   handleHeapAnomalies = (args: Record<string, unknown>) => this.integrity.handleHeapAnomalies(args);

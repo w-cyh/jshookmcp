@@ -6,6 +6,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getResponseText } from '@tests/test-utils';
 import { MemoryScanHandlers } from '@server/domains/memory/handlers.impl';
 
+// Heap/anticheat/guard/integrity now have cross-platform fallbacks.
+// Skip win32-only assertions for them on Win32; on Linux/macOS they succeed.
+const itCP = process.platform === 'win32' ? it.skip : it;
+
 describe('Memory Domain - Win32-only Platform Guards', () => {
   let handlers: MemoryScanHandlers;
 
@@ -139,34 +143,20 @@ describe('Memory Domain - Win32-only Platform Guards', () => {
   });
 
   describe('Heap Analysis Tools', () => {
-    it('memory_heap_enumerate returns clear error on non-Win32', async () => {
-      const result = await handlers.handleHeapEnumerate({
-        pid: 1234,
-      });
-
+    itCP('memory_heap_enumerate succeeds via cross-platform fallback', async () => {
+      const result = await handlers.handleHeapEnumerate({ pid: 1234 });
       const parsed = JSON.parse(getResponseText(result));
-      expect(parsed).toHaveProperty('success', false);
-      expect(parsed.error).toContain('only supported on Windows');
+      expect(parsed.success).toBe(true);
     });
-
-    it('memory_heap_stats returns clear error on non-Win32', async () => {
-      const result = await handlers.handleHeapStats({
-        pid: 1234,
-      });
-
+    itCP('memory_heap_stats succeeds via cross-platform fallback', async () => {
+      const result = await handlers.handleHeapStats({ pid: 1234 });
       const parsed = JSON.parse(getResponseText(result));
-      expect(parsed).toHaveProperty('success', false);
-      expect(parsed.error).toContain('only supported on Windows');
+      expect(parsed.success).toBe(true);
     });
-
-    it('memory_heap_anomalies returns clear error on non-Win32', async () => {
-      const result = await handlers.handleHeapAnomalies({
-        pid: 1234,
-      });
-
+    itCP('memory_heap_anomalies succeeds via cross-platform fallback', async () => {
+      const result = await handlers.handleHeapAnomalies({ pid: 1234 });
       const parsed = JSON.parse(getResponseText(result));
-      expect(parsed).toHaveProperty('success', false);
-      expect(parsed.error).toContain('only supported on Windows');
+      expect(parsed.success).toBe(true);
     });
   });
 
@@ -206,34 +196,20 @@ describe('Memory Domain - Win32-only Platform Guards', () => {
   });
 
   describe('Anti-Cheat Detection Tools', () => {
-    it('memory_anticheat_detect returns clear error on non-Win32', async () => {
-      const result = await handlers.handleAntiCheatDetect({
-        pid: 1234,
-      });
-
+    itCP('memory_anticheat_detect succeeds via cross-platform fallback', async () => {
+      const result = await handlers.handleAntiCheatDetect({ pid: 1234 });
       const parsed = JSON.parse(getResponseText(result));
-      expect(parsed).toHaveProperty('success', false);
-      expect(parsed.error).toContain('only supported on Windows');
+      expect(parsed.success).toBe(true);
     });
-
-    it('memory_guard_pages returns clear error on non-Win32', async () => {
-      const result = await handlers.handleGuardPages({
-        pid: 1234,
-      });
-
+    itCP('memory_guard_pages succeeds via cross-platform fallback', async () => {
+      const result = await handlers.handleGuardPages({ pid: 1234 });
       const parsed = JSON.parse(getResponseText(result));
-      expect(parsed).toHaveProperty('success', false);
-      expect(parsed.error).toContain('only supported on Windows');
+      expect(parsed.success).toBe(true);
     });
-
-    it('memory_integrity_check returns clear error on non-Win32', async () => {
-      const result = await handlers.handleIntegrityCheck({
-        pid: 1234,
-      });
-
+    itCP('memory_integrity_check succeeds via cross-platform fallback', async () => {
+      const result = await handlers.handleIntegrityCheck({ pid: 1234 });
       const parsed = JSON.parse(getResponseText(result));
-      expect(parsed).toHaveProperty('success', false);
-      expect(parsed.error).toContain('only supported on Windows');
+      expect(parsed.success).toBe(true);
     });
   });
 
@@ -259,15 +235,11 @@ describe('Memory Domain - Win32-only Platform Guards', () => {
         () => handlers.handleBreakpointTrace({ pid: 1234, address: '0x400000', access: 'read' }),
         () => handlers.handleSpeedhackApply({ pid: 1234, speed: 2.0 }),
         () => handlers.handleSpeedhackSet({ pid: 1234, speed: 1.5 }),
-        () => handlers.handleHeapEnumerate({ pid: 1234 }),
-        () => handlers.handleHeapStats({ pid: 1234 }),
-        () => handlers.handleHeapAnomalies({ pid: 1234 }),
         () => handlers.handlePEHeaders({ pid: 1234, moduleBase: '0x400000' }),
         () => handlers.handlePEImportsExports({ pid: 1234, moduleBase: '0x400000', table: 'both' }),
         () => handlers.handleInlineHookDetect({ pid: 1234 }),
-        () => handlers.handleAntiCheatDetect({ pid: 1234 }),
-        () => handlers.handleGuardPages({ pid: 1234 }),
-        () => handlers.handleIntegrityCheck({ pid: 1234 }),
+        // heap/anticheat/guard/integrity now have cross-platform fallbacks;
+        // they return success instead of error. Verified in this file above.
       ];
 
       for (const testCase of testCases) {

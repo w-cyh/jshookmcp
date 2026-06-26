@@ -62,7 +62,7 @@ export function requireStringArg(value: unknown, fieldName: string, toolName: st
 }
 
 /**
- * Require a positive finite number argument. Throws
+ * Require a positive finite number argument (e.g. counts, sizes in bytes). Throws
  * `${toolName}: missing or invalid required argument "${fieldName}" (expected positive number)` on violation.
  */
 export function requirePositiveNumberArg(
@@ -79,6 +79,29 @@ export function requirePositiveNumberArg(
 }
 
 /**
+ * Require a number argument within an inclusive `[min, max]` range. Throws
+ * `${toolName}: argument "${fieldName}" must be in [min, max], got: <value>` on violation.
+ *
+ * Used to bound operator inputs that have sane operational ranges (e.g. speedhack
+ * multipliers 0.01x–100x, freeze intervals ≥10ms) so extreme values cannot
+ * destabilise the target process.
+ */
+export function requireNumberInRangeArg(
+  value: unknown,
+  fieldName: string,
+  toolName: string,
+  min: number,
+  max: number,
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+    throw new Error(
+      `${toolName}: argument "${fieldName}" must be a finite number in [${min}, ${max}], got: ${JSON.stringify(value)}`,
+    );
+  }
+  return value;
+}
+
+/**
  * Require a positive integer argument (e.g. counts, sizes in bytes). Throws
  * `${toolName}: missing or invalid required argument "${fieldName}" (expected positive integer)` on violation.
  */
@@ -89,6 +112,78 @@ export function requirePositiveIntArg(value: unknown, fieldName: string, toolNam
     );
   }
   return value;
+}
+
+/**
+ * Validate that a scan value string is well-formed for its declared value type.
+ *
+ * This is an early-reject guard so that malformed inputs (e.g. "abc" paired
+ * with `int32`, or "12.5" with `uint64`) surface as a clear handler-layer
+ * error instead of a cryptic native FFI failure. The native scanner re-parses
+ * the value, so this only needs to catch gross mismatches — it intentionally
+ * stays looser than the native parser to avoid rejecting valid edge cases.
+ *
+ * Throws `${toolName}: value "<value>" is not valid for valueType "<type>" ...`
+ * on violation. `string` values are accepted as-is (any non-empty content).
+ */
+export function validateValueForType(value: string, valueType: string, toolName: string): void {
+  const v = value.trim();
+  switch (valueType) {
+    case 'int8':
+    case 'int16':
+    case 'int32':
+    case 'int64':
+    case 'uint8':
+    case 'uint16':
+    case 'uint32':
+    case 'uint64': {
+      if (!/^-?\d+$/.test(v)) {
+        throw new Error(
+          `${toolName}: value ${JSON.stringify(value)} is not a valid integer for valueType "${valueType}"`,
+        );
+      }
+      break;
+    }
+    case 'float':
+    case 'double': {
+      if (!/^-?\d*\.?\d+([eE][+-]?\d+)?$/.test(v)) {
+        throw new Error(
+          `${toolName}: value ${JSON.stringify(value)} is not a valid number for valueType "${valueType}"`,
+        );
+      }
+      break;
+    }
+    case 'hex': {
+      if (!/^([0-9a-fA-F]{2}\s*)+$/.test(v)) {
+        throw new Error(
+          `${toolName}: value ${JSON.stringify(value)} is not valid hex bytes for valueType "hex" (expected space-separated byte pairs, e.g. "48 65 6C 6C 6F")`,
+        );
+      }
+      break;
+    }
+    case 'byte': {
+      if (!/^-?\d+$/.test(v) || Number(v) < 0 || Number(v) > 255) {
+        throw new Error(
+          `${toolName}: value ${JSON.stringify(value)} is not a valid byte (0-255) for valueType "byte"`,
+        );
+      }
+      break;
+    }
+    case 'pointer': {
+      if (!/^(0x)?[0-9a-fA-F]+$/.test(v)) {
+        throw new Error(
+          `${toolName}: value ${JSON.stringify(value)} is not a valid hex pointer for valueType "pointer"`,
+        );
+      }
+      break;
+    }
+    case 'string':
+      // Any non-empty string is a valid search subject.
+      break;
+    default:
+      // Unknown types are passed through — the native layer is the final arbiter.
+      break;
+  }
 }
 
 /**

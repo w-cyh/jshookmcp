@@ -2,6 +2,7 @@ import type { CodeCollector } from '@modules/collector/CodeCollector';
 import { logger } from '@utils/logger';
 import { PAGE_FRAME_SELECTOR_TIMEOUT_MS, PAGE_NETWORK_IDLE_TIMEOUT_MS } from '@src/constants';
 import { setTimeout as asyncSetTimeout } from 'node:timers/promises';
+import { writeFile } from 'node:fs/promises';
 import type { Page, Frame, NewDocumentScriptEvaluation } from 'rebrowser-puppeteer-core';
 import type { BrowserTargetInfo } from '@modules/browser/BrowserTargetSessionManager.shared';
 import {
@@ -464,6 +465,9 @@ export class PageController {
           clip: options?.clip,
         });
         logger.info(`Screenshot taken via CDP${options?.path ? `: ${options.path}` : ''}`);
+        if (options?.path) {
+          await writeFile(options.path, buf);
+        }
         return buf;
       }
     }

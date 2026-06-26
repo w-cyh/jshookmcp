@@ -29,6 +29,7 @@ export async function setBreakpointByUrlCore(
     lineNumber: number;
     columnNumber?: number;
     condition?: string;
+    logMessage?: string;
   },
 ): Promise<BreakpointInfo> {
   const coreCtx = asBreakpointsCoreContext(ctx);
@@ -66,6 +67,7 @@ export async function setBreakpointByUrlCore(
         lineNumber: params.lineNumber,
         columnNumber: params.columnNumber,
         condition: params.condition,
+        logMessage: params.logMessage,
       },
     );
 
@@ -77,6 +79,7 @@ export async function setBreakpointByUrlCore(
         columnNumber: params.columnNumber,
       },
       condition: params.condition,
+      logMessage: params.logMessage,
       enabled: true,
       hitCount: 0,
       createdAt: Date.now(),
@@ -103,6 +106,7 @@ export async function setBreakpointCore(
     lineNumber: number;
     columnNumber?: number;
     condition?: string;
+    logMessage?: string;
   },
 ): Promise<BreakpointInfo> {
   const coreCtx = asBreakpointsCoreContext(ctx);
@@ -140,6 +144,7 @@ export async function setBreakpointCore(
         columnNumber: params.columnNumber,
       },
       condition: params.condition,
+      logMessage: params.logMessage,
     });
 
     const breakpointInfo: BreakpointInfo = {
@@ -150,6 +155,7 @@ export async function setBreakpointCore(
         columnNumber: params.columnNumber,
       },
       condition: params.condition,
+      logMessage: params.logMessage,
       enabled: true,
       hitCount: 0,
       createdAt: Date.now(),

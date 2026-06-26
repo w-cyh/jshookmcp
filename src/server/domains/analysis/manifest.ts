@@ -44,6 +44,9 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
     HookManager,
   } = await import('@server/domains/shared/modules');
   const { CoreAnalysisHandlers } = await import('@server/domains/analysis/index');
+  const { JScramberDeobfuscator } = await import('@modules/deobfuscator/JScramblerDeobfuscator');
+  const { UniversalUnpacker } = await import('@modules/deobfuscator/PackerDeobfuscator');
+  const { VMDeobfuscator } = await import('@modules/deobfuscator/VMDeobfuscator');
   globalContext = ctx;
   await ensureBrowserCore(ctx);
 
@@ -76,6 +79,9 @@ async function ensure(ctx: MCPServerContext): Promise<H> {
         cryptoDetector: ctx.cryptoDetector,
         hookManager: ctx.hookManager,
         samplingBridge: ctx.samplingBridge,
+        jscramblerDeobfuscator: new JScramberDeobfuscator(),
+        packerDeobfuscator: new UniversalUnpacker(),
+        vmDeobfuscator: new VMDeobfuscator(),
       });
     }
   }

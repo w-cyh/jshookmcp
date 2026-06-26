@@ -572,6 +572,264 @@ describe('FrameworkStateHandlers runtime coverage', () => {
     expect(parsed.states).toEqual([]);
   });
 
+  it('extracts Angular state from __ngContext__ elements', async () => {
+    const ngRoot = {
+      tagName: 'APP-ROOT',
+      __ngContext__: { lView: [1, 2, 3] },
+      attributes: [
+        { name: 'ng-reflect-title', value: 'MyApp' },
+        { name: 'ng-reflect-count', value: '42' },
+        { name: 'class', value: 'app-container' },
+      ],
+    };
+    const { handlers } = createHandler({
+      document: makeDocument({
+        body: ngRoot,
+        querySelector: vi.fn((selector: string) =>
+          selector === '[ng-version]' ? { getAttribute: () => '17.0.0' } : null,
+        ),
+        querySelectorAll: vi.fn(() => [ngRoot]),
+      }),
+      window: {},
+    });
+
+    const parsed = parseJson<any>(
+      await handlers.handleFrameworkStateExtract({ framework: 'auto' }),
+    );
+
+    expect(parsed.detected).toBe('angular');
+    expect(parsed.found).toBe(true);
+    expect(parsed.states.length).toBeGreaterThanOrEqual(1);
+    // Find the APP-ROOT entry (not the version-only fallback)
+    const appRoot = parsed.states.find((s: any) => s.component === 'APP-ROOT');
+    expect(appRoot).toBeDefined();
+    expect(appRoot.state[0]._contextType).toBe('object');
+    expect(appRoot.state[0].title).toBe('MyApp');
+    expect(appRoot.state[0].count).toBe('42');
+  });
+
+  it('extracts Angular state from window.ng debug tools', async () => {
+    const { handlers } = createHandler({
+      document: makeDocument({
+        querySelector: vi.fn(() => null),
+      }),
+      window: {
+        ng: { probe: () => {} },
+      },
+    });
+
+    const parsed = parseJson<any>(
+      await handlers.handleFrameworkStateExtract({ framework: 'auto' }),
+    );
+
+    expect(parsed.detected).toBe('angular');
+    expect(parsed.found).toBe(true);
+    expect(parsed.states).toHaveLength(1);
+    expect(parsed.states[0].component).toBe('AngularDebugTools');
+    expect(parsed.states[0].state[0]._source).toBe('window.ng');
+  });
+
+  it('extracts Angular version from [ng-version] when no __ngContext__ or debug tools', async () => {
+    const { handlers } = createHandler({
+      document: makeDocument({
+        body: {},
+        querySelector: vi.fn((selector: string) =>
+          selector === '[ng-version]' ? { getAttribute: () => '16.1.0' } : null,
+        ),
+      }),
+      window: {},
+    });
+
+    const parsed = parseJson<any>(
+      await handlers.handleFrameworkStateExtract({ framework: 'auto' }),
+    );
+
+    expect(parsed.detected).toBe('angular');
+    expect(parsed.found).toBe(true);
+    expect(parsed.states).toHaveLength(1);
+    expect(parsed.states[0].component).toBe('AngularApp');
+    expect(parsed.states[0].state[0]._version).toBe('16.1.0');
+  });
+
+  it('returns empty when Angular is explicitly requested but no markers found', async () => {
+    const { handlers } = createHandler({
+      document: makeDocument({
+        querySelector: vi.fn(() => null),
+      }),
+      window: {},
+    });
+
+    const parsed = parseJson<any>(
+      await handlers.handleFrameworkStateExtract({ framework: 'angular' }),
+    );
+
+    expect(parsed.detected).toBe('angular');
+    expect(parsed.found).toBe(false);
+    expect(parsed.states).toEqual([]);
+  });
+
+  it('caps __ngContext__ scan to 1000 elements and 10 roots', async () => {
+    // Create many elements with __ngContext__
+    const manyEls = Array.from({ length: 1050 }, (_, i) => ({
+      tagName: 'NG-EL',
+      __ngContext__: { id: i },
+      attributes: [],
+    }));
+    const { handlers } = createHandler({
+      document: makeDocument({
+        body: manyEls[0],
+        querySelector: vi.fn(() => null),
+        querySelectorAll: vi.fn(() => manyEls),
+      }),
+      window: {},
+    });
+
+    const parsed = parseJson<any>(
+      await handlers.handleFrameworkStateExtract({ framework: 'angular' }),
+    );
+
+    // Should cap at 10 root entries
+    const rootEntries = parsed.states.filter((s: any) => s.component === 'NG-EL');
+    expect(rootEntries.length).toBeLessThanOrEqual(10);
+  });
+
+  it('handles getAttribute not being a function gracefully', async () => {
+    const ngVersionEl = { getAttribute: 'not-a-function' };
+    const ngRoot = {
+      tagName: 'APP-ROOT',
+      __ngContext__: 'simple-context',
+      attributes: [],
+    };
+    const { handlers } = createHandler({
+      document: makeDocument({
+        body: ngRoot,
+        querySelector: vi.fn((selector: string) =>
+          selector === '[ng-version]' ? ngVersionEl : null,
+        ),
+        querySelectorAll: vi.fn(() => [ngRoot]),
+      }),
+      window: {},
+    });
+
+    const parsed = parseJson<any>(
+      await handlers.handleFrameworkStateExtract({ framework: 'angular' }),
+    );
+
+    expect(parsed.detected).toBe('angular');
+    expect(parsed.found).toBe(true);
+    // ngVersion should be null since getAttribute is not a function
+    // but __ngContext__ elements still provide state
+    expect(parsed.states.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('converts ng-reflect-* attribute names to camelCase', async () => {
+    const ngRoot = {
+      tagName: 'USER-COMPONENT',
+      __ngContext__: {},
+      attributes: [
+        { name: 'ng-reflect-user-name', value: 'Alice' },
+        { name: 'ng-reflect-is-active', value: 'true' },
+      ],
+    };
+    const { handlers } = createHandler({
+      document: makeDocument({
+        body: ngRoot,
+        querySelector: vi.fn(() => null),
+        querySelectorAll: vi.fn(() => [ngRoot]),
+      }),
+      window: {},
+    });
+
+    const parsed = parseJson<any>(
+      await handlers.handleFrameworkStateExtract({ framework: 'angular' }),
+    );
+
+    const comp = parsed.states.find((s: any) => s.component === 'USER-COMPONENT');
+    expect(comp).toBeDefined();
+    expect(comp.state[0].userName).toBe('Alice');
+    expect(comp.state[0].isActive).toBe('true');
+  });
+
+  it('handles querySelectorAll throwing an error', async () => {
+    const { handlers } = createHandler({
+      document: makeDocument({
+        body: {},
+        querySelector: vi.fn(() => null),
+        querySelectorAll: vi.fn(() => {
+          throw new Error('DOM broken');
+        }),
+      }),
+      window: {
+        ng: { probe: () => {} },
+      },
+    });
+
+    const parsed = parseJson<any>(
+      await handlers.handleFrameworkStateExtract({ framework: 'angular' }),
+    );
+
+    // Should still detect via window.ng even though querySelectorAll threw
+    expect(parsed.detected).toBe('angular');
+    expect(parsed.found).toBe(true);
+    expect(parsed.states[0].component).toBe('AngularDebugTools');
+  });
+
+  it('handles [ng-version] element without getAttribute gracefully', async () => {
+    const ngVersionEl = {}; // no getAttribute at all
+    const { handlers } = createHandler({
+      document: makeDocument({
+        body: {},
+        querySelector: vi.fn((selector: string) =>
+          selector === '[ng-version]' ? ngVersionEl : null,
+        ),
+      }),
+      window: {},
+    });
+
+    const parsed = parseJson<any>(
+      await handlers.handleFrameworkStateExtract({ framework: 'angular' }),
+    );
+
+    // ng-version element found but no getAttribute → parsed version is null
+    // No other markers → found: false
+    expect(parsed.detected).toBe('angular');
+    expect(parsed.found).toBe(false);
+    expect(parsed.states).toEqual([]);
+  });
+
+  it('extracts Angular state with both debug tools and __ngContext__ roots', async () => {
+    const ngRoot = {
+      tagName: 'APP-COMPONENT',
+      __ngContext__: { data: 'test' },
+      attributes: [{ name: 'ng-reflect-value', value: '123' }],
+    };
+    const { handlers } = createHandler({
+      document: makeDocument({
+        body: ngRoot,
+        querySelector: vi.fn((selector: string) =>
+          selector === '[ng-version]' ? { getAttribute: () => '17.0.0' } : null,
+        ),
+        querySelectorAll: vi.fn(() => [ngRoot]),
+      }),
+      window: {
+        ng: { probe: () => {} },
+      },
+    });
+
+    const parsed = parseJson<any>(
+      await handlers.handleFrameworkStateExtract({ framework: 'angular' }),
+    );
+
+    expect(parsed.detected).toBe('angular');
+    expect(parsed.found).toBe(true);
+    // Should have both debug tools entry and component entry
+    expect(parsed.states.length).toBeGreaterThanOrEqual(2);
+    expect(parsed.states[0].component).toBe('AngularDebugTools');
+    const comp = parsed.states.find((s: any) => s.component === 'APP-COMPONENT');
+    expect(comp).toBeDefined();
+    expect(comp.state[0].value).toBe('123');
+  });
+
   it('returns a prerequisite error when the CDP session is unresponsive', async () => {
     const { handlers } = createHandler({
       document: makeDocument(),

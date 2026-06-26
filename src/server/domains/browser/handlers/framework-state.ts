@@ -369,6 +369,116 @@ export class FrameworkStateHandlers {
             return states.length > 0 ? states : null;
           };
 
+          // ── Angular ──
+          const extractAngular = (): unknown[] | null => {
+            type NgReflectAttr = { name: string; value: string };
+            type NgRootEntry = {
+              tagName: string;
+              contextType: string;
+              ngReflectAttrs: NgReflectAttr[];
+            };
+
+            // Check for Angular debug tools (window.ng)
+            const hasNgDebug = typeof win['ng'] !== 'undefined';
+
+            // Check for Angular version attribute on the root element
+            let ngVersion: string | null = null;
+            try {
+              const ngVersionEl = document.querySelector('[ng-version]');
+              if (ngVersionEl && typeof ngVersionEl.getAttribute === 'function') {
+                const v = ngVersionEl.getAttribute('ng-version');
+                if (typeof v === 'string') ngVersion = v;
+              }
+            } catch {
+              // selector or getAttribute may fail on non-standard DOMs
+            }
+
+            // Scan for elements with __ngContext__ (Angular 9+ Ivy)
+            const roots: NgRootEntry[] = [];
+            try {
+              const allEls = document.querySelectorAll('*');
+              const limit = Math.min(allEls.length, 1000);
+              for (let i = 0; i < limit; i++) {
+                const el = allEls[i] as unknown as AnyObj;
+                if (el['__ngContext__'] !== undefined) {
+                  const reflectAttrs: NgReflectAttr[] = [];
+                  try {
+                    if (el['attributes']) {
+                      const attrs = el['attributes'] as ArrayLike<{ name: string; value: string }>;
+                      for (let j = 0; j < attrs.length && reflectAttrs.length < 20; j++) {
+                        const a = attrs[j];
+                        if (!a) continue;
+                        if (a.name.startsWith('ng-reflect-')) {
+                          reflectAttrs.push({ name: a.name, value: a.value });
+                        }
+                      }
+                    }
+                  } catch {
+                    // attributes access may fail
+                  }
+                  const rawTagName: unknown = el['tagName'];
+                  roots.push({
+                    tagName: typeof rawTagName === 'string' ? rawTagName : 'unknown',
+                    contextType: typeof el['__ngContext__'],
+                    ngReflectAttrs: reflectAttrs,
+                  });
+                }
+                if (roots.length >= 10) break;
+              }
+            } catch {
+              // querySelectorAll may fail
+            }
+
+            const detected = hasNgDebug || ngVersion !== null || roots.length > 0;
+            if (!detected) return null;
+
+            // Build state entries from roots and debug info
+            const states: unknown[] = [];
+
+            // Angular debug tools provide component inspection
+            if (hasNgDebug) {
+              states.push({
+                component: 'AngularDebugTools',
+                state: [{ _source: 'window.ng', available: true }],
+              });
+            }
+
+            // Each root with __ngContext__
+            for (const root of roots) {
+              const stateObj: Record<string, unknown> = {
+                _contextType: root.contextType,
+              };
+              if (root.ngReflectAttrs.length > 0) {
+                for (const attr of root.ngReflectAttrs) {
+                  // Convert ng-reflect-input-name → inputName
+                  const cleanName = attr.name
+                    .replace(/^ng-reflect-/, '')
+                    .replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase());
+                  stateObj[cleanName] = safeSerialize(attr.value);
+                }
+              }
+              states.push({
+                component: root.tagName,
+                state: [stateObj],
+              });
+            }
+
+            // If only version was found but no roots or debug tools, emit minimal metadata
+            if (states.length === 0 && ngVersion !== null) {
+              states.push({
+                component: 'AngularApp',
+                state: [
+                  {
+                    _version: ngVersion,
+                    _note: 'Angular detected via [ng-version] attribute only',
+                  },
+                ],
+              });
+            }
+
+            return states.length > 0 ? states : null;
+          };
+
           // ── Preact ──
           const extractPreact = (): unknown[] | null => {
             const rootEl = getRootEl();
@@ -517,6 +627,8 @@ export class FrameworkStateHandlers {
           const hasPreactMarker = keys.some(
             (k) => k === '__k' || k === '__e' || k === '_dom' || k === '_children',
           );
+          const hasAngularMarker =
+            typeof win['ng'] !== 'undefined' || Boolean(document.querySelector('[ng-version]'));
 
           let detectedFramework = opts.framework;
           if (detectedFramework === 'preact' && hasReactMarker) {
@@ -533,6 +645,8 @@ export class FrameworkStateHandlers {
               detectedFramework = 'svelte';
             } else if (hasSolidMarker) {
               detectedFramework = 'solid';
+            } else if (hasAngularMarker) {
+              detectedFramework = 'angular';
             } else if (hasPreactMarker) {
               detectedFramework = 'preact';
             }
@@ -553,6 +667,9 @@ export class FrameworkStateHandlers {
           }
           if (!states && (detectedFramework === 'solid' || detectedFramework === 'auto')) {
             states = extractSolid();
+          }
+          if (!states && (detectedFramework === 'angular' || detectedFramework === 'auto')) {
+            states = extractAngular();
           }
           if (!states && (detectedFramework === 'preact' || detectedFramework === 'auto')) {
             states = extractPreact();

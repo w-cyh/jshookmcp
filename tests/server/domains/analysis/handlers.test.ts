@@ -32,6 +32,9 @@ interface BaseResponse {
 
 interface DeobfuscateResponse extends BaseResponse {
   code?: string;
+  transformations?: string[];
+  type?: string;
+  detection?: Record<string, unknown>;
 }
 
 interface ManageHooksResponse extends BaseResponse {
@@ -66,6 +69,9 @@ describe('CoreAnalysisHandlers', () => {
       isSamplingSupported: vi.fn().mockReturnValue(false),
       sampleText: vi.fn(),
     },
+    jscramblerDeobfuscator: { deobfuscate: vi.fn() },
+    packerDeobfuscator: { deobfuscate: vi.fn() },
+    vmDeobfuscator: { detectVMProtection: vi.fn(), deobfuscateVM: vi.fn() },
   };
 
   let handlers: CoreAnalysisHandlers;
@@ -252,5 +258,128 @@ describe('CoreAnalysisHandlers', () => {
     expect(response.success).toBe(false);
     expect(response.error).toBe('webcrack execution failed');
     expect(response.engine).toBe('webcrack');
+  });
+
+  // ── New engine routing tests ──
+
+  it('routes engine=jscrambler to JScramberDeobfuscator', async () => {
+    deps.jscramblerDeobfuscator.deobfuscate.mockResolvedValue({
+      code: 'jscrambler-cleaned',
+      success: true,
+      transformations: ['control-flow-restored'],
+      warnings: [],
+      confidence: 0.8,
+    });
+
+    const body = parseJson<DeobfuscateResponse>(
+      await handlers.handleDeobfuscate({
+        code: 'jscrambler-obfuscated',
+        engine: 'jscrambler',
+      }),
+    );
+
+    expect(deps.jscramblerDeobfuscator.deobfuscate).toHaveBeenCalledWith({
+      code: 'jscrambler-obfuscated',
+    });
+    expect(body.success).toBe(true);
+    expect(body.code).toBe('jscrambler-cleaned');
+    expect(body.transformations).toEqual(['control-flow-restored']);
+  });
+
+  it('routes engine=packer to UniversalUnpacker', async () => {
+    deps.packerDeobfuscator.deobfuscate.mockResolvedValue({
+      code: 'unpacked-code',
+      type: 'Packer',
+      success: true,
+    });
+
+    const body = parseJson<DeobfuscateResponse>(
+      await handlers.handleDeobfuscate({
+        code: 'eval(function(p,a,c,k,e,d)...',
+        engine: 'packer',
+      }),
+    );
+
+    expect(deps.packerDeobfuscator.deobfuscate).toHaveBeenCalledWith(
+      'eval(function(p,a,c,k,e,d)...',
+    );
+    expect(body.success).toBe(true);
+    expect(body.code).toBe('unpacked-code');
+    expect(body.type).toBe('Packer');
+  });
+
+  it('routes engine=vm to VMDeobfuscator (detected)', async () => {
+    deps.vmDeobfuscator.detectVMProtection.mockReturnValue({
+      detected: true,
+      type: 'custom-vm',
+      instructionCount: 42,
+    });
+    deps.vmDeobfuscator.deobfuscateVM.mockResolvedValue({
+      success: true,
+      code: 'vm-cleaned',
+    });
+
+    const body = parseJson<DeobfuscateResponse>(
+      await handlers.handleDeobfuscate({
+        code: 'while(true){switch(pc){case 0:...}}',
+        engine: 'vm',
+      }),
+    );
+
+    expect(deps.vmDeobfuscator.detectVMProtection).toHaveBeenCalled();
+    expect(deps.vmDeobfuscator.deobfuscateVM).toHaveBeenCalledWith(
+      'while(true){switch(pc){case 0:...}}',
+      {
+        type: 'custom-vm',
+        instructionCount: 42,
+      },
+    );
+    expect(body.success).toBe(true);
+    expect(body.code).toBe('vm-cleaned');
+    expect(body.detection).toBeDefined();
+  });
+
+  it('engine=vm returns error when no VM protection detected', async () => {
+    deps.vmDeobfuscator.detectVMProtection.mockReturnValue({
+      detected: false,
+      type: 'none',
+      instructionCount: 0,
+    });
+
+    const body = parseJson<DeobfuscateResponse>(
+      await handlers.handleDeobfuscate({
+        code: 'console.log("hello")',
+        engine: 'vm',
+      }),
+    );
+
+    expect(deps.vmDeobfuscator.detectVMProtection).toHaveBeenCalled();
+    expect(deps.vmDeobfuscator.deobfuscateVM).not.toHaveBeenCalled();
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('No VM protection detected');
+  });
+
+  it('engine=webcrack still routes to advancedDeobfuscator', async () => {
+    deps.advancedDeobfuscator.deobfuscate.mockResolvedValue({
+      code: 'raw',
+      success: true,
+      astOptimized: false,
+    });
+
+    const body = parseJson<AdvancedDeobfuscateResponse>(
+      await handlers.handleDeobfuscate({
+        code: 'obf',
+        engine: 'webcrack',
+        detectOnly: true,
+        unpack: false,
+      }),
+    );
+
+    expect(deps.advancedDeobfuscator.deobfuscate).toHaveBeenCalledWith({
+      code: 'obf',
+      detectOnly: true,
+      unpack: false,
+    });
+    expect(body.code).toBe('raw');
   });
 });
