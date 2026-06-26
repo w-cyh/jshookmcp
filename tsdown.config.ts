@@ -37,6 +37,7 @@ export default defineConfig(async () => ({
       '@babel/types',
       'fingerprint-generator',
       'fingerprint-injector',
+      'z3-solver',
     ],
   },
 }));

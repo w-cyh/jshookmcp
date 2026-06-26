@@ -10,17 +10,14 @@ import {
   resolve,
   sep,
 } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { getConfig } from '@utils/config';
+import { projectRoot as configProjectRoot, getConfig } from '@utils/config';
 
-// In a flattened tsdown bundle, import.meta.url points to dist/index.mjs.
-// Therefore, the project root is just one directory up.
-// When running in Vitest, this file stays deeply nested in src/utils/outputPaths.ts.
-const currentFileUrl = fileURLToPath(import.meta.url);
-const defaultProjectRoot =
-  currentFileUrl.includes('/src/utils/') || currentFileUrl.includes('\\src\\utils\\')
-    ? fileURLToPath(new URL('../..', import.meta.url))
-    : fileURLToPath(new URL('..', import.meta.url));
+// Use config.ts's projectRoot as the single source of truth.
+// Both files compute import.meta.url-based roots with different fallback
+// depths (config: ../.. / outputPaths: .. in bundled prod), which diverge
+// when tsdown flattens them into the same chunk. This caused screenshot
+// and other path checks to fail isInside() silently.
+const defaultProjectRoot = configProjectRoot;
 
 function resolveProjectRoot(env: NodeJS.ProcessEnv = process.env): string {
   const requestedRoot = env.MCP_PROJECT_ROOT?.trim();

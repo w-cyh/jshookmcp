@@ -43,14 +43,14 @@ Memory analysis domain for native scans, pointer-chain discovery, structure infe
 | `memory_write_value` | Write a typed value to a memory address. Supports undo/redo via memory_write_history(action=undo\|redo). |
 | `memory_freeze` | Freeze or unfreeze a memory address. Freeze continuously writes a value to prevent changes; unfreeze stops it. |
 | `memory_dump` | Dump memory region as hex with ASCII column. Outputs a formatted hex dump similar to xxd. |
-| `memory_speedhack` | Hook time APIs to scale process time. Actions: apply (hook + set speed), set (adjust speed). |
-| `memory_write_history` | Undo or redo the last memory write operation. |
+| `memory_speedhack` | Hook time APIs (GetTickCount64/GetTickCount/QueryPerformanceCounter) to scale process time via an in-process SSE2 trampoline. Actions: apply (hook + set speed), set (adjust speed without re-hooking), restore (unhook and restore original functions). Speed range 0.01–100x; values outside this range are rejected to avoid destabilising the target. |
+| `memory_write_history` | Undo or redo the last memory write operation. Pass pid to scope the operation to a specific process — per-PID undo prevents reverting an unrelated process's write when multiple processes are being edited concurrently. |
 | `memory_heap_enumerate` | Enumerate all heaps and heap blocks in a process via Toolhelp32 snapshot. Returns heap list with block counts, sizes, and overall statistics. |
 | `memory_heap_stats` | Get detailed heap statistics with size distribution buckets (0-64B, 64B-1KB, 1-64KB, 64KB-1MB, &gt;1MB), fragmentation ratio, and aggregate metrics. |
 | `memory_heap_anomalies` | Detect heap anomalies: heap spray patterns (many same-size blocks), possible use-after-free (non-zero free blocks), and suspicious block sizes (0 or &gt;100MB). |
 | `memory_pe_headers` | Parse PE headers (DOS, NT, File, Optional) from a module base address in process memory. Returns machine type, entry point, image base, section count, and data directory info. |
 | `memory_pe_imports_exports` | Parse import and/or export tables from a PE module in process memory. Returns DLL names, function names, ordinals, hints, and forwarded exports. |
-| `memory_inline_hook_detect` | Detect inline hooks by comparing the first 16 bytes of each exported function on disk vs in memory. Identifies JMP rel32, JMP abs64, PUSH+RET hooks and decodes jump targets. |
+| `memory_inline_hook_detect` | Detect hooks in process modules. scanMode "inline" (default) compares the first 16 bytes of each exported function disk-vs-memory and recognises 8 hook patterns (JMP/CALL/short-jmp/MOV+JMP/MOV+CALL/PUSH+RET/INT3/padding). scanMode "iat" detects Import Address Table hooks (entries redirected outside their source module — evades inline detection, used by EasyHook/MinHook/Detours). scanMode "both" runs both scans. |
 | `memory_anticheat_detect` | Scan process imports for anti-debug/anti-cheat mechanisms: IsDebuggerPresent, NtQueryInformationProcess, timing checks (QPC, GetTickCount), thread hiding, heap flag checks, and DR register inspection. Each detection includes a bypass suggestion. |
 | `memory_guard_pages` | Find all memory regions with PAGE_GUARD protection in a process. Guard pages are often used as anti-tampering mechanisms or stack overflow detection. |
 | `memory_integrity_check` | Check executable memory regions against their corresponding on-disk PE files (.text sections) to detect modifications like inline hooks or code patches. |

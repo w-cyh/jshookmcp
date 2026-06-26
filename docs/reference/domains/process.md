@@ -19,7 +19,7 @@
 - process + debugger
 - process + platform
 
-## 工具清单（21）
+## 工具清单（24）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -44,3 +44,6 @@
 | `inject_shellcode` | 向目标进程注入并执行 Shellcode，支持 hex 或 base64。需要高权限，并会先执行目标进程与载荷校验。 |
 | `check_debug_port` | 通过 NtQueryInformationProcess 检查进程是否处于调试状态。 |
 | `enumerate_modules` | 列出进程中所有已加载模块（DLL）及其基址。 |
+| `process_enum_threads` | 待补充中文：Enumerate all threads in a process. Returns thread IDs. Uses CreateToolhelp32Snapshot (Win32 only). |
+| `process_detect_hollowing` | 待补充中文：Detect process hollowing (malware technique that unmaps original process image and injects malicious code). Compares process memory sections (.text, .data, .rdata) with on-disk PE file using SHA-256 hashes. Returns detection result with confidence score and list of differing sections. WARNING: autoRestore=true is HIGH RISK and may crash the target process. Win32 only. |
+| `process_enum_handles` | 待补充中文：Enumerate open handles for a process using NtQuerySystemInformation. Resolves handle type and object name, decodes access masks, identifies security risks (high-privilege handles to sensitive processes, dangerous Token handles, inheritable sensitive handles, Section handles to executables). Skips name resolution for File/EtwRegistration types (known to hang). Requires elevated privileges (run as Administrator). Win32 only. |
