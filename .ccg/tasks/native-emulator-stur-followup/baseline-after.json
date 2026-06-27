@@ -1,0 +1,198 @@
+{
+  "generatedAt": "2026-05-30T12:01:41.702Z",
+  "root": ".tmp_mcp_artifacts/jadx-apk-test/resources/lib/arm64-v8a",
+  "libraries": [
+    {
+      "name": "libapp.so",
+      "mapped": true,
+      "symbols": 5,
+      "probed": 0,
+      "ranToRet": 0,
+      "suspiciousReturns": 0,
+      "realGapHits": 0,
+      "dataLikeHits": 0,
+      "otherErrors": 0
+    },
+    {
+      "name": "libavcodec.so",
+      "mapped": true,
+      "symbols": 165,
+      "probed": 40,
+      "ranToRet": 20,
+      "suspiciousReturns": 10,
+      "realGapHits": 0,
+      "dataLikeHits": 2,
+      "otherErrors": 8
+    },
+    {
+      "name": "libavdevice.so",
+      "mapped": true,
+      "symbols": 18,
+      "probed": 18,
+      "ranToRet": 9,
+      "suspiciousReturns": 5,
+      "realGapHits": 0,
+      "dataLikeHits": 3,
+      "otherErrors": 1
+    },
+    {
+      "name": "libavfilter.so",
+      "mapped": true,
+      "symbols": 60,
+      "probed": 40,
+      "ranToRet": 9,
+      "suspiciousReturns": 18,
+      "realGapHits": 0,
+      "dataLikeHits": 1,
+      "otherErrors": 12
+    },
+    {
+      "name": "libavformat.so",
+      "mapped": true,
+      "symbols": 155,
+      "probed": 40,
+      "ranToRet": 20,
+      "suspiciousReturns": 10,
+      "realGapHits": 0,
+      "dataLikeHits": 5,
+      "otherErrors": 5
+    },
+    {
+      "name": "libavutil.so",
+      "mapped": true,
+      "symbols": 587,
+      "probed": 40,
+      "ranToRet": 17,
+      "suspiciousReturns": 11,
+      "realGapHits": 0,
+      "dataLikeHits": 0,
+      "otherErrors": 12
+    },
+    {
+      "name": "libbarhopper_v3.so",
+      "mapped": true,
+      "symbols": 10,
+      "probed": 8,
+      "ranToRet": 0,
+      "suspiciousReturns": 2,
+      "realGapHits": 0,
+      "dataLikeHits": 0,
+      "otherErrors": 6
+    },
+    {
+      "name": "libffmpegkit.so",
+      "mapped": true,
+      "symbols": 399,
+      "probed": 40,
+      "ranToRet": 6,
+      "suspiciousReturns": 23,
+      "realGapHits": 0,
+      "dataLikeHits": 7,
+      "otherErrors": 4
+    },
+    {
+      "name": "libffmpegkit_abidetect.so",
+      "mapped": true,
+      "symbols": 37,
+      "probed": 10,
+      "ranToRet": 0,
+      "suspiciousReturns": 5,
+      "realGapHits": 0,
+      "dataLikeHits": 2,
+      "otherErrors": 3
+    },
+    {
+      "name": "libflutter.so",
+      "mapped": true,
+      "symbols": 3,
+      "probed": 0,
+      "ranToRet": 0,
+      "suspiciousReturns": 0,
+      "realGapHits": 0,
+      "dataLikeHits": 0,
+      "otherErrors": 0
+    },
+    {
+      "name": "libimage_processing_util_jni.so",
+      "mapped": true,
+      "symbols": 4,
+      "probed": 4,
+      "ranToRet": 0,
+      "suspiciousReturns": 1,
+      "realGapHits": 0,
+      "dataLikeHits": 0,
+      "otherErrors": 3
+    },
+    {
+      "name": "libjingle_peerconnection_so.so",
+      "mapped": true,
+      "symbols": 196,
+      "probed": 40,
+      "ranToRet": 2,
+      "suspiciousReturns": 5,
+      "realGapHits": 0,
+      "dataLikeHits": 0,
+      "otherErrors": 33
+    },
+    {
+      "name": "libr_upgrade_lib.so",
+      "mapped": true,
+      "symbols": 428,
+      "probed": 3,
+      "ranToRet": 0,
+      "suspiciousReturns": 1,
+      "realGapHits": 0,
+      "dataLikeHits": 0,
+      "otherErrors": 2
+    },
+    {
+      "name": "libswresample.so",
+      "mapped": true,
+      "symbols": 25,
+      "probed": 25,
+      "ranToRet": 10,
+      "suspiciousReturns": 7,
+      "realGapHits": 0,
+      "dataLikeHits": 1,
+      "otherErrors": 7
+    },
+    {
+      "name": "libswscale.so",
+      "mapped": true,
+      "symbols": 32,
+      "probed": 32,
+      "ranToRet": 14,
+      "suspiciousReturns": 10,
+      "realGapHits": 1,
+      "dataLikeHits": 0,
+      "otherErrors": 7
+    }
+  ],
+  "realGapHistogram": {
+    "0x9e6703e1": 1
+  },
+  "allHitHistogram": {
+    "0x00000000": 7,
+    "0x76206765": 4,
+    "0x00000001": 3,
+    "0x00000006": 1,
+    "0x00000046": 1,
+    "0x00000008": 1,
+    "0x00017ac8": 1,
+    "0x00013d55": 1,
+    "0x000024f2": 1,
+    "0x00002320": 1,
+    "0x9e6703e1": 1
+  },
+  "totals": {
+    "librariesMapped": 15,
+    "librariesTotal": 15,
+    "probed": 340,
+    "ranToRet": 107,
+    "suspiciousReturns": 108,
+    "realGapHits": 1,
+    "dataLikeHits": 21,
+    "otherErrors": 103,
+    "distinctRealOpcodes": 1
+  }
+}

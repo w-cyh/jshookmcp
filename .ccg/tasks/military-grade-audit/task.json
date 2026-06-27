@@ -1,0 +1,15 @@
+{
+  "id": "military-grade-audit",
+  "title": "全域军工级标准验证评估——451 个工具逐一验证",
+  "status": "completed",
+  "strategy": "deep-research",
+  "currentPhase": "4-done",
+  "nextAction": "Final report saved to research/final-report.md",
+  "agentsLaunched": 3,
+  "domainsTotal": 36,
+  "domainsComplete": 36,
+  "branch": "master",
+  "scope": "all-domains-all-tools",
+  "createdAt": "2026-06-24T00:00:00Z",
+  "completedAt": "2026-06-24T11:58:00Z"
+}

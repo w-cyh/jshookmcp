@@ -1,0 +1,3 @@
+{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
+{"file": ".ccg/tasks/native-emulator-flutter-handoff/HANDOFF-SIMD-CRYPTO.md", "reason": "Native emulator SIMD/crypto implementation handoff doc"}
+{"file": "C:/Users/vmoranv/.claude/projects/D--coding-reverse-jshookmcp/memory/native-emulator-android-a-plan.md", "reason": "Current ARM64 emulator implementation status"}

@@ -1,0 +1,12 @@
+{
+  "id": "domain-merge",
+  "title": "Merge small domains so every domain has >5 tools",
+  "status": "in_progress",
+  "strategy": "refactor-safely",
+  "currentPhase": "1",
+  "nextAction": "Read HANDOFF.md and execute merge plan",
+  "gate": null,
+  "branch": "master",
+  "scope": "domain-merge",
+  "createdAt": "2026-05-31T01:01:42.102Z"
+}

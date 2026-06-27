@@ -1,0 +1,12 @@
+[
+  {
+    "phase": "6-verify",
+    "next": "Run verify-quality, verify-security, verify-change gates",
+    "ts": 1782525358224
+  },
+  {
+    "phase": "6-verify",
+    "next": "Run verify-quality, verify-security, verify-change gates",
+    "ts": 1782525786745
+  }
+]

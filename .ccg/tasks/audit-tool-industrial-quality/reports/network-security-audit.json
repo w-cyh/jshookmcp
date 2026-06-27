@@ -1,0 +1,550 @@
+{
+  "domainGroup": "Network & Security",
+  "toolsCount": 86,
+  "domains": [
+    "network",
+    "proxy",
+    "protocol-analysis",
+    "streaming",
+    "boringssl-inspector",
+    "graphql"
+  ],
+  "perDomain": [
+    {
+      "domain": "network",
+      "toolsCount": 33,
+      "profiles": ["workflow", "full"],
+      "categories": [
+        {
+          "name": "Capture/Monitoring",
+          "tools": [
+            "network_enable",
+            "network_disable",
+            "network_get_status",
+            "network_monitor",
+            "network_get_requests",
+            "network_get_response_body",
+            "network_get_stats"
+          ]
+        },
+        {
+          "name": "Console Injection",
+          "tools": [
+            "console_get_exceptions",
+            "console_inject",
+            "console_inject_fetch_interceptor",
+            "console_inject_xhr_interceptor",
+            "console_buffers"
+          ]
+        },
+        {
+          "name": "Performance/Profiling",
+          "tools": [
+            "performance_get_metrics",
+            "performance_coverage",
+            "performance_take_heap_snapshot",
+            "performance_trace",
+            "profiler_cpu",
+            "profiler_heap_sampling"
+          ]
+        },
+        {
+          "name": "Transport/Raw",
+          "tools": [
+            "http_request_build",
+            "http_plain_request",
+            "http2_probe",
+            "http2_frame_build",
+            "dns_resolve",
+            "dns_reverse",
+            "dns_probe",
+            "dns_cname_chain",
+            "dns_bulk_resolve"
+          ]
+        },
+        {
+          "name": "Analysis/Replay",
+          "tools": [
+            "network_extract_auth",
+            "network_export_har",
+            "network_replay_request",
+            "network_intercept",
+            "network_tls_fingerprint",
+            "network_bot_detect_analyze"
+          ]
+        },
+        {
+          "name": "Probing",
+          "tools": [
+            "network_rtt_measure",
+            "network_latency_stats",
+            "network_traceroute",
+            "network_icmp_probe"
+          ]
+        }
+      ],
+      "score": 78,
+      "verdict": "Strong browser-integrated network capture with HAR 1.2 export, request replay with SSRF-safe DNS pinning, HTTP/2 frame construction, and TLS/HTTP fingerprinting. Gaps: no native HTTP/3 support (only fingerprinting), no QUIC probe, no gRPC-specific tools, and HAR exporter hardcodes HTTP/1.1 version strings for all entries.",
+      "strengths": [
+        "HAR 1.2 export with parallel body fetching (concurrency-limited) and optional body inclusion",
+        "Request replay with dryRun default, SSRF guard with DNS resolution + IP pinning, redirect following (301/302/303→GET, 307/308→preserve), and authorization policy per request",
+        "HTTP/2 probe and raw frame builder (DATA, SETTINGS, PING, WINDOW_UPDATE, RST_STREAM, GOAWAY)",
+        "TLS fingerprint computation (GREASE-filtered, JA3-like format) and HTTP fingerprint (method, version, headers, cookies, accept-language)",
+        "Bot detection analysis on captured traffic",
+        "DNS toolkit: resolve, reverse, probe, CNAME chain, bulk resolve (up to 1000 hosts, 50 concurrency)",
+        "Network interception via CDP Fetch domain with glob/regex patterns, batch rules, and stage selection (Request/Response)",
+        "Auth extractor scans headers/cookies/URL params/body for Bearer/JWT/session tokens/API keys",
+        "Raw HTTP/1.x request builder and plain TCP request sender with authorization policy",
+        "Latency stats with percentile computation and RTT measurement (tcp/tls/http probes)",
+        "ICMP traceroute and echo probe with configurable TTL/packet size"
+      ],
+      "gaps": [
+        "HAR exporter always sets httpVersion to 'HTTP/1.1' regardless of actual protocol (HTTP/2 or HTTP/3 traffic misreported)",
+        "No native HTTP/3 or QUIC probe tool — only fingerprinting hash computation",
+        "No gRPC-specific request builder or protobuf-aware payload inspection",
+        "No Wireshark-style packet dissection for captured traffic (relies on protocol-analysis domain for manual packet build)",
+        "network_replay_request uses global fetch with manual redirect handling; no HTTP/2 multiplexing or stream priority replay",
+        "No certificate transparency (CT) log querying or OCSP stapling inspection",
+        "No bandwidth/throttling simulation tools"
+      ]
+    },
+    {
+      "domain": "proxy",
+      "toolsCount": 8,
+      "profiles": ["full"],
+      "categories": [
+        { "name": "Lifecycle", "tools": ["proxy_start", "proxy_stop", "proxy_status"] },
+        { "name": "CA & Trust", "tools": ["proxy_export_ca"] },
+        {
+          "name": "Rules & Capture",
+          "tools": ["proxy_add_rule", "proxy_get_requests", "proxy_clear_logs"]
+        },
+        { "name": "Device Integration", "tools": ["proxy_setup_adb_device"] }
+      ],
+      "score": 62,
+      "verdict": "Functional HTTP/HTTPS interception proxy built on mockttp with CA generation, rule-based forwarding/mock/blocking, and ADB device integration. Limited compared to mitmproxy/Burp Suite: no scriptable request/response transformation, no WebSocket proxying, no upstream proxy chaining, and no traffic decryption introspection beyond mockttp's built-in TLS termination.",
+      "strengths": [
+        "mockttp-based HTTP/HTTPS proxy with auto-generated CA (PKCS#8 normalized for cross-platform compatibility)",
+        "CA certificate export for manual trust store installation",
+        "Rule-based interception: forward, mock_response (status + body), block (close connection)",
+        "ADB device proxy setup: push CA, reverse tcp port, set global http_proxy",
+        "Capture buffer with FIFO eviction and URL filtering"
+      ],
+      "gaps": [
+        "No request/response body inspection or modification in rules (only mock_response with static body)",
+        "No scriptable/transform hook support (mitmproxy has Python scripting; Burp has Extender API)",
+        "No WebSocket upgrade interception or wss proxying",
+        "No upstream proxy chaining (corporate proxy bypass scenarios)",
+        "No traffic replay or repeat-from-proxy capabilities",
+        "No automatic CA installation on ADB (requires manual Settings install; noted in instructions)",
+        "No HAR export from proxy capture (only internal buffer, no HAR serialization)"
+      ]
+    },
+    {
+      "domain": "protocol-analysis",
+      "toolsCount": 16,
+      "profiles": ["full"],
+      "categories": [
+        {
+          "name": "Packet Construction",
+          "tools": ["ethernet_frame_build", "arp_build", "raw_ip_packet_build", "icmp_echo_build"]
+        },
+        { "name": "Payload Manipulation", "tools": ["payload_template_build", "payload_mutate"] },
+        { "name": "PCAP", "tools": ["pcap_write", "pcap_read"] },
+        {
+          "name": "Protocol Inference",
+          "tools": [
+            "proto_define_pattern",
+            "proto_auto_detect",
+            "proto_infer_fields",
+            "proto_infer_state_machine",
+            "proto_export_schema",
+            "proto_visualize_state",
+            "proto_fingerprint"
+          ]
+        },
+        { "name": "Checksum", "tools": ["checksum_apply"] }
+      ],
+      "score": 68,
+      "verdict": "Solid packet crafting and PCAP I/O with deterministic checksums, but protocol inference is heuristic-based and lacks deep binary protocol analysis. Good for educational/CTF use; industrial reverse engineering would need more structured format grammar support (Kaitai Struct, 010 Editor templates).",
+      "strengths": [
+        "Deterministic Ethernet II, ARP, IPv4/IPv6, ICMP echo packet builders with full header field control (DSCP, ECN, DF/MF, fragment offset, flow label)",
+        "Internet checksum application with zero-and-write support, configurable endianness",
+        "Classic PCAP read/write (little/big endian, micro/nano precision, configurable link type and snap length); explicitly excludes PCAPNG for determinism",
+        "Payload template builder with typed fields (u8/u16/u32/i8/i16/i32/string/bytes), endianness, encoding, padding",
+        "Byte-level mutation strategies: set_byte, flip_bit, overwrite_bytes, append_bytes, truncate, increment_integer",
+        "Protocol pattern auto-detection from hex samples, field inference, and state machine inference from message sequences",
+        "Mermaid state diagram generation from inferred state machines",
+        "Protocol fingerprinting against known signatures with field boundary hints"
+      ],
+      "gaps": [
+        "No TCP/UDP segment builder (only IP packet + ICMP echo; missing transport layer above IP)",
+        "No support for protocol grammar definitions (ASN.1, protobuf, msgpack, thrift) beyond simple field pattern",
+        "Protocol inference is heuristic/byte-boundary based, not semantic — no true protocol compiler or grammar inference",
+        "No integration with Wireshark dissector engine or tshark for automated dissection",
+        "No support for reading PCAPNG (modern Wireshark default format)",
+        "No support for writing pcapng with enhanced packet blocks, comments, or interface statistics"
+      ]
+    },
+    {
+      "domain": "streaming",
+      "toolsCount": 5,
+      "profiles": ["workflow", "full"],
+      "categories": [
+        { "name": "WebSocket", "tools": ["ws_monitor", "ws_get_frames", "ws_get_connections"] },
+        { "name": "SSE", "tools": ["sse_monitor_enable", "sse_get_events"] }
+      ],
+      "score": 72,
+      "verdict": "Competent WebSocket and SSE monitoring via CDP events and in-page EventSource patching. Good frame-level capture with pagination and filtering. Missing: no binary WebSocket payload hex dump, no WebSocket message reconstruction (fragmented frames), and no compression (permessage-deflate) awareness.",
+      "strengths": [
+        "WebSocket monitoring via CDP Network.webSocketFrameSent/Received with RingBuffer-backed frame storage (configurable max 1000-20000 frames)",
+        "Frame filtering by direction (sent/received/all), payload regex filter, pagination with offset/limit",
+        "Connection tracking with status (connecting/open/closed/error), handshake status, frame counts",
+        "SSE monitoring via in-page EventSource wrapper with persistent injection support (evaluateOnNewDocument)",
+        "SSE event filtering by sourceUrl and eventType, pagination",
+        "Custom event type capture beyond standard message/open/error via addEventListener wrapping"
+      ],
+      "gaps": [
+        "No binary payload hex decoding for WebSocket frames (payloadSample is raw string, no hex view)",
+        "No WebSocket frame fragmentation reassembly (multi-frame messages not reconstructed)",
+        "No permessage-deflate compression awareness (compressed payloads appear as binary noise)",
+        "No WebSocket handshake header inspection or custom subprotocol negotiation tracking",
+        "No Server-Sent Events replay or injection capability (only monitoring)",
+        "No streaming bandwidth/rate measurement tools"
+      ]
+    },
+    {
+      "domain": "boringssl-inspector",
+      "toolsCount": 27,
+      "profiles": ["workflow", "full"],
+      "categories": [
+        {
+          "name": "Keylog Session",
+          "tools": [
+            "tls_keylog_enable",
+            "tls_keylog_parse",
+            "tls_keylog_disable",
+            "tls_decrypt_payload",
+            "tls_keylog_summarize",
+            "tls_keylog_lookup_secret"
+          ]
+        },
+        {
+          "name": "TLS Analysis",
+          "tools": [
+            "tls_cert_pin_bypass",
+            "tls_parse_handshake",
+            "tls_cipher_suites",
+            "tls_parse_certificate",
+            "tls_probe_endpoint"
+          ]
+        },
+        {
+          "name": "TCP/TLS Socket",
+          "tools": [
+            "tcp_open",
+            "tcp_write",
+            "tcp_read_until",
+            "tcp_close",
+            "tls_open",
+            "tls_write",
+            "tls_read_until",
+            "tls_close"
+          ]
+        },
+        {
+          "name": "WebSocket",
+          "tools": [
+            "websocket_open",
+            "websocket_send_frame",
+            "websocket_read_frame",
+            "websocket_close"
+          ]
+        },
+        { "name": "Frida", "tools": ["tls_cert_pin_bypass_frida"] },
+        {
+          "name": "Raw Network",
+          "tools": [
+            "net_raw_tcp_send",
+            "net_raw_tcp_listen",
+            "net_raw_udp_send",
+            "net_raw_udp_listen"
+          ]
+        }
+      ],
+      "score": 75,
+      "verdict": "Impressive TLS tooling with SSLKEYLOGFILE support, active TLS probing, raw socket sessions, and Frida integration for cert pinning bypass. Strong for mobile/browser TLS analysis. Gaps: no TLS 1.3 key derivation (only static keylog parsing), no automated TLS session resumption testing, and no OCSP/CT inspection.",
+      "strengths": [
+        "SSLKEYLOGFILE enable/parse/disable with secret lookup by client_random, summary by label distribution",
+        "TLS payload decryption with configurable algorithm (default aes-256-gcm) and auth tag",
+        "Active TLS endpoint probing with full handshake metadata: cipher, ALPN, certificate chain, hostname validation, session reuse, timing",
+        "Certificate pinning bypass strategy generation per platform (android/ios/desktop) with instructions",
+        "Frida-based cert pinning bypass delegating to binary-instrument domain (BoringSSL, Chrome, OkHttp support)",
+        "Raw TLS handshake parsing from hex with ClientHello SNI/cipher suite/extension extraction",
+        "Certificate chain parsing from hex with SHA-256 fingerprints",
+        "Stateful TCP and TLS sessions with read-until-delimiter, write, close (graceful or force)",
+        "Raw TCP/UDP send/listen for one-shot or timeout-bound interactions",
+        "WebSocket client session management (open/send/read/close) with TLS options",
+        "SSRF validation on all network targets, custom CA bundle support, allowInvalidCertificates and skipHostnameCheck policies"
+      ],
+      "gaps": [
+        "TLS keylog parsing is static file-based; no live capture from running process without SSLKEYLOGFILE env (Frida path exists but separate)",
+        "No TLS 1.3 specific key schedule or early data (0-RTT) inspection tools",
+        "No OCSP stapling status inspection or certificate transparency log verification",
+        "No automated TLS session resumption / ticket rotation testing",
+        "No HTTP/2 ALPN-aware WebSocket upgrade (only raw ws/wss)",
+        "Raw socket tools are one-shot or single-connection; no persistent server mode for multi-client testing",
+        "No TLS middlebox or DPI evasion fingerprint randomization"
+      ]
+    },
+    {
+      "domain": "graphql",
+      "toolsCount": 6,
+      "profiles": ["workflow", "full"],
+      "categories": [
+        { "name": "Introspection", "tools": ["graphql_introspect", "graphql_enum_schema"] },
+        { "name": "Extraction", "tools": ["graphql_extract_queries"] },
+        { "name": "Replay", "tools": ["graphql_replay"] },
+        { "name": "Auxiliary", "tools": ["call_graph_analyze", "script_replace_persist"] }
+      ],
+      "score": 70,
+      "verdict": "Well-rounded GraphQL toolkit with introspection, field enumeration via suggestion errors, query extraction from captured traffic, and replay. Good SSRF protection and browser/Node dual-path execution. Gaps: no batch query analysis, no query complexity/cost analysis, no subscription testing, and no persisted query inspection.",
+      "strengths": [
+        "GraphQL introspection with standard query, browser or Node fetch, schema preview with truncation safety",
+        "Field enumeration via server suggestion errors (Did you mean ...) with introspection fallback, configurable depth (1-6)",
+        "Query extraction from captured network traces (fetch/XHR/in-page monitors) with deduplication by URL+operationName+query+variables",
+        "GraphQL replay with variable injection, operationName, custom headers, browser/Node dual path",
+        "SSRF protection via validateExternalEndpoint (blocks private/reserved addresses) and validateBrowserEndpoint (same-origin policy check)",
+        "Persistent script replacement via CDP request interception for modifying GraphQL client scripts",
+        "Call graph analysis for runtime function tracing in page context"
+      ],
+      "gaps": [
+        "No GraphQL batch query analysis or alias-based attack detection",
+        "No query complexity/cost analysis or depth-limit testing",
+        "No subscription (WebSocket-based GraphQL) testing or replay",
+        "No persisted query (APQ) hash inspection or automatic persisted query probing",
+        "No GraphQL directive-based introspection bypass detection",
+        "No federation/schema stitching-specific tools (gateway introspection, entity resolution)",
+        "graphql_enum_schema concurrency parameter is reserved/future expansion (not implemented)"
+      ]
+    }
+  ],
+  "criticalFindings": [
+    {
+      "id": "NET-CRIT-01",
+      "severity": "critical",
+      "domain": "network",
+      "tool": "network_export_har",
+      "finding": "HAR exporter hardcodes HTTP version to 'HTTP/1.1' for all entries regardless of actual protocol (HTTP/2 or HTTP/3). This corrupts HAR fidelity and misleads downstream analysis in Chrome DevTools, Wireshark, or performance tools.",
+      "recommendation": "Track actual protocol version from CDP Network.responseReceived/loadingFinished events and emit correct httpVersion ('HTTP/2', 'HTTP/3', 'HTTP/1.1') in HAR entries.",
+      "industryBenchmark": "Chrome DevTools HAR export preserves accurate protocol version; Wireshark dissects HTTP/2 streams correctly."
+    },
+    {
+      "id": "NET-CRIT-02",
+      "severity": "critical",
+      "domain": "network",
+      "tool": "network_replay_request",
+      "finding": "Replay engine uses global fetch with manual redirect handling and no HTTP/2 multiplexing support. For HTTP/2 origins, replay may downgrade to HTTP/1.1 or fail on connection coalescing, breaking fidelity for modern APIs.",
+      "recommendation": "Integrate Node.js http2 module for HTTP/2-aware replay with stream priority and header compression preservation."
+    }
+  ],
+  "warningFindings": [
+    {
+      "id": "NET-WARN-01",
+      "severity": "warning",
+      "domain": "network",
+      "tool": "network_tls_fingerprint",
+      "finding": "TLS fingerprint computation implements a custom format (not standard JA3/JA3S/JA4). While internally consistent, interoperability with existing bot-detection databases (FingerprintJS, Cloudflare JA3 blocklists) requires manual mapping.",
+      "recommendation": "Add optional ja3 and ja3s output fields alongside the custom format for industry compatibility."
+    },
+    {
+      "id": "PROXY-WARN-01",
+      "severity": "warning",
+      "domain": "proxy",
+      "tool": "proxy_add_rule",
+      "finding": "Rule actions limited to forward/mock_response/block. No request/response body transformation, no regex replacement, no script hook — significantly less capable than mitmproxy's Python scripting or Burp's Extender API.",
+      "recommendation": "Add a 'transform' action type accepting a JavaScript/QuickJS script for request/response mutation, or integrate with sandbox-sdk for safe script execution."
+    },
+    {
+      "id": "PROTO-WARN-01",
+      "severity": "warning",
+      "domain": "protocol-analysis",
+      "tool": "pcap_read",
+      "finding": "Explicitly excludes PCAPNG support. Modern Wireshark and tcpdump default to pcapng; users must convert files before analysis.",
+      "recommendation": "Add pcapng read support (at least for Enhanced Packet Blocks with common link types) to eliminate friction with modern capture tools."
+    },
+    {
+      "id": "PROTO-WARN-02",
+      "severity": "warning",
+      "domain": "protocol-analysis",
+      "tool": "payload_template_build",
+      "finding": "No TCP or UDP segment builder — transport layer above IP is missing. Users cannot craft complete TCP SYN packets or UDP datagrams with checksums for full stack testing.",
+      "recommendation": "Add tcp_segment_build and udp_datagram_build with sequence/ack numbers, flags, window size, and UDP checksum."
+    },
+    {
+      "id": "STREAM-WARN-01",
+      "severity": "warning",
+      "domain": "streaming",
+      "tool": "ws_get_frames",
+      "finding": "Binary WebSocket payloads are not hex-decoded; payloadSample stores raw string which may be corrupted for non-UTF8 binary data. No fragmentation reassembly.",
+      "recommendation": "Add hex payload output for binary frames and implement multi-frame message reassembly using FIN and opcode continuity rules."
+    },
+    {
+      "id": "SSL-WARN-01",
+      "severity": "warning",
+      "domain": "boringssl-inspector",
+      "tool": "tls_probe_endpoint",
+      "finding": "No OCSP stapling status or certificate transparency (CT) log inspection in TLS probe results. Modern security assessment requires CT visibility (SCT list parsing).",
+      "recommendation": "Parse and report OCSP staple status, SCT list count, and CT log names from TLS handshake extensions."
+    },
+    {
+      "id": "GQL-WARN-01",
+      "severity": "warning",
+      "domain": "graphql",
+      "tool": "graphql_enum_schema",
+      "finding": "Concurrency parameter is documented but not implemented (reserved for future expansion). Users may expect parallel enumeration speedup.",
+      "recommendation": "Implement bounded concurrent field probing with Promise.allSettled and configurable concurrency, or remove the parameter from the schema until implemented."
+    }
+  ],
+  "infoFindings": [
+    {
+      "id": "NET-INFO-01",
+      "severity": "info",
+      "domain": "network",
+      "finding": "No HTTP/3 or QUIC probe tool exists. Only fingerprinting hash computation is available. For full HTTP/3 analysis, users must rely on external tools (curl --http3, nghttp3)."
+    },
+    {
+      "id": "NET-INFO-02",
+      "severity": "info",
+      "domain": "network",
+      "finding": "No gRPC-specific request builder or protobuf-aware payload inspection. gRPC-Web traffic can be captured but not decoded without manual protobuf schema."
+    },
+    {
+      "id": "PROXY-INFO-01",
+      "severity": "info",
+      "domain": "proxy",
+      "finding": "Proxy capture buffer is in-memory only with no persistence or HAR serialization. For long-running captures, buffer eviction causes data loss."
+    },
+    {
+      "id": "SSL-INFO-01",
+      "severity": "info",
+      "domain": "boringssl-inspector",
+      "finding": "TLS session resumption and 0-RTT early data testing are not supported. No ticket rotation or PSK binder inspection tools."
+    },
+    {
+      "id": "GQL-INFO-01",
+      "severity": "info",
+      "domain": "graphql",
+      "finding": "No GraphQL subscription (WebSocket-based) testing tools. No automatic persisted query (APQ) hash probing."
+    }
+  ],
+  "industryBenchmarks": [
+    {
+      "tool": "mitmproxy",
+      "category": "proxy",
+      "capabilities": [
+        "Python scripting",
+        "WebSocket proxying",
+        "HTTP/2 full proxy",
+        "upstream proxy chaining",
+        "HAR export",
+        "traffic replay",
+        "content view (protobuf, JSON, images)"
+      ],
+      "ourGaps": [
+        "No scripting",
+        "No WebSocket proxy",
+        "No upstream chaining",
+        "No HAR export from proxy",
+        "No content view plugins"
+      ]
+    },
+    {
+      "tool": "Burp Suite",
+      "category": "proxy",
+      "capabilities": [
+        "Extender API (Java/Python/Ruby)",
+        "Intruder (automated attacks)",
+        "Repeater (manual replay)",
+        "Scanner (DAST)",
+        "Sequencer (entropy analysis)",
+        "Decoder (multiple encodings)",
+        "Comparer (diff)"
+      ],
+      "ourGaps": [
+        "No extender API",
+        "No automated attack tools",
+        "No DAST scanner",
+        "No entropy analysis",
+        "No built-in decoder/comparer"
+      ]
+    },
+    {
+      "tool": "Wireshark",
+      "category": "protocol-analysis",
+      "capabilities": [
+        "1000+ dissectors",
+        "Live capture (pcapng)",
+        "Protocol hierarchy stats",
+        "IO graphs",
+        "Follow TCP/UDP/HTTP/QUIC stream",
+        "Expert info (warnings/errors)"
+      ],
+      "ourGaps": [
+        "No live capture",
+        "No protocol dissector library",
+        "No stream following",
+        "No expert info system",
+        "No pcapng support"
+      ]
+    },
+    {
+      "tool": "tcpdump",
+      "category": "protocol-analysis",
+      "capabilities": [
+        "BPF filter syntax",
+        "Live capture",
+        "pcapng output",
+        "High performance (kernel-level)"
+      ],
+      "ourGaps": ["No BPF filter support", "No kernel-level capture", "No pcapng output"]
+    },
+    {
+      "tool": "OpenSSL keylog",
+      "category": "boringssl-inspector",
+      "capabilities": [
+        "SSLKEYLOGFILE standard format",
+        "Wireshark TLS decryption integration",
+        "Live capture from browser/process"
+      ],
+      "ourGaps": [
+        "No live capture without env var",
+        "No direct Wireshark integration (manual file export needed)"
+      ]
+    },
+    {
+      "tool": "gRPC",
+      "category": "network",
+      "capabilities": [
+        "HTTP/2 framing",
+        "protobuf serialization",
+        "gRPC-Web fallback",
+        "reflection API"
+      ],
+      "ourGaps": [
+        "No gRPC request builder",
+        "No protobuf decode without schema",
+        "No gRPC reflection client"
+      ]
+    },
+    {
+      "tool": "HTTP/3 (curl/nghttp3)",
+      "category": "network",
+      "capabilities": ["QUIC handshake", "0-RTT", "Connection migration", "HTTP/3 datagrams"],
+      "ourGaps": ["No QUIC handshake probe", "No HTTP/3 request builder", "No 0-RTT testing"]
+    }
+  ],
+  "overallScore": 71,
+  "overallVerdict": "The Network & Security domain group is functionally comprehensive for browser-integrated network analysis, TLS inspection, and GraphQL API testing. It exceeds typical MCP tool suites in depth (HAR export, SSRF-safe replay, TLS keylog, packet crafting) but falls short of industrial standalone tools (mitmproxy, Burp, Wireshark) in areas requiring deep protocol dissection, scriptable interception, HTTP/3/QUIC support, and live kernel-level capture. The critical gaps are HAR version accuracy and HTTP/2 replay fidelity. With targeted fixes, this group can serve as a credible lightweight alternative for automated security pipelines.",
+  "confidenceLevel": "high"
+}

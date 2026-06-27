@@ -1,0 +1,12 @@
+{
+  "id": "webgpu-limitations-upgrade",
+  "title": "Upgrade WebGPU domain known limitations: recoverable hooks, structured command capture, real memory tracking, WGSL parser, SPIR-V support",
+  "status": "in_progress",
+  "strategy": "guided-develop",
+  "currentPhase": "6-verify",
+  "nextAction": "Run verify-quality, verify-security, verify-change gates",
+  "gate": null,
+  "branch": "master",
+  "scope": "src/server/domains/webgpu, src/modules/webgpu",
+  "createdAt": "2026-06-18T00:46:56Z"
+}

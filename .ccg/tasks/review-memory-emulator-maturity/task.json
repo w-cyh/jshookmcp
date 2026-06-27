@@ -1,0 +1,12 @@
+{
+  "id": "review-memory-emulator-maturity",
+  "title": "审查 memory 工具与 native-emulator 安卓模拟工具是否达生产级而非 MVP",
+  "status": "completed",
+  "strategy": "review-audit",
+  "currentPhase": "3",
+  "nextAction": "报告已产出，等待用户决定是否补全指令集/重定位/JNI 槽位",
+  "gate": "双模型审查不可用(subagent spawn 失效)，主 agent 深度阅读+websearch 对标 unidbg 完成",
+  "branch": "master",
+  "scope": "review-memory-emulator-maturity",
+  "createdAt": "2026-05-29T00:00:00Z"
+}

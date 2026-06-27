@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
+{"file": "scripts/native-emulator-probe.ts", "reason": "现成 opcode 直方图探针；重跑基线的复用工具，但有盲调噪音问题需改进"}
+{"file": "src/modules/native-emulator/CpuEngine.ts", "reason": "RETURN_SENTINEL=0(L40) + run loop while(pc!==stopAt)(L523) + BLR target=0(L865) = NULL间接调用伪装成正常返回的根因"}
+{"file": "D:/coding/reverse/jshookmcp/.ccg/tasks/sqlcipher-decrypt-chain/diagnosis.md", "reason": "STUR bug 诊断全文，反思③的证据来源"}

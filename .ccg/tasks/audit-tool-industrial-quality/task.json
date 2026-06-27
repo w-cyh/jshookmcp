@@ -1,0 +1,24 @@
+{
+  "id": "audit-tool-industrial-quality",
+  "title": "审查所有域所有工具是否达到工业级水准",
+  "status": "completed",
+  "strategy": "review-audit",
+  "currentPhase": "3",
+  "nextAction": "报告已完成，查看 .ccg/tasks/audit-tool-industrial-quality/REPORT.md 和 reports/ 目录",
+  "gate": null,
+  "branch": "master",
+  "scope": "audit-tool-industrial-quality",
+  "createdAt": "2026-06-16T17:10:00+08:00",
+  "updatedAt": "2026-06-16T20:30:00+08:00",
+  "artifacts": [
+    ".ccg/tasks/audit-tool-industrial-quality/REPORT.md",
+    ".ccg/tasks/audit-tool-industrial-quality/reports/summary-audit.json",
+    ".ccg/tasks/audit-tool-industrial-quality/reports/browser-automation-audit.json",
+    ".ccg/tasks/audit-tool-industrial-quality/reports/reverse-engineering-audit.json",
+    ".ccg/tasks/audit-tool-industrial-quality/reports/network-security-audit.json",
+    ".ccg/tasks/audit-tool-industrial-quality/reports/system-native-audit.json",
+    ".ccg/tasks/audit-tool-industrial-quality/reports/infra-utility-audit.json",
+    ".ccg/tasks/audit-tool-industrial-quality/reports/SECURITY-INPUT-VALIDATION-audit.json",
+    ".ccg/tasks/audit-tool-industrial-quality/reports/README.md"
+  ]
+}

@@ -1,0 +1,1 @@
+.ccg/tasks/audit-tool-industrial-quality/REPORT.md

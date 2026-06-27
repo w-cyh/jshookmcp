@@ -1,0 +1,12 @@
+{
+  "id": "mcp-architecture-improvements",
+  "title": "基于面试文档的 MCP 架构深度改进计划",
+  "status": "in_progress",
+  "strategy": "deep-research",
+  "currentPhase": "1",
+  "nextAction": "完成详细计划文档并等待用户确认优先级",
+  "gate": null,
+  "branch": "master",
+  "scope": "mcp-architecture-improvements",
+  "createdAt": "2026-05-17T00:00:00.000Z"
+}

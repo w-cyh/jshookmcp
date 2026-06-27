@@ -1,0 +1,5 @@
+{"file": "src/modules/native-emulator/CpuEngine.ts", "reason": "ARM64 解释器核心，仅实现 ~17 类指令，缺 MOVK/ADRP/AND/MUL/UDIV/CSEL/位域/NEON，real .so 必然触发 throw"}
+{"file": "src/modules/native-emulator/jni.ts", "reason": "JNIEnv 仅 21/232 槽，缺 GetFieldID/异常/全局引用/Float-Double 等，复杂 native 会 NULL fault"}
+{"file": "src/modules/native-emulator/ElfLoader.ts", "reason": "无重定位(R_AARCH64_RELATIVE/GLOB_DAT/JUMP_SLOT)，real PIC .so 的 GOT/PLT 不会被修正"}
+{"file": "tests/modules/native-emulator/CpuEngine.callSymbol.test.ts", "reason": "全部用手搓 buildSo 字节码 fixture，从未验证真实编译 .so"}
+{"file": "src/native/MemoryController.ts", "reason": "memory 工具走真 FFI(ReadProcessMemory/WriteProcessMemory/VirtualProtectEx)，已达生产级"}

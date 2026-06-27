@@ -1,0 +1,8 @@
+{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
+{"file": "src/modules/native-emulator/NativeEmulator.ts", "reason": "L7 facade composing CPU/ELF/bionic/syscall/JNI"}
+{"file": "src/modules/native-emulator/CpuEngine.ts", "reason": "ARM64 interpreter - integer ISA + NEON + crypto + FP"}
+{"file": "src/modules/native-emulator/jni.ts", "reason": "JNI environment for Java callback mocks"}
+{"file": "src/modules/native-emulator/apk.ts", "reason": "APK lib/arm64-v8a/*.so extractor"}
+{"file": "src/server/domains/native-emulator/handlers.impl.ts", "reason": "MCP tool handlers (19 nemu_* tools)"}
+{"file": "tests/modules/native-emulator/", "reason": "41 existing test files covering ISA/JNI/bionic"}
+{"file": "D:/cumhub/reverse/luolishe/luoys-6.10.apk", "reason": "Real-world Flutter APK test target (21.8MB)"}

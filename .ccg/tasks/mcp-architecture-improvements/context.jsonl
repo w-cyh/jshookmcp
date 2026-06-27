@@ -1,0 +1,8 @@
+{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
+{"file": "src/server/MCPServer.prompts.ts", "reason": "Only 3 prompts registered, interview doc emphasizes MCP prompts as core capability"}
+{"file": "src/server/MCPServer.resources.ts", "reason": "Only 4 resources, should expose eval metrics, search stats, activation state"}
+{"file": "src/server/search/ToolSearchEngineImpl.ts", "reason": "Missing re-ranker layer after RRF fusion"}
+{"file": "src/server/ToolRouter.ts", "reason": "No circuit breaker pattern for tool execution"}
+{"file": "src/server/ToolCallContextGuard.ts", "reason": "Only detects repeat loops, no prompt injection detection or permission tiers"}
+{"file": "src/server/observability/InstrumentationContract.ts", "reason": "NoopInstrumentation by default, no real OpenTelemetry/Prometheus backend"}
+{"file": "src/server/http/HttpMiddleware.ts", "reason": "Has auth/rate-limit but no tool-level permission control (A2SPA)"}

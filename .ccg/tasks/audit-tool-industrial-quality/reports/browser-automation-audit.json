@@ -1,0 +1,269 @@
+{
+  "domainGroup": "Browser Automation",
+  "toolsCount": 114,
+  "domains": ["browser", "canvas", "debugger", "v8-inspector", "instrumentation", "coordination"],
+  "perDomain": [
+    {
+      "domain": "browser",
+      "toolCount": 64,
+      "profiles": ["workflow", "full"],
+      "score": 78,
+      "completeness": "excellent",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "达到工业级。覆盖 Playwright/Puppeteer 核心能力 + JSDOM 无头替代方案 + Camoufox 反检测 + 验证码处理 + 人类行为模拟 + 操作录制回放。",
+      "strengths": [
+        "64 个工具覆盖导航、点击、输入、截图、上传、滚动、等待、框架状态提取、IndexedDB 导出、JS 堆搜索等全场景",
+        "Camoufox 集成提供反检测 Firefox 环境，支持 GeoIP、代理、WebRTC/WebGL 阻断",
+        "stealth_generate_fingerprint + stealth_configure_jitter + stealth_verify 形成完整反检测工作流",
+        "captcha_detect/captcha_wait/captcha_vision_solve/widget_challenge_solve 覆盖检测、等待、外部求解、widget hook",
+        "human_mouse/human_scroll/human_typing 使用贝塞尔曲线 + 抖动 + 打字错误模拟，超越基础 Playwright",
+        "browser_codegen_start/stop 提供操作录制与步骤清洗",
+        "JSDOM 工具提供完整无头 DOM 环境（parse/query/execute/serialize/cookies）"
+      ],
+      "missingCapabilities": [
+        "视频录制与 PDF 生成",
+        "多指触控手势模拟（pinch/swipe/rotate）",
+        "权限管理对话框自动化（camera/microphone/notifications）",
+        "文件选择器对话框处理",
+        "移动端真机云实验室集成"
+      ],
+      "keyFindings": [
+        "page_evaluate 在 Camoufox 路径使用 new Function() 包装用户代码",
+        "browser_jsdom_execute 使用 window.eval() 执行用户代码",
+        "stealth jitter 使用模块级可变状态，多 session 间可能互相影响"
+      ]
+    },
+    {
+      "domain": "canvas",
+      "toolCount": 7,
+      "profiles": ["workflow", "full"],
+      "score": 72,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "良好。Canvas 引擎指纹、场景 dump、对象拾取、Skia 关联具备，但缺少 WebGPU/Three.js shader 检查。",
+      "strengths": ["Canvas/WebGL 引擎指纹识别", "场景树 dump 与对象拾取", "Skia 渲染对象关联"],
+      "missingCapabilities": [
+        "WebGPU 支持",
+        "Three.js/Babylon.js 等 3D 框架专用提取",
+        "Shader 代码检查与修改"
+      ],
+      "keyFindings": []
+    },
+    {
+      "domain": "debugger",
+      "toolCount": 18,
+      "profiles": ["workflow", "full"],
+      "score": 80,
+      "completeness": "excellent",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "达到工业级。CDP 调试器完整封装，支持代码断点、XHR/事件/异常断点、watch 表达式、blackbox、反调试绕过。",
+      "strengths": [
+        "代码断点、XHR 断点、事件断点、事件类别断点、异常断点",
+        "watch 表达式管理",
+        "blackbox 跳过第三方库",
+        "调试会话保存/加载/导出",
+        "反调试检测与绕过"
+      ],
+      "missingCapabilities": [
+        "条件断点表达式高级验证",
+        "异步调用栈捕获",
+        "DOM 断点（子树/属性/节点）",
+        "内存观察点集成"
+      ],
+      "keyFindings": [
+        "debugger_evaluate 接受用户表达式直接传入 runtimeInspector.evaluate()",
+        "breakpoint condition 未做表达式安全校验"
+      ]
+    },
+    {
+      "domain": "v8-inspector",
+      "toolCount": 8,
+      "profiles": ["workflow", "full"],
+      "score": 62,
+      "completeness": "good",
+      "implementation": "fair",
+      "documentation": "good",
+      "verdict": "良好但分析深度不足。快照捕获、对象检查、版本检测具备，但 heap analyze/diff 仅返回 trivial 指标，无法计算 dominator tree 或 class histogram。",
+      "strengths": [
+        "V8 heap snapshot 捕获",
+        "对象属性检查",
+        "堆统计信息",
+        "JIT 状态检查",
+        "字节码提取尝试"
+      ],
+      "missingCapabilities": [
+        "Dominator tree 计算",
+        "Class histogram",
+        "Retention path 分析",
+        "真正的堆 diff（对象级而非 size 级）"
+      ],
+      "keyFindings": [
+        "v8_heap_snapshot_analyze 仅返回 chunkCount/sizeBytes，无法分析泄漏根因",
+        "v8_heap_diff 仅比较 sizeDeltaBytes"
+      ]
+    },
+    {
+      "domain": "instrumentation",
+      "toolCount": 10,
+      "profiles": ["full"],
+      "score": 74,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "良好。会话管理、hook preset、证据图、AI hook 覆盖主要插桩场景。",
+      "strengths": [
+        "Instrumentation session 管理",
+        "Hook preset（eval/new Function/fetch/XHR/storage）",
+        "Evidence graph 构建",
+        "AI-assisted hook 建议"
+      ],
+      "missingCapabilities": [
+        "PerformanceObserver hook",
+        "WebAssembly 相关 hook",
+        "更细粒度的 hook 条件触发"
+      ],
+      "keyFindings": ["hookPresetHandlers/advancedHandlers 依赖可能 undefined，错误信息较模糊"]
+    },
+    {
+      "domain": "coordination",
+      "toolCount": 10,
+      "profiles": ["full"],
+      "score": 75,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "良好。多 tab 协同、状态板、任务交接、快照管理覆盖 Playwright BrowserContext 等价能力。",
+      "strengths": [
+        "tab alias 绑定与切换",
+        "跨 tab 数据传递",
+        "状态板读写与监听",
+        "任务交接与快照"
+      ],
+      "missingCapabilities": ["分布式多机器协调", "持久化状态板后端"],
+      "keyFindings": []
+    }
+  ],
+  "criticalFindings": [
+    {
+      "id": "BROWSER-CRIT-01",
+      "domain": "browser",
+      "tool": "page_evaluate",
+      "finding": "Camoufox 路径使用 new Function() 直接包装并执行用户传入的 code 参数，无任何沙箱或 AST 校验，可执行任意 JavaScript。",
+      "recommendation": "Camoufox 路径应复用 pageController.evaluate() 的安全评估路径，或先用 Babel AST 做白名单校验再执行。",
+      "industryBenchmark": "Playwright page.evaluate 在页面隔离上下文中执行，不提供 new Function 包装。"
+    },
+    {
+      "id": "BROWSER-CRIT-02",
+      "domain": "browser",
+      "tool": "browser_jsdom_execute",
+      "finding": "JSDOM 工具使用 window.eval() 直接执行用户代码，JSDOM 与 Node 共享事件循环，存在 DoS/信息泄漏风险。",
+      "recommendation": "在独立 Worker/vm2/QuickJS 沙箱中执行用户脚本，并限制执行时间。",
+      "industryBenchmark": "jsdom 官方推荐 runScripts='dangerously' 仅用于可信输入。"
+    },
+    {
+      "id": "BROWSER-CRIT-03",
+      "domain": "v8-inspector",
+      "tool": "v8_heap_snapshot_analyze",
+      "finding": "堆快照分析仅返回 chunkCount/sizeBytes/objectAddress（地址实为 size 的十六进制），无法计算 dominator tree、class histogram 或 retention path。",
+      "recommendation": "集成 Chrome DevTools frontend 的堆快照解析器（如 chrome-devtools-frontend 的 HeapSnapshotModel）实现真正的泄漏分析。",
+      "industryBenchmark": "Chrome DevTools Memory 面板提供完整的 dominator tree 和 class histogram。"
+    }
+  ],
+  "warningFindings": [
+    {
+      "id": "BROWSER-WARN-01",
+      "domain": "browser",
+      "tool": "stealth_configure_jitter",
+      "finding": "jitter 配置使用模块级可变状态，多个并发 browser session 共享同一配置。",
+      "recommendation": "将 jitter 配置迁移到 BrowserSessionCoordinator 的 per-session 状态。"
+    },
+    {
+      "id": "BROWSER-WARN-02",
+      "domain": "browser",
+      "tool": "captcha_vision_solve",
+      "finding": "验证码 solver 直接 fetch 外部服务，缺少代理/指数退避/熔断机制。",
+      "recommendation": "增加请求级代理、指数退避、熔断和响应超时控制。"
+    },
+    {
+      "id": "DEBUGGER-WARN-01",
+      "domain": "debugger",
+      "tool": "debugger_evaluate",
+      "finding": "调试器表达式直接传入 CDP Runtime.evaluate，无表达式校验。",
+      "recommendation": "对 expression 做长度限制和危险模式检测（如无限递归构造）。"
+    }
+  ],
+  "infoFindings": [
+    {
+      "id": "BROWSER-INFO-01",
+      "domain": "browser",
+      "tool": "page_evaluate",
+      "finding": "autoSummarize/maxSize/fieldFilter/stripBase64 是 LLM 上下文感知的独特功能，工业工具中罕见。"
+    },
+    {
+      "id": "BROWSER-INFO-02",
+      "domain": "browser",
+      "tool": "human_mouse",
+      "finding": "人类行为模拟使用三次贝塞尔曲线 + 垂直控制点偏移 + 速度曲线，优于基础 Playwright mouse.move。"
+    }
+  ],
+  "industryBenchmarks": [
+    {
+      "tool": "Playwright/Puppeteer",
+      "category": "browser automation",
+      "capabilities": [
+        "core page ops",
+        "mobile emulation",
+        "video recording",
+        "PDF generation",
+        "touch gestures",
+        "permissions API"
+      ],
+      "ourGaps": [
+        "video recording",
+        "PDF generation",
+        "multi-touch gestures",
+        "permission management",
+        "file picker dialog"
+      ]
+    },
+    {
+      "tool": "Puppeteer Extra Stealth + Camoufox",
+      "category": "anti-detection",
+      "capabilities": [
+        "stealth patches",
+        "fingerprint randomization",
+        "plugin evasion",
+        "iframe fingerprint consistency"
+      ],
+      "ourGaps": ["per-session jitter isolation", "iframe fingerprint consistency"]
+    },
+    {
+      "tool": "Chrome DevTools",
+      "category": "debugger",
+      "capabilities": [
+        "async stack traces",
+        "DOM breakpoints",
+        "memory profiling integration",
+        "source maps"
+      ],
+      "ourGaps": ["async stack traces", "DOM breakpoints", "full memory panel integration"]
+    },
+    {
+      "tool": "Chrome DevTools Memory",
+      "category": "v8 heap analysis",
+      "capabilities": [
+        "dominator tree",
+        "class histogram",
+        "retention path",
+        "allocation sampling"
+      ],
+      "ourGaps": ["dominator tree", "class histogram", "retention path"]
+    }
+  ],
+  "overallScore": 76,
+  "overallVerdict": "Browser Automation 域组整体达到工业级水准，在反检测、验证码处理、人类行为模拟和 JSDOM 替代方案上甚至具备全球领先的特色能力。主要缺口在移动端高级自动化（视频/PDF/多指触控/权限管理）和 V8 堆分析深度。",
+  "confidenceLevel": "high"
+}

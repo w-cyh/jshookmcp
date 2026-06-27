@@ -1,0 +1,24 @@
+{
+  "id": "fix-critical-issues-tdd",
+  "title": "TDD 修复 10 个 Critical 缺陷 + 顶尖论文对标优化",
+  "status": "in_progress",
+  "strategy": "guided-develop",
+  "currentPhase": "1",
+  "nextAction": "启动 subagent 团队，按 P0 优先级修复 Critical 缺陷，同时 websearch 顶尖论文对标",
+  "gate": null,
+  "branch": "master",
+  "scope": "fix-critical-issues-tdd",
+  "createdAt": "2026-06-16T21:10:00+08:00",
+  "criticalIssues": [
+    "CRIT-01: page_evaluate Camoufox new Function()",
+    "CRIT-02: browser_jsdom_execute eval()",
+    "CRIT-03: electron_attach evaluateExpr new Function()",
+    "CRIT-04: native injection lacks validation",
+    "CRIT-05: v8_heap_snapshot_analyze shallow",
+    "CRIT-06: nemu_destroy_session no dispose",
+    "CRIT-07: process manifest registration missing",
+    "CRIT-08: HAR HTTP/1.1 hardcoded",
+    "CRIT-09: network_replay_request no HTTP/2",
+    "CRIT-10: memory cross-platform non-null assertion"
+  ]
+}

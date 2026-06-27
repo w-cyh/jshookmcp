@@ -1,0 +1,228 @@
+{
+  "domainGroup": "Reverse Engineering",
+  "toolsCount": 139,
+  "domains": [
+    "analysis",
+    "binary-instrument",
+    "native-emulator",
+    "wasm",
+    "dart-inspector",
+    "platform"
+  ],
+  "perDomain": [
+    {
+      "domain": "analysis",
+      "toolCount": 22,
+      "profiles": ["workflow", "full"],
+      "score": 80,
+      "completeness": "excellent",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "达到工业级。覆盖脚本采集、反混淆、AST 分析、控制流反平坦化、字符串数组解码、符号执行、JSVMP 分析、加密检测等核心 JS 逆向能力。",
+      "strengths": [
+        "webcrack 集成实现 webpack/browserify/UMD 解包",
+        "JSVMP 反混淆与虚拟机分析",
+        "控制流反平坦化（switch-dispatcher）",
+        "字符串数组解码",
+        "AST 模式匹配",
+        "符号执行（通用 + JSVMP）",
+        "加密算法检测",
+        "LLM 辅助变量命名"
+      ],
+      "missingCapabilities": [
+        "Synchrony 风格的组合式 AST 反混淆",
+        "OLLVM 模式检测与去除",
+        "VM2 级动态反混淆",
+        "Source map 感知反混淆管线",
+        "Webpack 5 Module Federation 分析"
+      ],
+      "keyFindings": [
+        "CodeAnalyzer 解析大文件无输入大小限制",
+        "QualityAnalyzer 的 parser.parse() 缺少 try/catch 包裹"
+      ]
+    },
+    {
+      "domain": "binary-instrument",
+      "toolCount": 36,
+      "profiles": ["full"],
+      "score": 78,
+      "completeness": "excellent",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "达到工业级。集成 Frida、Ghidra、Unidbg、JADX、IDA，覆盖 Android APK、DEX、Native 库的动静态分析。",
+      "strengths": [
+        "Frida session 与脚本管理",
+        "Ghidra 反编译与分析",
+        "Unidbg 模拟执行",
+        "JADX 反编译与搜索",
+        "APK/DEX 工件收集",
+        "Android 运行时 dump"
+      ],
+      "missingCapabilities": ["Ghidra  Headless 批量分析", "IDA Python 脚本集成", "Radare2 支持"],
+      "keyFindings": []
+    },
+    {
+      "domain": "native-emulator",
+      "toolCount": 21,
+      "profiles": ["full"],
+      "score": 82,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "全球领先特色能力。进程内自建 ARM64 解释器，整数 ISA + NEON SIMD + AES/SHA/PMULL crypto-ext + 标量 FP 全实现，bit-exact 对齐行业标准，无需外部依赖。",
+      "strengths": [
+        "自研 ARM64 解释器，零外部依赖",
+        "AES/SHA/PMULL 加密扩展 bit-exact 对齐 FIPS-197/180-4/180-1",
+        "NEON SIMD 覆盖",
+        "标量 FP IEEE-754 对齐",
+        "JNI 模拟与 Java mock",
+        "APK .so 无临时文件加载",
+        "指令级 trace"
+      ],
+      "missingCapabilities": [
+        "ARM32/Thumb 模式",
+        "x86/x64 仿真",
+        "NEON long/widening/saturating 完整变体",
+        "多线程支持",
+        "异常处理/栈展开",
+        "动态重编译/JIT"
+      ],
+      "keyFindings": [
+        "destroySession 未显式清理 NativeEmulator 底层资源，依赖 sweep 定时器",
+        "mapMemory 缺少地址/大小验证"
+      ]
+    },
+    {
+      "domain": "wasm",
+      "toolCount": 12,
+      "profiles": ["full"],
+      "score": 72,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "良好。支持 dump、disassemble、decompile、instrument、hook，覆盖 WASM 逆向主要需求。",
+      "strengths": [
+        "WASM 模块 dump",
+        "反汇编",
+        "反编译为 WAT",
+        "instrument/hook",
+        "外部运行时执行（wasmtime/wasmer）"
+      ],
+      "missingCapabilities": ["WASM 内存快照与恢复", "WASI 调用追踪", "WASM 源码级调试"],
+      "keyFindings": []
+    },
+    {
+      "domain": "dart-inspector",
+      "toolCount": 12,
+      "profiles": ["full"],
+      "score": 70,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "良好。Flutter/Dart AOT 分析能力覆盖字符串提取、Smi 扫描、符号化、快照分析。",
+      "strengths": ["Dart AOT 字符串提取", "Smi 扫描", "符号化", "快照分析", "对象表解析"],
+      "missingCapabilities": ["Dart 函数反编译", "Flutter 运行时 hook", "Dart isolate 分析"],
+      "keyFindings": []
+    },
+    {
+      "domain": "platform",
+      "toolCount": 14,
+      "profiles": ["full"],
+      "score": 68,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "良好。支持 Electron、ASAR、MiniApp、V8 字节码等平台特定格式分析。",
+      "strengths": ["Electron ASAR 解包", "MiniApp 分析", "V8 字节码提取", "平台特定运行时分析"],
+      "missingCapabilities": ["NW.js 支持", "Tauri 支持", "React Native bundle 分析"],
+      "keyFindings": []
+    }
+  ],
+  "criticalFindings": [
+    {
+      "id": "RE-CRIT-01",
+      "domain": "native-emulator",
+      "tool": "nemu_destroy_session",
+      "finding": "destroySession 仅删除 session 映射，未显式调用 NativeEmulator 的 cleanup，导致映射内存、JNI 句柄、CPU 状态泄漏，直到 sweep 定时器触发。",
+      "recommendation": "在 destroySession 中显式调用 NativeEmulator.dispose()，释放所有映射内存和 JNI 资源。",
+      "industryBenchmark": "Unicorn Engine 提供 uc_close() 彻底释放资源。"
+    },
+    {
+      "id": "RE-CRIT-02",
+      "domain": "native-emulator",
+      "tool": "nemu_alloc_memory / mapMemory",
+      "finding": "mapMemory 接受任意地址/大小，无重叠检查、无最大尺寸限制、无 NULL 地址保护，可能导致 OOM 或地址冲突。",
+      "recommendation": "增加地址验证（拒绝 0、对齐检查）、最大区域大小限制、重叠检测。",
+      "industryBenchmark": "Unicorn/QEMU 对内存映射有严格的区域冲突和大小检查。"
+    },
+    {
+      "id": "RE-CRIT-03",
+      "domain": "analysis",
+      "tool": "deobfuscate / analyzeStructure",
+      "finding": "CodeAnalyzer.analyzeStructure() 对输入代码长度无限制，多 MB 的 minified bundle 可能导致解析 OOM 或 hang。",
+      "recommendation": "增加代码长度上限（如 5MB），超长输入返回清晰错误。",
+      "industryBenchmark": "商业反混淆工具通常对输入大小和复杂度设限。"
+    }
+  ],
+  "warningFindings": [
+    {
+      "id": "RE-WARN-01",
+      "domain": "native-emulator",
+      "tool": "nemu_call_symbol",
+      "finding": "异常发生时寄存器状态（LR、SP 等）可能未恢复，影响后续调用。",
+      "recommendation": "在 try/finally 中保存/恢复寄存器文件状态。"
+    },
+    {
+      "id": "RE-WARN-02",
+      "domain": "analysis",
+      "tool": "SecurityCodeAnalyzer",
+      "finding": "identifySecurityRisks 在 AST 已构建时仍重新解析代码，大输入下效率低。",
+      "recommendation": "接受 AST 参数并复用。"
+    }
+  ],
+  "infoFindings": [
+    {
+      "id": "RE-INFO-01",
+      "domain": "native-emulator",
+      "finding": "自研 ARM64 解释器在加密扩展和 SIMD 覆盖上达到学术论文/工业实现标准，是项目的核心差异化优势。"
+    }
+  ],
+  "industryBenchmarks": [
+    {
+      "tool": "webcrack / de4js / synchrony",
+      "category": "JS deobfuscation",
+      "capabilities": [
+        "webpack unpack",
+        "control flow deflatten",
+        "string array decode",
+        "dead code elimination"
+      ],
+      "ourGaps": [
+        "combined AST pipeline depth",
+        "OLLVM pattern support",
+        "source-map aware deobfuscation"
+      ]
+    },
+    {
+      "tool": "Ghidra / IDA Pro / Binary Ninja",
+      "category": "binary analysis",
+      "capabilities": ["interactive disassembly", "decompiler", "scripting", "type recovery"],
+      "ourGaps": ["interactive UI", "advanced type recovery", "plugin ecosystem"]
+    },
+    {
+      "tool": "Unicorn Engine / QEMU",
+      "category": "native emulation",
+      "capabilities": ["multi-architecture", "full system emulation", "MMU", "JIT"],
+      "ourGaps": ["ARM32/x86 support", "multi-threading", "exception unwinding", "JIT"]
+    },
+    {
+      "tool": "Frida",
+      "category": "dynamic instrumentation",
+      "capabilities": ["JS scripting engine", "interceptor API", "code tracer"],
+      "ourGaps": ["no embedded JS script engine for users", "limited interceptor abstraction"]
+    }
+  ],
+  "overallScore": 77,
+  "overallVerdict": "Reverse Engineering 域组整体达到工业级水准，尤其在 native-emulator 自研 ARM64 解释器、binary-instrument 多工具集成、analysis JS 反混淆方面具备全球领先的深度。主要缺口在多架构仿真、线程支持、高级反混淆pipeline。",
+  "confidenceLevel": "high"
+}

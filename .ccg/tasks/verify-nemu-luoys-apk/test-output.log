@@ -1,0 +1,47 @@
+
+ RUN  v4.1.8 D:/coding/reverse/jshookmcp
+
+stdout | tests/modules/native-emulator/luoys-apk.integration.test.ts > luoys APK integration test
+Extracted 10 libs: [
+  'libsqlite3.so',
+  'libijksdl.so',
+  'libflutter.so',
+  'libapp.so',
+  'libijkffmpeg.so',
+  'libffmpeg_remux.so',
+  'libijkplayer.so',
+  'libmmkv.so',
+  'libimage_processing_util_jni.so',
+  'libsurface_util_jni.so'
+]
+
+ ❯ |server| tests/modules/native-emulator/luoys-apk.integration.test.ts (5 tests | 1 failed) 249ms
+     × loads libmmkv.so and tests JNI exports 10ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |server| tests/modules/native-emulator/luoys-apk.integration.test.ts > luoys APK integration test > loads libmmkv.so and tests JNI exports
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/modules/native-emulator/luoys-apk.integration.test.ts:163:42
+    161|       const loadResult = await handlers.handleLoadLibrary({ sessionId,…
+    162|       const loadData = payload(loadResult);
+    163|       expect(loadData.success !== false).toBe(true);
+       |                                          ^
+    164|
+    165|       // List symbols
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  22:51:33
+   Duration  953ms (transform 308ms, setup 34ms, import 439ms, tests 249ms, environment 0ms)
+

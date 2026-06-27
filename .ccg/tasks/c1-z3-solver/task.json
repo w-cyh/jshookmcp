@@ -1,0 +1,32 @@
+{
+  "id": "c1-z3-solver",
+  "title": "Z3 约束求解器集成 — exploit-dev + analysis 域（方案2激进）",
+  "status": "completed",
+  "strategy": "full-collaborate",
+  "currentPhase": "6-final",
+  "nextAction": "C1 全部完成 (L1-L6)。所有 gate 绿。下一位可归档或开启下一域。",
+  "gate": null,
+  "branch": "master",
+  "scope": "c1-z3-solver",
+  "createdAt": "2026-06-25T06:17:02Z",
+  "lastUpdatedAt": "2026-06-26T11:20:00Z",
+  "sessions": {
+    "session1": {
+      "completedAt": "2026-06-25T14:00:00Z",
+      "deliverables": "L1+L2+L3+L5 (Z3Solver + ast-bridge + SymbolicExecutor Z3 + exploit_solve_constraints tool)",
+      "filesAdded": 6,
+      "filesModified": 7,
+      "toolsAdded": 1,
+      "testsAdded": 27
+    },
+    "session2": {
+      "completedAt": "2026-06-26T11:20:00Z",
+      "deliverables": "L4 RopBuilder Z3 BMC + L5.2 exploit_verify_rop_chain + L6 docs",
+      "filesAdded": 1,
+      "filesModified": 8,
+      "toolsAdded": 1,
+      "testsAdded": 16
+    }
+  },
+  "note": "C1 全部完成。exploit-dev 9.8, analysis 8.6。工具数 494→496。外部模型网络不可用，Claude 单模型完成。"
+}

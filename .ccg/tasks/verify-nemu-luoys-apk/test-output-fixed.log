@@ -1,0 +1,45 @@
+
+ RUN  v4.1.8 D:/coding/reverse/jshookmcp
+
+stdout | tests/modules/native-emulator/luoys-apk.integration.test.ts > luoys APK integration test > loads libmmkv.so and tests JNI exports
+✅ libmmkv.so loaded successfully
+  Constructor faults: 2
+
+stdout | tests/modules/native-emulator/luoys-apk.integration.test.ts > luoys APK integration test
+Extracted 10 libs: [
+  'libsqlite3.so',
+  'libijksdl.so',
+  'libflutter.so',
+  'libapp.so',
+  'libijkffmpeg.so',
+  'libffmpeg_remux.so',
+  'libijkplayer.so',
+  'libmmkv.so',
+  'libimage_processing_util_jni.so',
+  'libsurface_util_jni.so'
+]
+
+ ❯ |server| tests/modules/native-emulator/luoys-apk.integration.test.ts (5 tests | 1 failed) 246ms
+     × loads libmmkv.so and tests JNI exports 10ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |server| tests/modules/native-emulator/luoys-apk.integration.test.ts > luoys APK integration test > loads libmmkv.so and tests JNI exports
+TypeError: Cannot read properties of undefined (reading 'startsWith')
+ ❯ tests/modules/native-emulator/luoys-apk.integration.test.ts:184:53
+    182|
+    183|       // Find JNI exports
+    184|       const jniExports = exports.filter(s => s.name.startsWith('Java_'…
+       |                                                     ^
+    185|       console.log(`Found ${jniExports.length} JNI exports`);
+    186|       if (jniExports.length > 0) {
+ ❯ tests/modules/native-emulator/luoys-apk.integration.test.ts:184:34
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  08:56:53
+   Duration  1.00s (transform 301ms, setup 41ms, import 420ms, tests 246ms, environment 0ms)
+

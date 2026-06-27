@@ -1,0 +1,244 @@
+{
+  "domainGroup": "System & Native",
+  "toolsCount": 90,
+  "domains": ["process", "memory", "adb-bridge", "native-bridge", "syscall-hook", "trace"],
+  "perDomain": [
+    {
+      "domain": "process",
+      "toolCount": 17,
+      "profiles": ["full"],
+      "score": 72,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "良好。跨平台进程管理、内存 R/W、扫描、注入、Electron CDP attach 覆盖核心能力。Win32-only 工具已按平台过滤。",
+      "strengths": [
+        "进程查找/列表/详情/窗口/命令行",
+        "内存读写/扫描/批量写入/转储",
+        "内存保护查询",
+        "DLL/shellcode 注入（Win32）",
+        "模块枚举",
+        "Electron attach",
+        "统一跨平台抽象"
+      ],
+      "missingCapabilities": [
+        "服务管理（Windows Service）",
+        "驱动枚举",
+        "句柄查看器",
+        "符号调试支持"
+      ],
+      "keyFindings": [
+        "process_find/process_get/process_kill/process_list 在 ProcessHandlersCore 中有实现，需确认 manifest 注册完整性"
+      ]
+    },
+    {
+      "domain": "memory",
+      "toolCount": 30,
+      "profiles": ["full"],
+      "score": 85,
+      "completeness": "excellent",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "接近工业级。扫描、指针链、结构体推断、断点、speedhack、heap/PE 分析、反作弊检测等高 parity 覆盖 Cheat Engine 核心能力。",
+      "strengths": [
+        "首扫/缩扫/未知值扫描",
+        "指针链扫描与解析",
+        "结构体推断与 C 头导出",
+        "vtable/RTTI 解析",
+        "内存补丁（bytes/NOP/undo）",
+        "code cave 查找",
+        "硬件断点（DR 寄存器）",
+        "speedhack 时间缩放",
+        "堆枚举/统计/异常检测",
+        "PE 头/导入导出解析",
+        "inline hook 检测",
+        "反作弊检测"
+      ],
+      "missingCapabilities": [
+        "Cheat Engine 的 Dissect data/structures 高级 UI",
+        "自动汇编脚本",
+        "DBVM 内核级调试"
+      ],
+      "keyFindings": [
+        "IntegrityHandlers 和 HookHandlers 在 macOS/Linux 路径对 Win32-only 引擎使用非空断言 (!)，平台过滤失效时可能抛出 TypeError"
+      ]
+    },
+    {
+      "domain": "adb-bridge",
+      "toolCount": 12,
+      "profiles": ["full"],
+      "score": 74,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "良好。设备管理、APK pull、WebView 调试、logcat、截图、shell 执行覆盖 ADB 核心场景。",
+      "strengths": [
+        "设备列表与连接",
+        "APK pull/dex/vdex 收集",
+        "WebView 调试端口启用",
+        "logcat 捕获",
+        "截图与屏幕录制",
+        "shell 执行"
+      ],
+      "missingCapabilities": [
+        "install/uninstall",
+        "perfetto/simpleperf 性能采集",
+        "root 权限管理（已外移到扩展）"
+      ],
+      "keyFindings": []
+    },
+    {
+      "domain": "native-bridge",
+      "toolCount": 4,
+      "profiles": ["full"],
+      "score": 55,
+      "completeness": "fair",
+      "implementation": "fair",
+      "documentation": "fair",
+      "verdict": "较弱。工具数量少，能力较基础，主要作为 native-emulator 和 process 的补充。",
+      "strengths": ["原生桥接调用", "基础 FFI 封装"],
+      "missingCapabilities": ["完整的多语言 binding 生成", "类型安全的 FFI 抽象", "性能监控"],
+      "keyFindings": []
+    },
+    {
+      "domain": "syscall-hook",
+      "toolCount": 7,
+      "profiles": ["full"],
+      "score": 68,
+      "completeness": "good",
+      "implementation": "fair",
+      "documentation": "good",
+      "verdict": "良好。ETW/strace/dtrace 系统调用监控与 JS 调用栈关联具备，但后端可能为 stub，需要验证实际实现深度。",
+      "strengths": [
+        "ETW（Windows）监控",
+        "strace（Linux）监控",
+        "dtrace（macOS）监控",
+        "系统调用与 JS 调用栈关联",
+        "eBPF 脚本生成"
+      ],
+      "missingCapabilities": ["实时流与直方图", "完整的 bpftrace 兼容", "内核级过滤"],
+      "keyFindings": ["ETW/strace/dtrace 后端实际实现深度未在域文件中验证"]
+    },
+    {
+      "domain": "trace",
+      "toolCount": 9,
+      "profiles": ["full"],
+      "score": 72,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "良好。录制、SQL 查询、时间旅行、堆 diff、导出覆盖主要追踪场景。",
+      "strengths": [
+        "执行追踪录制",
+        "SQLite 存储",
+        "SQL 查询",
+        "时间旅行回放",
+        "堆 diff",
+        "HAR/PCAP 导出"
+      ],
+      "missingCapabilities": ["分布式追踪", "与 OpenTelemetry 兼容", "高级可视化"],
+      "keyFindings": []
+    }
+  ],
+  "criticalFindings": [
+    {
+      "id": "SYS-CRIT-01",
+      "domain": "process",
+      "tool": "process_find / process_get / process_kill / process_list",
+      "finding": "这些核心进程管理工具在 ProcessHandlersCore 中有实现，但 manifest.ts 中未注册，导致无法通过 MCP 调用。",
+      "recommendation": "在 manifest.ts 的 registrations 中添加这 4 个工具的注册。",
+      "industryBenchmark": "Process Hacker、htop 等基本进程管理工具必须可直接调用。"
+    },
+    {
+      "id": "SYS-CRIT-02",
+      "domain": "memory",
+      "tool": "memory_breakpoint / memory_speedhack / integrity handlers",
+      "finding": "IntegrityHandlers 和 HookHandlers 在 macOS/Linux 代码路径上对 Win32-only 引擎使用非空断言 (!)，平台过滤失效时会抛出 TypeError。",
+      "recommendation": "为 macOS/Linux 路径提供 stub 实现或提前返回不支持，避免运行时 TypeError。",
+      "industryBenchmark": "Cheat Engine 在非 Windows 平台仅启用支持的功能，不会崩溃。"
+    },
+    {
+      "id": "SYS-CRIT-03",
+      "domain": "native",
+      "tool": "OpenProcess / injectDll / injectShellcode",
+      "finding": "DLL/shellcode 注入仅受 ENABLE_INJECTION_TOOLS 常量门控，无额外目标进程验证或载荷签名检查。",
+      "recommendation": "增加目标进程白名单/授权策略、载荷 hash 记录、审计日志。",
+      "industryBenchmark": "Cobalt Strike 等商业工具对注入有严格的 OPSEC 控制。"
+    }
+  ],
+  "warningFindings": [
+    {
+      "id": "SYS-WARN-01",
+      "domain": "memory",
+      "tool": "memory_patch_bytes",
+      "finding": "patchBytes 接受任意字节数组，未验证指令边界或目标区域可写性。",
+      "recommendation": "增加目标地址区域保护和指令有效性校验。"
+    },
+    {
+      "id": "SYS-WARN-02",
+      "domain": "process",
+      "tool": "electron_attach",
+      "finding": "evaluateExpr 参数通过 new Function() 在 Electron renderer 中执行，无校验。",
+      "recommendation": "对 evaluateExpr 做 AST 白名单校验或使用 page.evaluate 安全路径。"
+    }
+  ],
+  "infoFindings": [
+    {
+      "id": "SYS-INFO-01",
+      "domain": "memory",
+      "finding": "内存域的扫描引擎、指针链、结构体推断、硬件断点、speedhack 与 Cheat Engine 高度 parity。"
+    }
+  ],
+  "industryBenchmarks": [
+    {
+      "tool": "Cheat Engine",
+      "category": "memory scanning",
+      "capabilities": [
+        "scan engine",
+        "pointer chain",
+        "speedhack",
+        "hardware breakpoints",
+        "assembler",
+        "trainer"
+      ],
+      "ourGaps": ["advanced trainer UI", "auto-assembler", "DBVM kernel debugging"]
+    },
+    {
+      "tool": "Process Hacker",
+      "category": "process management",
+      "capabilities": [
+        "service management",
+        "driver enumeration",
+        "handle viewer",
+        "token inspection"
+      ],
+      "ourGaps": ["service management", "driver enumeration", "handle viewer"]
+    },
+    {
+      "tool": "WinDbg / GDB / LLDB",
+      "category": "symbolic debugging",
+      "capabilities": [
+        "symbol debugging",
+        "single-stepping",
+        "register inspection",
+        "memory watchpoints"
+      ],
+      "ourGaps": ["symbol debugging", "single-stepping", "register inspection"]
+    },
+    {
+      "tool": "ADB / scrcpy",
+      "category": "Android bridge",
+      "capabilities": ["install/uninstall", "perfetto", "simpleperf", "screen mirroring"],
+      "ourGaps": ["install/uninstall", "perfetto/simpleperf", "screen mirroring"]
+    },
+    {
+      "tool": "bpftrace",
+      "category": "syscall tracing",
+      "capabilities": ["real-time streaming", "histograms", "kernel probes", "one-liners"],
+      "ourGaps": ["real-time streaming", "histograms", "full kernel probe support"]
+    }
+  ],
+  "overallScore": 72,
+  "overallVerdict": "System & Native 域组整体达到工业级水准，memory 域尤其接近 Cheat Engine 的核心能力。主要缺口是 process 域 manifest 注册完整性、跨平台内存 handler 的健壮性、以及 native-bridge 的薄弱。修复关键问题后可达 75+。",
+  "confidenceLevel": "high"
+}

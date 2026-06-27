@@ -1,0 +1,163 @@
+{
+  "domainGroup": "Security & Input Validation",
+  "toolsCount": 465,
+  "domains": ["all"],
+  "perDomain": [
+    {
+      "domain": "browser",
+      "toolCount": 64,
+      "score": 65,
+      "completeness": "good",
+      "implementation": "fair",
+      "documentation": "good",
+      "verdict": "功能强大但存在关键代码执行风险点。"
+    },
+    {
+      "domain": "process",
+      "toolCount": 17,
+      "score": 60,
+      "completeness": "good",
+      "implementation": "fair",
+      "documentation": "good",
+      "verdict": "注入工具有门控但缺少细粒度授权。"
+    },
+    {
+      "domain": "memory",
+      "toolCount": 30,
+      "score": 68,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "平台过滤总体有效，跨平台路径存在非空断言风险。"
+    },
+    {
+      "domain": "debugger",
+      "toolCount": 18,
+      "score": 70,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "表达式执行依赖 CDP 隔离，缺少输入校验。"
+    },
+    {
+      "domain": "proxy",
+      "toolCount": 8,
+      "score": 62,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "URL 正则构造存在 ReDoS 风险。"
+    },
+    {
+      "domain": "network",
+      "toolCount": 37,
+      "score": 72,
+      "completeness": "good",
+      "implementation": "good",
+      "documentation": "good",
+      "verdict": "SSRF 防护较完善，部分错误响应可能泄漏内部信息。"
+    }
+  ],
+  "criticalFindings": [
+    {
+      "id": "SEC-CRIT-01",
+      "domain": "browser",
+      "tool": "page_evaluate",
+      "finding": "Camoufox 路径使用 new Function() 直接包装并执行用户传入的 code 参数，无沙箱或 AST 校验。",
+      "recommendation": "复用 pageController.evaluate() 安全路径或增加 AST 白名单校验。",
+      "industryBenchmark": "Playwright page.evaluate 在页面隔离上下文中执行。"
+    },
+    {
+      "id": "SEC-CRIT-02",
+      "domain": "browser",
+      "tool": "browser_jsdom_execute",
+      "finding": "JSDOM 工具使用 window.eval() 直接执行用户代码，与 Node 共享事件循环。",
+      "recommendation": "隔离到 Worker/vm2/QuickJS 沙箱并限制执行时间。",
+      "industryBenchmark": "jsdom runScripts='dangerously' 仅用于可信输入。"
+    },
+    {
+      "id": "SEC-CRIT-03",
+      "domain": "process",
+      "tool": "electron_attach",
+      "finding": "evaluateExpr 参数通过 new Function() 在 Electron renderer 中执行。",
+      "recommendation": "对 expression 做 AST 白名单校验。",
+      "industryBenchmark": "Electron 安全指南推荐禁用 nodeIntegration 并启用 contextIsolation。"
+    },
+    {
+      "id": "SEC-CRIT-04",
+      "domain": "native",
+      "tool": "OpenProcess / injectDll / injectShellcode",
+      "finding": "OpenProcess 接受任意 dwDesiredAccess，DLL/shellcode 注入仅受常量门控，无额外验证。",
+      "recommendation": "限制访问权限、增加目标进程验证、载荷签名、审计日志。",
+      "industryBenchmark": "Cheat Engine 对注入操作有管理员和签名提示。"
+    }
+  ],
+  "warningFindings": [
+    {
+      "id": "SEC-WARN-01",
+      "domain": "debugger",
+      "tool": "debugger_evaluate",
+      "finding": "调试器表达式直接传入 runtimeInspector.evaluate()，无表达式校验。",
+      "recommendation": "增加长度限制和危险模式检测。"
+    },
+    {
+      "id": "SEC-WARN-02",
+      "domain": "debugger",
+      "tool": "breakpoint",
+      "finding": "condition 参数未校验，可能包含危险调试器表达式。",
+      "recommendation": "对 condition 做白名单校验。"
+    },
+    {
+      "id": "SEC-WARN-03",
+      "domain": "proxy",
+      "tool": "proxy_add_rule",
+      "finding": "compileUrlPattern 直接从用户输入构造 RegExp，存在 ReDoS 风险。",
+      "recommendation": "增加正则复杂度分析和超时保护。"
+    },
+    {
+      "id": "SEC-WARN-04",
+      "domain": "network",
+      "tool": "network handlers",
+      "finding": "错误响应可能包含内部网络详情。",
+      "recommendation": "统一错误消息脱敏。"
+    },
+    {
+      "id": "SEC-WARN-05",
+      "domain": "all",
+      "tool": "parseArgs",
+      "finding": "parseArgs 仅做类型检查，缺少语义校验（URL、regex、path 等）。",
+      "recommendation": "增加 argUrl、argRegex、argPath 等语义校验 helper。"
+    }
+  ],
+  "infoFindings": [
+    {
+      "id": "SEC-INFO-01",
+      "domain": "network",
+      "tool": "network_replay_request",
+      "finding": "SSRF 防护通过 validateExternalEndpoint 实现，urlOverride 应接受同样检查。"
+    },
+    {
+      "id": "SEC-INFO-02",
+      "domain": "memory",
+      "tool": "memory patches",
+      "finding": "补丁工具保存原始字节支持 undo，符合安全最佳实践。"
+    }
+  ],
+  "industryBenchmarks": [
+    {
+      "tool": "OWASP ASVS",
+      "category": "input validation",
+      "capabilities": ["whitelist validation", "semantic checks", "safe eval alternatives"],
+      "ourGaps": ["semantic validation helpers", "safe eval sandboxing"]
+    },
+    {
+      "tool": "CSP / Trusted Types",
+      "category": "script injection prevention",
+      "capabilities": ["policy enforcement", "default trusted types"],
+      "ourGaps": ["no CSP for injected scripts", "no trusted types enforcement"]
+    }
+  ],
+  "overallScore": 66,
+  "overallVerdict": "安全与输入验证方面整体达到准工业级。parseArgs 提供了良好的基础类型检查，但多个关键工具仍存在任意代码执行风险（new Function/eval）和原生操作越权风险。需要优先修复 Critical issue 并增加语义校验层。",
+  "confidenceLevel": "high"
+}

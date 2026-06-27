@@ -1,0 +1,8 @@
+[keypath] libsqlcipher.so = 5187544 bytes
+
+[keypath] === step 1: sqlite3_open_v2(":memory:", &db, RW|CREATE|MEMORY, 0) ===
+✓ open: sqlite3_open_v2(0x10000000,0x10000800,0x86,0x0) → 0x4fa448
+[keypath] db handle = 0x0 (open returned 5219400)
+[keypath] db handle is NULL — open_v2 did not populate ppDb (gap in VFS/alloc path)
+
+[keypath] getrandom total: 0

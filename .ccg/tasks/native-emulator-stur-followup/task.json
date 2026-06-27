@@ -1,0 +1,12 @@
+{
+  "id": "native-emulator-stur-followup",
+  "title": "STUR 修复后重跑全库 opcode 基线 + 脚本卫生清理 + 产品级反思",
+  "status": "completed",
+  "strategy": "deep-research",
+  "currentPhase": "done",
+  "nextAction": "等用户拍板 opcode-baseline.ts 去留；是否要修 CpuEngine 的 NULL 间接调用检测",
+  "gate": null,
+  "branch": "master",
+  "scope": "native-emulator-stur-followup",
+  "createdAt": "2026-05-30T00:00:00Z"
+}

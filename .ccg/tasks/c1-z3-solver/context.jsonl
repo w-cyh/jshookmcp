@@ -1,0 +1,23 @@
+{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
+{"file": ".ccg/tasks/military-grade-audit/handoff.md", "reason": "Round 3 handoff — C1 Session 2 交付摘要 + 经验教训 #9-13 已写入"}
+{"file": ".ccg/tasks/military-grade-audit-fixes/requirements.md", "reason": "Round 3 规划与需求细节"}
+{"file": ".ccg/tasks/c1-z3-solver/requirements.md", "reason": "Phase 1 需求增强（评分 8.0/10）"}
+{"file": ".ccg/tasks/c1-z3-solver/analysis.md", "reason": "Phase 2 双视角分析 + 方案对比（Claude 单模型降级产出）"}
+{"file": "src/server/domains/exploit-dev/handlers/rop-builder.ts", "reason": "C1 L4 已完成: solveConstraints() async (Z3 BMC K=1..12 + greedy fallback), solverUsed/warnings 已加, solveConstraintsGreedy 是旧 greedy 逻辑"}
+{"file": "src/server/domains/exploit-dev/handlers/verify-rop-chain.ts", "reason": "C1 L5.2 新增: exploit_verify_rop_chain handler — decode hex chain → match gadgets → simulate regs → Z3 验证 numeric 约束"}
+{"file": "src/server/domains/exploit-dev/types.ts", "reason": "RopChainResult 已扩展 solverUsed + warnings 字段"}
+{"file": "src/server/domains/exploit-dev/definitions.ts", "reason": "已加 exploit_verify_rop_chain 工具 schema (gadgets/binaryPath/goal/arch/...)"}
+{"file": "src/server/domains/exploit-dev/manifest.ts", "reason": "已注册 exploit_verify_rop_chain → handleVerifyRopChain"}
+{"file": "src/server/domains/exploit-dev/handlers.impl.ts", "reason": "已加 handleVerifyRopChain 委托给 verify-rop-chain.ts"}
+{"file": "tests/server/domains/exploit-dev/verify-rop-chain.test.ts", "reason": "C1 L5.2 新测试 13 场景: valid/invalid/missing-syscall/unmatched/round-trip"}
+{"file": "src/server/domains/exploit-dev/CLAUDE.md", "reason": "已更新: 9 工具表 + Z3 BMC 设计决策 + verify workflow"}
+{"file": "src/modules/CLAUDE.md", "reason": "已更新: modules 表加 z3/ (2 files)"}
+{"file": "src/modules/z3/Z3Solver.ts", "reason": "Z3 单例: withZ3(fn, timeout) → 回调内 api.Context('main') 获取 {Int,Bool,Solver,And,Or}"}
+{"file": "src/modules/z3/ast-bridge.ts", "reason": "babel→Z3 bridge: jsExprToZ3(expr, api, ctx, vars), 已用于 solve-constraints + SymbolicExecutor"}
+{"file": "src/modules/symbolic/SymbolicExecutor.ts", "reason": "analysis Z3 集成已完成: solveConstraintsZ3() 替换 simpleSMTSolver (Session 1)"}
+{"file": "src/server/domains/exploit-dev/handlers/solve-constraints.ts", "reason": "exploit_solve_constraints handler (Session 1 已交付)"}
+{"file": "tests/modules/z3/Z3Solver.test.ts", "reason": "11 场景: init/fallback/mutex/timeout, Z3_TEST_REAL=1 跑真实 WASM"}
+{"file": "tests/modules/z3/ast-bridge.test.ts", "reason": "16 场景: babel→Z3 operator coverage + real SAT/UNSAT"}
+{"file": "tests/server/domains/exploit-dev/exploit-dev.test.ts", "reason": "已扩展 +3 场景: solverUsed/warnings/uncovered-register"}
+{"file": "src/constants/sandbox.ts", "reason": "Z3_* 常量已加 (Z3_ENABLED/INIT_TIMEOUT/SOLVE_TIMEOUT/BMC_MAX_GADGETS=12)"}
+{"file": "tsdown.config.ts", "reason": "deps.neverBundle 已含 z3-solver"}
