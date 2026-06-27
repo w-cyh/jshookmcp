@@ -140,7 +140,7 @@ export function isWindows(): boolean {
 /**
  * Get or load kernel32.dll
  */
-function getKernel32(): LibraryHandle {
+export function getKernel32(): LibraryHandle {
   if (!kernel32) {
     kernel32 = koffi.load('kernel32.dll');
     logger.debug('Loaded kernel32.dll via koffi');
@@ -151,7 +151,7 @@ function getKernel32(): LibraryHandle {
 /**
  * Get or load ntdll.dll
  */
-function getNtdll(): LibraryHandle {
+export function getNtdll(): LibraryHandle {
   if (!ntdll) {
     ntdll = koffi.load('ntdll.dll');
     logger.debug('Loaded ntdll.dll via koffi');

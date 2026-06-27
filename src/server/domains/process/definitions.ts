@@ -268,6 +268,19 @@ export const processToolDefinitions: Tool[] = [
       .required('pid'),
   ),
 
+  tool('process_detect_apc', (t) =>
+    t
+      .desc(
+        'Detect APC (Asynchronous Procedure Call) injection in a process. ' +
+          'Enumerates threads, probes each thread APC queue via NtQueryInformationThread(ThreadApcState), ' +
+          'and detects threads in alertable wait state (SleepEx/WaitForMultipleObjectsEx). ' +
+          'Returns verdict (clean/suspicious/infected), confidence score, and risk reasons. ' +
+          'Requires elevated privileges (run as Administrator). Win32 only.',
+      )
+      .number('pid', 'Process ID to check for APC injection')
+      .required('pid'),
+  ),
+
   tool('electron_attach', (t) =>
     t
       .desc('Attach to an Electron CDP port and optionally evaluate in a matching page.')

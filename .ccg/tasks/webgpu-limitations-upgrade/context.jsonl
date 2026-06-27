@@ -1,5 +1,0 @@
-{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
-{"file": "src/modules/webgpu/CDPIntegration.ts", "reason": "Core command capture and memory tracking implementation"}
-{"file": "src/server/domains/webgpu/handlers/command-capture.ts", "reason": "Tool handler that uses CDPIntegration"}
-{"file": "src/server/domains/webgpu/types.ts", "reason": "Type definitions for GPUCommand and GPUAdapterInfo"}
-{"file": "tests/server/domains/webgpu/webgpu-capture-commands.test.ts", "reason": "Existing tests for command capture"}

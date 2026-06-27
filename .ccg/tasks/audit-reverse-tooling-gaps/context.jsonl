@@ -1,8 +1,0 @@
-{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
-{"file": "CLAUDE.md", "reason": "项目骨架与 36 domains 索引"}
-{"file": "src/server/domains/binary-instrument/manifest.ts", "reason": "Frida/JADX/IDA/Ghidra 集成入口"}
-{"file": "src/server/domains/adb-bridge/manifest.ts", "reason": "Android APK/设备相关工具"}
-{"file": "packages/extension-sdk/src/plugin.ts", "reason": "Plugin SDK API 形态"}
-{"file": "packages/extension-sdk/src/workflow.ts", "reason": "Workflow SDK API 形态"}
-{"file": "src/server/workflows/", "reason": "WorkflowEngine 实现"}
-{"file": "src/server/extensions/ExtensionManager.ts", "reason": "Extension 加载与生命周期"}

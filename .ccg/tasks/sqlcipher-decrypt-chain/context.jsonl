@@ -1,8 +1,0 @@
-{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
-{"file": "src/modules/native-emulator/NativeEmulator.ts", "reason": "L7 门面：loadLibrary/call/callJniExport/setupJava 入口"}
-{"file": "src/modules/native-emulator/CpuEngine.ts", "reason": "ARM64 解释器核心，opcode 缺口在此抛出"}
-{"file": "src/modules/native-emulator/bionic.ts", "reason": "libc 桩 + VFS，sqlcipher 走 malloc/memcpy/PRNG 等"}
-{"file": "src/modules/native-emulator/syscalls.ts", "reason": "Android syscall 表，sqlcipher open/read 走 syscall"}
-{"file": "src/modules/native-emulator/jni.ts", "reason": "JNI 桥，对象数组/字段已修"}
-{"file": "scripts/native-emulator-probe.ts", "reason": "已有 opcode 直方图探针（已入库），语义压测可参考"}
-{"file": ".ccg/tasks/native-emulator-flutter-handoff/HANDOFF-SIMD-CRYPTO.md", "reason": "上轮交接：crypto-ext bit-exact 就位，主线下一步是 sqlcipher 解密链"}

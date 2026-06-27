@@ -16,6 +16,7 @@ import { MemoryOperationHandlers } from './handlers/memory-operations';
 import { InjectionHandlers } from './handlers/injection-handlers';
 import { HollowingDetectionHandlers } from './handlers/hollowing-detection';
 import { HandleEnumerationHandlers } from './handlers/handle-enumeration';
+import { ApcDetectionHandlers } from './handlers/apc-detection';
 import {
   validatePid,
   requireString,
@@ -149,6 +150,7 @@ export class ProcessToolHandlers extends ProcessHandlersBase {
   private injection: InjectionHandlers;
   private hollowing: HollowingDetectionHandlers;
   private handleEnum: HandleEnumerationHandlers;
+  private apcDetection: ApcDetectionHandlers;
 
   constructor(ctx?: import('@server/MCPServer.context').MCPServerContext) {
     super(ctx);
@@ -156,6 +158,7 @@ export class ProcessToolHandlers extends ProcessHandlersBase {
     this.injection = new InjectionHandlers(this.deps, this.processMgmt);
     this.hollowing = new HollowingDetectionHandlers();
     this.handleEnum = new HandleEnumerationHandlers(this.processMgmt);
+    this.apcDetection = new ApcDetectionHandlers(this.deps);
   }
 
   // ── Injection Handlers ──
@@ -194,6 +197,12 @@ export class ProcessToolHandlers extends ProcessHandlersBase {
 
   async handleProcessEnumHandles(args: Record<string, unknown>) {
     return this.handleEnum.handleProcessEnumHandles(args);
+  }
+
+  // ── APC Detection ──
+
+  async handleProcessDetectApc(args: Record<string, unknown>) {
+    return this.apcDetection.handleProcessDetectApc(args);
   }
 }
 

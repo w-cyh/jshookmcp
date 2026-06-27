@@ -10,7 +10,7 @@ import {
   resolve,
   sep,
 } from 'node:path';
-import { projectRoot as configProjectRoot, getConfig } from '@utils/config';
+import { projectRoot as configProjectRoot, getConfig, isNpxContext } from '@utils/config';
 
 // Use config.ts's projectRoot as the single source of truth.
 // Both files compute import.meta.url-based roots with different fallback
@@ -19,15 +19,21 @@ import { projectRoot as configProjectRoot, getConfig } from '@utils/config';
 // and other path checks to fail isInside() silently.
 const defaultProjectRoot = configProjectRoot;
 
+/**
+ * In npx / global-install contexts the package root is in a read-only
+ * npm cache.  Redirect to the user's cwd so that relative-path validation
+ * and output directories land in their project, not the install cache.
+ */
 function resolveProjectRoot(env: NodeJS.ProcessEnv = process.env): string {
   const requestedRoot = env.MCP_PROJECT_ROOT?.trim();
-  if (!requestedRoot) {
-    return defaultProjectRoot;
+  if (requestedRoot) {
+    return normalize(
+      isUserAbsolutePath(requestedRoot)
+        ? requestedRoot
+        : resolve(defaultProjectRoot, requestedRoot),
+    );
   }
-
-  return normalize(
-    isUserAbsolutePath(requestedRoot) ? requestedRoot : resolve(defaultProjectRoot, requestedRoot),
-  );
+  return isNpxContext() ? process.cwd() : defaultProjectRoot;
 }
 
 function isUserAbsolutePath(inputPath: string): boolean {

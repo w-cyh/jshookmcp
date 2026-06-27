@@ -1,8 +1,0 @@
-审查过程备注：
-
-1. 最初尝试启动多个 subagent 并行审查，但受限于 API 限制/认证失败/AUP 拦截，多数 subagent 未能成功完成。
-2. 其中一个 subagent（network-security-audit）成功完成并生成了报告，该报告已纳入最终交付。
-3. 剩余 4 份域组报告和 1 份安全审查报告由 Claude 直接基于代码静态分析和行业对标完成。
-4. 所有 JSON 报告均已通过 json.tool 校验。
-5. 行业对标参考了 Playwright、Puppeteer Extra、Camoufox、Unicorn Engine、QEMU、Cheat Engine、mitmproxy、Burp Suite、Wireshark、Ghidra、IDA Pro、Chrome DevTools 等顶尖工具。
-6. 本审查未对真实运行环境进行测试，结论基于源码结构和文档分析。

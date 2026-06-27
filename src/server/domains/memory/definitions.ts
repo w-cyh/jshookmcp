@@ -511,4 +511,28 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
       .required('pattern')
       .query(),
   ),
+
+  // Minidump Parsing Tool
+  tool('memory_parse_dump', (t) =>
+    t
+      .desc(
+        'Parse a Windows Minidump (.dmp) file and extract forensic information: ' +
+          'loaded modules (base/size/name/timestamp), threads (ID/stack/context), ' +
+          'memory ranges (64-bit or 32-bit), system info (OS/CPU), and exception records. ' +
+          'Optionally resolve a list of addresses against the dump contents. ' +
+          'Pure TS — cross-platform (can analyze Windows dumps on Linux/macOS).',
+      )
+      .string('filePath', 'Absolute or relative path to the .dmp file')
+      .boolean('includeModules', 'Include module list (default: true)', { default: true })
+      .boolean('includeThreads', 'Include thread list (default: true)', { default: true })
+      .boolean('includeMemoryRanges', 'Include memory ranges (default: true)', { default: true })
+      .boolean('includeException', 'Include exception record (default: true)', { default: true })
+      .boolean('includeSystemInfo', 'Include system information (default: true)', { default: true })
+      .array(
+        'resolveAddresses',
+        { type: 'string' },
+        'Optional list of addresses to resolve against the dump',
+      )
+      .required('filePath'),
+  ),
 ];

@@ -82,6 +82,7 @@ export class V8InspectorHandlers {
       v8_version_detect: (toolArgs) => this.v8_version_detect(toolArgs),
       v8_jit_inspect: (toolArgs) => this.v8_jit_inspect(toolArgs),
       v8_heap_find_leaks: (toolArgs) => this.v8_heap_find_leaks(toolArgs),
+      v8_heap_retainers: (toolArgs) => this.v8_heap_retainers(toolArgs),
     };
 
     const handler = dispatchTable[toolName];
@@ -425,6 +426,76 @@ export class V8InspectorHandlers {
       snapshotId,
       leakCandidates,
       totalCandidates: allLeaks.length,
+    };
+  }
+
+  async v8_heap_retainers(args: ToolArgs): Promise<{
+    success: boolean;
+    snapshotId: string;
+    chains: Record<
+      number,
+      Array<{
+        nodeId: number;
+        name: string;
+        className: string;
+        shallowSize: number;
+        retainedSize: number;
+        distance: number;
+      }>
+    >;
+    chainCount: number;
+    totalTraced: number;
+  }> {
+    const snapshotId = requireStringArg(args, 'snapshotId');
+    const snapshot = getSnapshot(snapshotId);
+    if (!snapshot) {
+      throw new Error(`Snapshot ${snapshotId} not found`);
+    }
+
+    const nodeIds = Array.isArray(args.nodeIds)
+      ? (args.nodeIds.filter(
+          (v) => typeof v === 'number' && Number.isFinite(v) && v > 0,
+        ) as number[])
+      : [];
+
+    if (nodeIds.length === 0) {
+      throw new Error('nodeIds must be a non-empty array of positive integers');
+    }
+
+    if (nodeIds.length > 100) {
+      throw new Error('nodeIds must contain at most 100 entries');
+    }
+
+    const maxSteps =
+      typeof args.maxSteps === 'number' && args.maxSteps > 0 && args.maxSteps <= 200
+        ? args.maxSteps
+        : 50;
+
+    const { HeapSnapshotParser } = await import('@modules/v8-inspector/HeapSnapshotParser');
+    const { DominatorTreeBuilder } = await import('@modules/v8-inspector/DominatorTreeBuilder');
+
+    const parser = new HeapSnapshotParser();
+    parser.feedChunk(snapshot.chunks);
+
+    const nodes = parser.parseNodes();
+    const edges = parser.parseEdges();
+
+    const builder = new DominatorTreeBuilder();
+    builder.buildDominatorTree(nodes, edges);
+
+    const chains = builder.getRetainerChains(nodeIds, maxSteps);
+
+    let totalSteps = 0;
+    for (const chain of Object.values(chains)) {
+      totalSteps += chain.length;
+    }
+
+    return {
+      success: true,
+      snapshotId,
+      chains,
+      chainCount: Object.keys(chains).length,
+      totalTraced: totalSteps,
     };
   }
 

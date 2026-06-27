@@ -1,5 +1,0 @@
-{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
-{"file": ".ccg/tasks/native-emulator-industry-leading/MASTER-PLAN.md", "reason": "World-class emulator master plan"}
-{"file": ".ccg/tasks/native-emulator-industry-leading/phase-1.1-fp-exceptions.md", "reason": "FP exception handling detailed design"}
-{"file": "src/modules/native-emulator/simd-fp.ts", "reason": "Current FP implementation to extend"}
-{"file": "src/modules/native-emulator/CpuEngine.ts", "reason": "Main engine to add FPCR/FPSR"}

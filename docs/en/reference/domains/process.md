@@ -19,7 +19,7 @@ Process, module, memory diagnostics, and controlled injection domain for host-le
 - process + debugger
 - process + platform
 
-## Full tool list (24)
+## Full tool list (25)
 
 | Tool | Description |
 | --- | --- |
@@ -47,3 +47,4 @@ Process, module, memory diagnostics, and controlled injection domain for host-le
 | `process_enum_threads` | Enumerate all threads in a process. Returns thread IDs. Uses CreateToolhelp32Snapshot (Win32 only). |
 | `process_detect_hollowing` | Detect process hollowing (malware technique that unmaps original process image and injects malicious code). Compares process memory sections (.text, .data, .rdata) with on-disk PE file using SHA-256 hashes. Returns detection result with confidence score and list of differing sections. WARNING: autoRestore=true is HIGH RISK and may crash the target process. Win32 only. |
 | `process_enum_handles` | Enumerate open handles for a process using NtQuerySystemInformation. Resolves handle type and object name, decodes access masks, identifies security risks (high-privilege handles to sensitive processes, dangerous Token handles, inheritable sensitive handles, Section handles to executables). Skips name resolution for File/EtwRegistration types (known to hang). Requires elevated privileges (run as Administrator). Win32 only. |
+| `process_detect_apc` | Detect APC (Asynchronous Procedure Call) injection in a process. Enumerates threads, probes each thread APC queue via NtQueryInformationThread(ThreadApcState), and detects threads in alertable wait state (SleepEx/WaitForMultipleObjectsEx). Returns verdict (clean/suspicious/infected), confidence score, and risk reasons. Requires elevated privileges (run as Administrator). Win32 only. |

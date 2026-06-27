@@ -68,4 +68,24 @@ export const v8InspectorTools: Tool[] = [
       .required('snapshotId')
       .query(),
   ),
+  tool('v8_heap_retainers', (t) =>
+    t
+      .desc(
+        'Trace retainer chains from suspect leak objects back to GC roots. ' +
+          'For each nodeId, walks the immediate-dominator chain to produce a ' +
+          '"what keeps it alive" path: leaf → ... → GC root. Each step includes ' +
+          'nodeId, name, className, shallowSize, retainedSize, and distance from the leaf. ' +
+          'Use after v8_heap_find_leaks or v8_heap_snapshot_analyze to understand ' +
+          'why a specific object is not being collected.',
+      )
+      .string('snapshotId', 'Snapshot ID taken with v8_heap_snapshot_capture')
+      .array(
+        'nodeIds',
+        { type: 'number' },
+        'One or more nodeIds to trace (from leak candidates or class histogram)',
+      )
+      .number('maxSteps', 'Maximum steps per chain (default: 50)')
+      .required('snapshotId', 'nodeIds')
+      .query(),
+  ),
 ];

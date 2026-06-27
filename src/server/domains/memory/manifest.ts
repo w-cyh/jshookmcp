@@ -323,6 +323,12 @@ const allRegistrations = [
     domain: DOMAIN,
     bind: bindByKey((h, a) => h.handleFindAccesses(a)),
   },
+  // ── Minidump Parser (cross-platform, pure TS) ──
+  {
+    tool: toolByName('memory_parse_dump'),
+    domain: DOMAIN,
+    bind: bindByKey((h, a) => h.handleMemoryParseDump(a)),
+  },
 ] as const;
 
 // Filter: on non-Windows platforms, exclude Win32-only tools

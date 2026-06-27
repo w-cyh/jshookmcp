@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, join, normalize, resolve } from 'node:path';
+import { isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config as dotenvConfig } from 'dotenv';
 import { z } from 'zod';
@@ -16,6 +16,25 @@ import type {
 } from '@internal-types/index';
 
 export const projectRoot = fileURLToPath(new URL('../..', import.meta.url));
+
+/**
+ * True when the package is loaded from a global npm prefix (npx / npm install -g)
+ * rather than a local node_modules. We use this to redirect writable paths (screenshots,
+ * artifacts, etc.) to the user's cwd instead of the immutable install cache.
+ */
+export function isNpxContext(): boolean {
+  // Common npm-prefix markers:
+  if (process.env.NPX_CACHE || process.env.npm_config_prefix) return true;
+  const cwd = process.cwd();
+  // If projectRoot is not under cwd, we're almost certainly running via npx/global install
+  // (local node_modules/ would put the package inside cwd or a parent of cwd).
+  const rel = normalize(relative(cwd, projectRoot));
+  return rel === '' || rel.startsWith('..') || isAbsolute(rel);
+}
+
+function getWritableBaseDir(): string {
+  return isNpxContext() ? process.cwd() : projectRoot;
+}
 
 // Resolve .env relative to the package root — works in both dev (tsx src/utils/config.ts)
 // and production (bundled dist/*.mjs). Env vars always take precedence.
@@ -774,14 +793,15 @@ export function getConfig(): Config {
       ? cacheDir
       : join(projectRoot, cacheDir);
   const search = buildSearchConfig();
+  const writableBase = getWritableBaseDir();
   const paths = {
     screenshotDir: resolveConfigPath(
       (env.MCP_SCREENSHOT_DIR as string) || CONFIG_DEFAULTS.paths.screenshotDir,
-      projectRoot,
+      writableBase,
     ),
     captchaScreenshotDir: resolveConfigPath(
       (env.CAPTCHA_SCREENSHOT_DIR as string) || CONFIG_DEFAULTS.paths.captchaScreenshotDir,
-      projectRoot,
+      writableBase,
     ),
     debuggerSessionsDir: resolveConfigPath(
       (env.MCP_DEBUGGER_SESSIONS_DIR as string) || CONFIG_DEFAULTS.paths.debuggerSessionsDir,
@@ -789,11 +809,11 @@ export function getConfig(): Config {
     ),
     extensionRegistryDir: resolveConfigPath(
       (env.MCP_EXTENSION_REGISTRY_DIR as string) || CONFIG_DEFAULTS.paths.extensionRegistryDir,
-      projectRoot,
+      writableBase,
     ),
     tlsKeyLogDir: resolveConfigPath(
       (env.MCP_TLS_KEYLOG_DIR as string) || CONFIG_DEFAULTS.paths.tlsKeyLogDir,
-      projectRoot,
+      writableBase,
     ),
     registryCacheDir: resolveConfigPath(
       (env.MCP_REGISTRY_CACHE_DIR as string) || CONFIG_DEFAULTS.paths.registryCacheDir,

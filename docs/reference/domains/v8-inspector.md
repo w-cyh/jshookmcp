@@ -20,7 +20,7 @@ V8 检查器域，提供堆快照分析、CPU 分析和内存检查。
 - v8-inspector + browser
 - v8-inspector + debugger
 
-## 工具清单（9）
+## 工具清单（10）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -33,3 +33,4 @@ V8 检查器域，提供堆快照分析、CPU 分析和内存检查。
 | `v8_version_detect` | 检测 V8 引擎版本和功能支持。 |
 | `v8_jit_inspect` | 检查 V8 脚本的 JIT 优化状态。 |
 | `v8_heap_find_leaks` | 在堆快照中查找疑似内存泄漏。返回按置信度排序的泄漏候选，包括分离的 DOM 节点、大数组、闭包泄漏和意外保留的大对象。 |
+| `v8_heap_retainers` | 待补充中文：Trace retainer chains from suspect leak objects back to GC roots. For each nodeId, walks the immediate-dominator chain to produce a "what keeps it alive" path: leaf → ... → GC root. Each step includes nodeId, name, className, shallowSize, retainedSize, and distance from the leaf. Use after v8_heap_find_leaks or v8_heap_snapshot_analyze to understand why a specific object is not being collected. |

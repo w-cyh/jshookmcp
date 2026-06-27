@@ -37,6 +37,7 @@ import { ReadWriteHandlers } from './handlers/readwrite';
 import { IntegrityHandlers } from './handlers/integrity';
 import { FindAccessesHandlers } from './handlers/find-accesses';
 import { RegionHandlers } from './handlers/region-enumerate';
+import { MinidumpHandlers } from './handlers/minidump-parse';
 import { MemoryAuditTrail } from '@modules/process/memory/AuditTrail';
 
 export class MemoryScanHandlers {
@@ -49,6 +50,7 @@ export class MemoryScanHandlers {
   private readonly integrity: IntegrityHandlers;
   private readonly regions: RegionHandlers;
   private readonly findAccesses: FindAccessesHandlers;
+  private readonly minidump: MinidumpHandlers;
   /** Shared audit trail for destructive operations (write/freeze/patch). */
   readonly auditTrail = new MemoryAuditTrail();
 
@@ -85,6 +87,7 @@ export class MemoryScanHandlers {
     );
     this.regions = new RegionHandlers();
     this.findAccesses = new FindAccessesHandlers(bpEngine, null);
+    this.minidump = new MinidumpHandlers();
   }
 
   // ── Session ──
@@ -227,4 +230,9 @@ export class MemoryScanHandlers {
 
   handleFindAccesses = (args: Record<string, unknown>) =>
     this.findAccesses.handleFindAccesses(args);
+
+  // ── Minidump Parser ──
+
+  handleMemoryParseDump = (args: Record<string, unknown>) =>
+    this.minidump.handleMemoryParseDump(args);
 }

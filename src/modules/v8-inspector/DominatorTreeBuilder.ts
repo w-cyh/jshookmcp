@@ -81,6 +81,7 @@ export class DominatorTreeBuilder {
   private edges: ParsedEdge[] = [];
   private outgoingEdges: Map<number, number[]> = new Map();
   private incomingEdges: Map<number, number[]> = new Map();
+  private idom: Map<number, number> = new Map();
 
   /**
    * Build dominator tree from heap snapshot nodes and edges
@@ -337,8 +338,10 @@ export class DominatorTreeBuilder {
 
         if (semiU < semiV) {
           idom.set(v, u);
+          this.idom.set(v, u);
         } else {
           idom.set(v, parentW);
+          this.idom.set(v, parentW);
         }
       }
       bucket.set(parentW, new Set());
@@ -359,6 +362,7 @@ export class DominatorTreeBuilder {
         const idomIdomW = idom.get(idomW);
         if (idomIdomW !== undefined) {
           idom.set(w, idomIdomW);
+          this.idom.set(w, idomIdomW);
         }
       }
     }
@@ -546,5 +550,74 @@ export class DominatorTreeBuilder {
     }
 
     return null;
+  }
+
+  /**
+   * Walk from a leaf node back to the GC root through immediate dominators,
+   * returning a chain of (nodeId, name, className, shallowSize, retainedSize)
+   * objects from leaf to root.  This is the "what keeps it alive" retainer path.
+   *
+   * @param nodeId - Leaf node id to trace from
+   * @param maxSteps - Maximum steps before giving up (default: 50)
+   * @returns Array of retainer chain entries (leaf first, GC root last)
+   */
+  getRetainerChain(
+    nodeId: number,
+    maxSteps: number = 50,
+  ): Array<{
+    nodeId: number;
+    name: string;
+    className: string;
+    shallowSize: number;
+    retainedSize: number;
+    distance: number;
+  }> {
+    const chain: Array<{
+      nodeId: number;
+      name: string;
+      className: string;
+      shallowSize: number;
+      retainedSize: number;
+      distance: number;
+    }> = [];
+
+    let current = nodeId;
+    let dist = 0;
+
+    while (current !== 0 && dist < maxSteps) {
+      const node = this.nodes.get(current);
+      if (!node) break;
+
+      chain.push({
+        nodeId: node.id,
+        name: node.name,
+        className: (node as { className?: string }).className ?? node.type ?? 'unknown',
+        shallowSize: (node as { shallowSize?: number }).shallowSize ?? node.selfSize,
+        retainedSize: (node as { retainedSize?: number }).retainedSize ?? node.selfSize,
+        distance: dist,
+      });
+
+      // Walk to immediate dominator
+      const parentId = this.idom.get(current);
+      if (parentId === undefined || parentId === current) break;
+      current = parentId;
+      dist++;
+    }
+
+    return chain;
+  }
+
+  /**
+   * Batch version of getRetainerChain — traces retainer paths for multiple nodes.
+   */
+  getRetainerChains(
+    nodeIds: number[],
+    maxSteps: number = 50,
+  ): Record<number, ReturnType<DominatorTreeBuilder['getRetainerChain']>> {
+    const result: Record<number, ReturnType<DominatorTreeBuilder['getRetainerChain']>> = {};
+    for (const id of nodeIds) {
+      result[id] = this.getRetainerChain(id, maxSteps);
+    }
+    return result;
   }
 }

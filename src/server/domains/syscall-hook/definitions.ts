@@ -80,4 +80,25 @@ export const syscallHookToolDefinitions: Tool[] = [
       .boolean('simulate', 'Use synthetic events when bpftrace is unavailable', { default: false })
       .query(),
   ),
+  tool('syscall_resolve_ssn', (t) =>
+    t
+      .desc(
+        'Resolve NT syscall service numbers (SSN) from on-disk ntdll.dll. ' +
+          'Parses the export table to extract Zw* → SSN mappings and locates a ' +
+          'syscall;ret gadget for direct invocation stubs. Win32 only.',
+      )
+      .string('ntdllPath', 'Optional custom path to ntdll.dll for offline analysis')
+      .query(),
+  ),
+  tool('syscall_direct_invoke', (t) =>
+    t
+      .desc(
+        'Direct NT syscall invocation guidance. ' +
+          'Resolves SSN for a given NT function and returns a stub template ' +
+          'with usage instructions for in-process direct syscall invocation. ' +
+          'Bypasses user-mode hooks on ntdll.dll. Win32 only.',
+      )
+      .string('functionName', 'NT function name (e.g. NtOpenProcess, NtAllocateVirtualMemory)')
+      .required('functionName'),
+  ),
 ];

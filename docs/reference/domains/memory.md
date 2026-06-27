@@ -20,7 +20,7 @@
 - memory + debugger
 - memory + workflow
 
-## 工具清单（33）
+## 工具清单（34）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -57,3 +57,4 @@
 | `memory_region_enumerate` | 待补充中文：Enumerate memory regions in a target process. Cross-platform: Windows (VirtualQueryEx), macOS (mach_vm_region), Linux (/proc/pid/maps). Returns base address, size, protection (r/w/x/rw/rx/rwx), state, type (image/mapped/private), and module name (if module-backed). |
 | `memory_aob_scan` | 待补充中文：Array-of-Bytes scan with wildcard support. Search for byte patterns like "48 8B ?? ?? 00 00" across readable memory. Accepts hex bytes (00-FF, optional 0x prefix) and "??" wildcards. Case insensitive. |
 | `memory_find_accesses` | 待补充中文：Find what writes to or accesses a memory address (Cheat Engine MWT workflow). Sets a hardware breakpoint on the target address, auto-rearms after each hit, captures the faulting instruction address + context + timestamp, and optionally disassembles the instruction. Returns aggregated hits with per-hit instruction details. |
+| `memory_parse_dump` | 待补充中文：Parse a Windows Minidump (.dmp) file and extract forensic information: loaded modules (base/size/name/timestamp), threads (ID/stack/context), memory ranges (64-bit or 32-bit), system info (OS/CPU), and exception records. Optionally resolve a list of addresses against the dump contents. Pure TS — cross-platform (can analyze Windows dumps on Linux/macOS). |

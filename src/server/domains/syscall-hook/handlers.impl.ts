@@ -8,6 +8,7 @@ import {
 import type { EventBus, ServerEventMap } from '@server/EventBus';
 import { asJsonResponse } from '@server/domains/shared/response';
 import { checkSyscallPermission } from './permission-check';
+import { DirectNtApiHandlers } from './handlers/direct-nt';
 import {
   SYSCALL_TRACE_DURATION_DEFAULT_SEC,
   SYSCALL_TRACE_DURATION_MIN_SEC,
@@ -158,6 +159,7 @@ export class SyscallHookHandlers {
     private monitor?: SyscallMonitor,
     private mapper?: SyscallToJSMapper,
     private eventBus?: EventBus<ServerEventMap>,
+    private directNt = new DirectNtApiHandlers(),
   ) {}
 
   async handleSyscallStartMonitor(args: Record<string, unknown>): Promise<unknown> {
@@ -495,6 +497,16 @@ END {
       note: 'Run the generated bpftrace script on a Linux system with bpftrace installed and CAP_BPF/root privileges.',
       requiredCapabilities: ['CAP_BPF', 'root', 'bpftrace'],
     };
+  }
+
+  // ── Direct NT API delegation ───────────────────────────────────────────────
+
+  async handleSyscallResolveSsn(args: Record<string, unknown>): Promise<unknown> {
+    return this.directNt.handleSyscallResolveSsn(args);
+  }
+
+  async handleSyscallDirectInvoke(args: Record<string, unknown>): Promise<unknown> {
+    return this.directNt.handleSyscallDirectInvoke(args);
   }
 
   private ensureMonitor(): SyscallMonitor {

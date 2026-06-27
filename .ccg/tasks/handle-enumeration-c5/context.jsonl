@@ -1,9 +1,0 @@
-{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
-{"file": "src/server/domains/process/handlers/hollowing-detection.ts", "reason": "C4 process_detect_hollowing — 参考同类 Win32 工具的 handler 实现模式"}
-{"file": "src/native/Win32API.ts", "reason": "Win32 FFI 声明层 — NtQuerySystemInformation 需在此注册 koffi 绑定"}
-{"file": "src/server/domains/process/manifest.ts", "reason": "工具注册入口 — 新工具需在此 ensure + register"}
-{"file": "src/server/domains/process/definitions.ts", "reason": "工具 schema 定义 — 新工具 JSON Schema 在此声明"}
-{"file": "src/server/domains/process/handlers/injection-handlers.ts", "reason": "现有 process 工具 handler — 参考模式"}
-{"file": "src/server/domains/process/handlers/handle-enumeration.ts", "reason": "C5 新增 handler — 句柄枚举 + 安全分析 + access mask 解码"}
-{"file": "src/native/HandleEnumerator.ts", "reason": "C5 新增 native — NtQuerySystemInformation koffi FFI + buffer 解析 + type cache"}
-{"tests/server/domains/process/handle-enumeration.test.ts", "reason": "C5 TDD — buffer 解析 6 + access decode 7 + security 10 + handler 集成 6 = 29 测试全绿"}

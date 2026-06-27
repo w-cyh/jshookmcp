@@ -20,7 +20,7 @@ V8 inspector domain providing heap snapshot analysis, CPU profiling, and memory 
 - v8-inspector + browser
 - v8-inspector + debugger
 
-## Full tool list (9)
+## Full tool list (10)
 
 | Tool | Description |
 | --- | --- |
@@ -33,3 +33,4 @@ V8 inspector domain providing heap snapshot analysis, CPU profiling, and memory 
 | `v8_version_detect` | Detect V8 engine version, flags, and runtime capabilities. |
 | `v8_jit_inspect` | Report JIT compilation status and optimization tier for a script. |
 | `v8_heap_find_leaks` | Find suspected memory leaks in a heap snapshot. Returns leak candidates sorted by confidence, including detached DOM nodes, large arrays, closure leaks, and unexpectedly large retained objects. |
+| `v8_heap_retainers` | Trace retainer chains from suspect leak objects back to GC roots. For each nodeId, walks the immediate-dominator chain to produce a "what keeps it alive" path: leaf → ... → GC root. Each step includes nodeId, name, className, shallowSize, retainedSize, and distance from the leaf. Use after v8_heap_find_leaks or v8_heap_snapshot_analyze to understand why a specific object is not being collected. |

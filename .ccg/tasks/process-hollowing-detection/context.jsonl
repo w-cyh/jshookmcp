@@ -1,8 +1,0 @@
-{"_example": "Fill with {\"file\": \"path\", \"reason\": \"why\"}. Seed rows are skipped."}
-{"file": "src/native/PEAnalyzer.ts", "reason": "已有 parseHeaders/detectInlineHooks/detectIATHooks，需扩展内存 PE 解析和完整性检测"}
-{"file": "src/native/Win32API.ts", "reason": "已有 ReadProcessMemory/EnumProcessModules，需添加 NtUnmapViewOfSection 检测相关 API"}
-{"file": "src/native/MemoryController.ts", "reason": "已有 writeValue/undo/freeze，需了解内存操作模式用于恢复功能"}
-{"file": "src/server/domains/process/manifest.ts", "reason": "工具注册模式：WIN32_ONLY_TOOLS 集合 + defineMethodRegistrations"}
-{"file": "src/server/domains/process/definitions.ts", "reason": "工具定义数组：需添加 process_detect_hollowing 定义"}
-{"file": "src/server/domains/process/handlers/injection-handlers.ts", "reason": "现有注入工具模式：参考错误处理、权限检查、安全边界"}
-{"file": "tests/server/domains/process/handlers.inject.test.ts", "reason": "注入工具测试模式：需参考 mock 策略和场景覆盖"}

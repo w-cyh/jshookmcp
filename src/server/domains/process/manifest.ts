@@ -29,6 +29,7 @@ const WIN32_ONLY_TOOLS = new Set([
   'process_enum_threads',
   'process_detect_hollowing',
   'process_enum_handles',
+  'process_detect_apc',
 ]);
 
 const allRegistrations = defineMethodRegistrations<
@@ -66,6 +67,7 @@ const allRegistrations = defineMethodRegistrations<
     { tool: 'process_enum_threads', method: 'handleProcessEnumThreads' },
     { tool: 'process_detect_hollowing', method: 'handleDetectHollowing' },
     { tool: 'process_enum_handles', method: 'handleProcessEnumHandles' },
+    { tool: 'process_detect_apc', method: 'handleProcessDetectApc' },
   ],
 });
 

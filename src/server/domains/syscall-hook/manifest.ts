@@ -8,6 +8,15 @@ const DEP_KEY = 'syscallHookHandlers' as const;
 
 type Handlers = SyscallHookHandlers;
 
+const EFFECTIVE_PLATFORM =
+  process.env.JSHOOK_REGISTRY_PLATFORM === 'win32' ||
+  process.env.JSHOOK_REGISTRY_PLATFORM === 'linux' ||
+  process.env.JSHOOK_REGISTRY_PLATFORM === 'darwin'
+    ? process.env.JSHOOK_REGISTRY_PLATFORM
+    : process.platform;
+
+const IS_WIN32 = EFFECTIVE_PLATFORM === 'win32';
+
 const lookupTool = toolLookup(syscallHookToolDefinitions);
 const registrations = defineMethodRegistrations<
   Handlers,
@@ -24,8 +33,17 @@ const registrations = defineMethodRegistrations<
     { tool: 'syscall_filter', method: 'handleSyscallFilter' },
     { tool: 'syscall_get_stats', method: 'handleSyscallGetStats' },
     { tool: 'syscall_ebpf_trace', method: 'handleSyscallEbpfTrace' },
+    { tool: 'syscall_resolve_ssn', method: 'handleSyscallResolveSsn' },
+    { tool: 'syscall_direct_invoke', method: 'handleSyscallDirectInvoke' },
   ],
 });
+
+// Win32-only: direct NT API tools require koffi/ntdll.
+const WIN32_ONLY_SYSCALL_TOOLS = new Set(['syscall_resolve_ssn', 'syscall_direct_invoke']);
+
+const activeRegistrations = IS_WIN32
+  ? registrations
+  : registrations.filter((r) => !WIN32_ONLY_SYSCALL_TOOLS.has(r.tool.name));
 
 async function ensure(ctx: MCPServerContext): Promise<SyscallHookHandlers> {
   const { SyscallHookHandlers } = await import('@server/domains/syscall-hook/handlers');
@@ -46,7 +64,7 @@ const manifest = {
   depKey: DEP_KEY,
   profiles: ['full'],
   ensure,
-  registrations,
+  registrations: activeRegistrations,
   workflowRule: {
     patterns: [
       /\b(syscall|etw|strace|dtrace|kernel|system\s?call)\b/i,

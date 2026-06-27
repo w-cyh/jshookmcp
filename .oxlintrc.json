@@ -82,7 +82,13 @@
           "_Vf",
           "_Vp",
           "_waitpidFn",
-          "_Wpm"
+          "_Wpm",
+          "_NtQueryInformationThread",
+          "_OpenThread",
+          "_CreateToolhelp32Snapshot",
+          "_Thread32First",
+          "_Thread32Next",
+          "_CloseHandle"
         ]
       }
     ],

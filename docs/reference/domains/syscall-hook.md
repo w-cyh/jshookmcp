@@ -19,7 +19,7 @@
 - syscall-hook + process
 - syscall-hook + instrumentation
 
-## 工具清单（7）
+## 工具清单（9）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -30,3 +30,5 @@
 | `syscall_filter` | 按系统调用名称过滤已捕获的系统调用事件。 |
 | `syscall_get_stats` | 获取系统调用监控统计。 |
 | `syscall_ebpf_trace` | 通过 Linux eBPF/bpftrace 追踪系统调用。需要 root 或 CAP_BPF。 |
+| `syscall_resolve_ssn` | 待补充中文：Resolve NT syscall service numbers (SSN) from on-disk ntdll.dll. Parses the export table to extract Zw* → SSN mappings and locates a syscall;ret gadget for direct invocation stubs. Win32 only. |
+| `syscall_direct_invoke` | 待补充中文：Direct NT syscall invocation guidance. Resolves SSN for a given NT function and returns a stub template with usage instructions for in-process direct syscall invocation. Bypasses user-mode hooks on ntdll.dll. Win32 only. |
