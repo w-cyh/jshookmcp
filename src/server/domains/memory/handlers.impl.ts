@@ -1,7 +1,7 @@
 /**
  * Memory domain — handler implementations.
  *
- * Delegates to 7 internal sub-handler classes, each owning a focused responsibility:
+ * Delegates to 8 internal sub-handler classes, each owning a focused responsibility:
  *   SessionHandlers      — scan session lifecycle (list/delete/export)
  *   ScanHandlers        — first/next/unknown/pointer/group scans
  *   PointerChainHandlers— pointer chain scan/validate/resolve/export
@@ -9,6 +9,7 @@
  *   HookHandlers        — hardware breakpoints + code injection (patch/NOP/caves)
  *   ReadWriteHandlers   — memory read/write, freeze, undo/redo
  *   IntegrityHandlers   — speedhack, heap analysis, PE introspection, anti-cheat
+ *   FindAccessesHandlers— "find what writes/accesses this address" (MWT trace)
  *
  * Constructor signature is unchanged — the manifest creates this facade directly.
  */
@@ -34,6 +35,8 @@ import { StructureHandlers } from './handlers/structure';
 import { HookHandlers } from './handlers/hooks';
 import { ReadWriteHandlers } from './handlers/readwrite';
 import { IntegrityHandlers } from './handlers/integrity';
+import { FindAccessesHandlers } from './handlers/find-accesses';
+import { RegionHandlers } from './handlers/region-enumerate';
 import { MemoryAuditTrail } from '@modules/process/memory/AuditTrail';
 
 export class MemoryScanHandlers {
@@ -44,6 +47,8 @@ export class MemoryScanHandlers {
   private readonly hooks: HookHandlers;
   private readonly readwrite: ReadWriteHandlers;
   private readonly integrity: IntegrityHandlers;
+  private readonly regions: RegionHandlers;
+  private readonly findAccesses: FindAccessesHandlers;
   /** Shared audit trail for destructive operations (write/freeze/patch). */
   readonly auditTrail = new MemoryAuditTrail();
 
@@ -78,6 +83,8 @@ export class MemoryScanHandlers {
       ctx,
       this.auditTrail,
     );
+    this.regions = new RegionHandlers();
+    this.findAccesses = new FindAccessesHandlers(bpEngine, null);
   }
 
   // ── Session ──
@@ -104,6 +111,7 @@ export class MemoryScanHandlers {
   handleUnknownScan = (args: Record<string, unknown>) => this.scans.handleUnknownScan(args);
   handlePointerScan = (args: Record<string, unknown>) => this.scans.handlePointerScan(args);
   handleGroupScan = (args: Record<string, unknown>) => this.scans.handleGroupScan(args);
+  handleAobScan = (args: Record<string, unknown>) => this.scans.handleAobScan(args);
 
   // ── Pointer Chain ──
 
@@ -209,4 +217,14 @@ export class MemoryScanHandlers {
   handleGuardPages = (args: Record<string, unknown>) => this.integrity.handleGuardPages(args);
   handleIntegrityCheck = (args: Record<string, unknown>) =>
     this.integrity.handleIntegrityCheck(args);
+
+  // ── Region Enumeration ──
+
+  handleRegionEnumerate = (args: Record<string, unknown>) =>
+    this.regions.handleRegionEnumerate(args);
+
+  // ── Find Accesses (MWT) ──
+
+  handleFindAccesses = (args: Record<string, unknown>) =>
+    this.findAccesses.handleFindAccesses(args);
 }

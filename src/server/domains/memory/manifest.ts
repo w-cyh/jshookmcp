@@ -141,6 +141,7 @@ const WIN32_ONLY_TOOLS = new Set([
   'memory_integrity_check',
   // Hardware breakpoints (debug registers)
   'memory_breakpoint',
+  'memory_find_accesses',
   // Speedhack (Win32 timer hooking)
   'memory_speedhack',
 ]);
@@ -304,6 +305,24 @@ const allRegistrations = [
     domain: DOMAIN,
     bind: bindByKey((h, a) => h.handleIntegrityCheck(a)),
   },
+  // ── Region Enumeration (cross-platform) ──
+  {
+    tool: toolByName('memory_region_enumerate'),
+    domain: DOMAIN,
+    bind: bindByKey((h, a) => h.handleRegionEnumerate(a)),
+  },
+  // ── AOB Scan (cross-platform) ──
+  {
+    tool: toolByName('memory_aob_scan'),
+    domain: DOMAIN,
+    bind: bindByKey((h, a) => h.handleAobScan(a)),
+  },
+  // ── Find Accesses (Win32-only, uses hardware breakpoints) ──
+  {
+    tool: toolByName('memory_find_accesses'),
+    domain: DOMAIN,
+    bind: bindByKey((h, a) => h.handleFindAccesses(a)),
+  },
 ] as const;
 
 // Filter: on non-Windows platforms, exclude Win32-only tools
@@ -325,10 +344,14 @@ const manifest: DomainManifest<typeof DEP_KEY, H, typeof DOMAIN> = {
       /cheat\s*engine/i,
       /find\s*(value|address|variable|struct)/i,
       /scan\s*(for|memory)/i,
+      /aob\s*scan|signature\s*scan|byte\s*pattern/i,
+      /region\s*(enum|list)/i,
       /pointer\s*(chain|scan)/i,
       /struct(ure)?\s*(analy|infer|dissect)/i,
       /vtable|rtti/i,
       /breakpoint|watchpoint|hardware\s*bp/i,
+      /find\s*(what|access|write|read).*address/i,
+      /MWT|memory\s*write\s*trace/i,
       /patch\s*(byte|nop|code)/i,
       /code\s*cave/i,
       /freeze|unfreeze/i,
@@ -346,11 +369,13 @@ const manifest: DomainManifest<typeof DEP_KEY, H, typeof DOMAIN> = {
       'memory_first_scan',
       'memory_next_scan',
       'memory_unknown_scan',
+      'memory_aob_scan',
+      'memory_region_enumerate',
       'memory_pointer_chain',
       'memory_structure_analyze',
       'memory_vtable_parse',
       'memory_scan_session',
-      ...(IS_WIN32 ? ['memory_breakpoint', 'memory_speedhack'] : []),
+      ...(IS_WIN32 ? ['memory_breakpoint', 'memory_find_accesses', 'memory_speedhack'] : []),
       'memory_patch_bytes',
       'memory_freeze',
       'memory_dump',

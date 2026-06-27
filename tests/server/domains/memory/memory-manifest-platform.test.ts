@@ -46,6 +46,8 @@ const CROSS_PLATFORM_TOOLS = [
   'memory_pointer_scan',
   'memory_group_scan',
   'memory_scan_session',
+  'memory_aob_scan',
+  'memory_region_enumerate',
   'memory_pointer_chain',
   'memory_structure_analyze',
   'memory_vtable_parse',
@@ -81,9 +83,9 @@ describe('memory manifest platform filtering', () => {
     expect(manifest.domain).toBe('memory');
   });
 
-  it(`should have ${IS_WIN32 ? 30 : 19} tools on ${process.platform}`, async () => {
+  it(`should have ${IS_WIN32 ? 32 : 21} tools on ${process.platform}`, async () => {
     const manifest = await loadManifestWithPlatform();
-    const expected = IS_WIN32 ? 30 : 19;
+    const expected = IS_WIN32 ? 33 : 21;
     expect(manifest.registrations.length).toBe(expected);
   });
 
@@ -131,7 +133,7 @@ describe('memory manifest platform filtering', () => {
     const win32Manifest = await loadManifestWithPlatform('win32');
     const linuxManifest = await loadManifestWithPlatform('linux');
 
-    expect(win32Manifest.registrations.length).toBe(30);
-    expect(linuxManifest.registrations.length).toBe(19);
+    expect(win32Manifest.registrations.length).toBe(33);
+    expect(linuxManifest.registrations.length).toBe(21);
   });
 });

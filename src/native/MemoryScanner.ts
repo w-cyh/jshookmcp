@@ -526,6 +526,128 @@ export class MemoryScanner {
     };
   }
 
+  /**
+   * AOB (Array of Bytes) scan with wildcard support.
+   *
+   * Searches for byte patterns like "48 8B ?? ?? 00 00" across readable memory
+   * regions. Wildcards (??) match any byte. Optionally restricts to a module.
+   */
+  async aobScan(
+    pid: number,
+    pattern: string,
+    options: { maxResults?: number; moduleName?: string } = {},
+  ): Promise<{
+    matches: string[];
+    totalMatches: number;
+    elapsed: string;
+  }> {
+    const start = performance.now();
+    const maxResults = options.maxResults ?? 10000;
+
+    // Parse pattern into (byte | null)[] where null = wildcard
+    const parsed: (number | null)[] = [];
+    const tokens = pattern.trim().split(/\s+/);
+    for (const token of tokens) {
+      if (token === '??' || token === '?' || token === '???') {
+        parsed.push(null);
+      } else {
+        // Strip optional 0x prefix
+        const hex = token.startsWith('0x') || token.startsWith('0X') ? token.slice(2) : token;
+        if (hex.length !== 2 || !/^[0-9a-fA-F]{2}$/.test(hex)) {
+          throw new Error(`Invalid AOB pattern byte: "${token}" (expected 2 hex chars or "??")`);
+        }
+        parsed.push(parseInt(hex, 16));
+      }
+    }
+
+    if (parsed.length === 0) {
+      throw new Error('AOB pattern must contain at least one byte or wildcard');
+    }
+
+    // Build search needle: byte array + mask boolean array
+    const needle = Buffer.from(parsed.map((b) => b ?? 0));
+    const mask: boolean[] = parsed.map((b) => b !== null);
+
+    const matches: bigint[] = [];
+    const handle = this.provider.openProcess(pid, false);
+    try {
+      let regions = this.getFilteredRegions(handle, { valueType: 'byte' });
+
+      // If moduleName filter is provided, restrict to that module's memory range
+      if (options.moduleName) {
+        const filterLower = options.moduleName.toLowerCase();
+        const modules = this.provider.enumerateModules(handle);
+        const moduleRanges = modules
+          .filter((m) => m.name.toLowerCase().includes(filterLower))
+          .map((m) => ({
+            baseAddress: m.baseAddress,
+            size: m.size,
+          }));
+
+        if (moduleRanges.length === 0) {
+          const elapsed = `${(performance.now() - start).toFixed(1)}ms`;
+          return { matches: [], totalMatches: 0, elapsed };
+        }
+
+        // Filter regions to only those within matching modules
+        regions = regions.filter((r) =>
+          moduleRanges.some(
+            (mod) =>
+              r.baseAddress >= mod.baseAddress &&
+              r.baseAddress < mod.baseAddress + BigInt(mod.size),
+          ),
+        );
+      }
+
+      const patternLen = parsed.length;
+      for (const region of regions) {
+        if (matches.length >= maxResults) break;
+
+        const chunkSize = 16 * 1024 * 1024;
+        for (
+          let offset = 0;
+          offset < region.size && matches.length < maxResults;
+          offset += chunkSize
+        ) {
+          const readSize = Math.min(chunkSize, region.size - offset);
+          const chunkAddr = region.baseAddress + BigInt(offset);
+
+          let chunk: Buffer;
+          try {
+            chunk = this.provider.readMemory(handle, chunkAddr, readSize).data;
+          } catch {
+            break;
+          }
+
+          // Scan the chunk byte by byte using mask
+          for (let i = 0; i <= chunk.length - patternLen && matches.length < maxResults; i++) {
+            let matched = true;
+            for (let j = 0; j < patternLen; j++) {
+              if (mask[j] && chunk[i + j] !== needle[j]) {
+                matched = false;
+                break;
+              }
+            }
+            if (matched) {
+              matches.push(chunkAddr + BigInt(i));
+            }
+          }
+        }
+      }
+    } finally {
+      this.provider.closeProcess(handle);
+    }
+
+    const elapsed = `${(performance.now() - start).toFixed(1)}ms`;
+    const displayMatches = matches.map(formatAddress);
+
+    return {
+      matches: displayMatches,
+      totalMatches: matches.length,
+      elapsed,
+    };
+  }
+
   // ── Private Helpers ──
 
   private getAlignStep(alignment: number): number {

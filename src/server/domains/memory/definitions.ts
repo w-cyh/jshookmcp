@@ -216,6 +216,28 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
       .required('action')
       .destructive(),
   ),
+  tool('memory_find_accesses', (t) =>
+    t
+      .desc(
+        `Find what writes to or accesses a memory address (Cheat Engine MWT workflow). ` +
+          `Sets a hardware breakpoint on the target address, auto-rearms after each hit, ` +
+          `captures the faulting instruction address + context + timestamp, and optionally ` +
+          `disassembles the instruction. Returns aggregated hits with per-hit instruction details.`,
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
+      .string('address', 'Memory address to watch (hex, e.g. "0x7FF612340000")')
+      .enum(
+        'mode',
+        ['write', 'readwrite'],
+        'Access mode: write (only writes) or readwrite (reads and writes)',
+      )
+      .number('size', 'Watch size in bytes: 1, 2, 4, or 8 (default: 4)')
+      .number('maxHits', 'Maximum hits before auto-stop (default: 20)')
+      .number('timeoutMs', 'Timeout in ms before auto-stop (default: 15000)')
+      .boolean('disassemble', 'Whether to disassemble the faulting instruction (default: true)')
+      .required('address', 'mode')
+      .query(),
+  ),
 
   // Injection Tools
   tool('memory_patch_bytes', (t) =>
@@ -444,6 +466,49 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
       .number('pid', 'Target process ID (optional when a browser session is attached)')
       .number('maxSections', 'Maximum sections to check before stopping (default: 100)')
       .required()
+      .query(),
+  ),
+
+  // Region Enumeration Tool
+  tool('memory_region_enumerate', (t) =>
+    t
+      .desc(
+        'Enumerate memory regions in a target process. Cross-platform: Windows (VirtualQueryEx), ' +
+          'macOS (mach_vm_region), Linux (/proc/pid/maps). Returns base address, size, protection ' +
+          '(r/w/x/rw/rx/rwx), state, type (image/mapped/private), and module name (if module-backed).',
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
+      .enum(
+        'protection',
+        ['r', 'w', 'x', 'rw', 'rx', 'wx', 'rwx'],
+        'Filter by protection (optional)',
+      )
+      .string(
+        'moduleName',
+        'Filter regions by module name (optional, case-insensitive substring match)',
+      )
+      .number('maxRegions', 'Maximum regions to return (default: 500)')
+      .required()
+      .query(),
+  ),
+
+  // AOB (Array of Bytes) Scan Tool
+  tool('memory_aob_scan', (t) =>
+    t
+      .desc(
+        'Array-of-Bytes scan with wildcard support. Search for byte patterns like ' +
+          '"48 8B ?? ?? 00 00" across readable memory. Accepts hex bytes (00-FF, optional 0x prefix) ' +
+          'and "??" wildcards. Case insensitive.',
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
+      .string(
+        'pattern',
+        'AOB pattern: space-separated hex bytes (00-FF) and "??" wildcards. ' +
+          'Example: "48 8B ?? ?? 00 00".',
+      )
+      .string('moduleName', 'Restrict scan to a specific module (optional, case-insensitive)')
+      .number('maxResults', 'Maximum results to return (default: 10000)')
+      .required('pattern')
       .query(),
   ),
 ];

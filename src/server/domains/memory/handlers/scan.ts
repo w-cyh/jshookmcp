@@ -10,7 +10,13 @@ import type { UnifiedProcessManager } from '@server/domains/shared/modules/nativ
 import type { MCPServerContext } from '@server/MCPServer.context';
 import { resolveMemoryDomainPid } from '@server/domains/memory/pid-resolver';
 import { handleSafe } from '@server/domains/shared/ResponseBuilder';
-import { argBool, argEnum, argNumber, argObject } from '@server/domains/shared/parse-args';
+import {
+  argBool,
+  argEnum,
+  argNumber,
+  argObject,
+  argString,
+} from '@server/domains/shared/parse-args';
 import { logger } from '@utils/logger';
 import { MemoryAuditTrail } from '@modules/process/memory/AuditTrail';
 import { validateHexAddress, requireStringArg, validateValueForType } from './validation';
@@ -256,6 +262,50 @@ export class ScanHandlers {
       const maxResults = capMaxResults(argNumber(args, 'maxResults'));
       const result = await this.scanner.groupScan(pid, pattern, { alignment, maxResults });
       return { ...result };
+    });
+  }
+
+  async handleAobScan(args: Record<string, unknown>) {
+    return handleSafe(async () => {
+      const pid = await this.resolvePid(args.pid);
+      const rawPattern = requireStringArg(args.pattern, 'pattern', 'memory_aob_scan');
+      const moduleName = argString(args, 'moduleName');
+      const maxResults = argNumber(args, 'maxResults', 10000);
+
+      // Validate pattern format on the handler side before passing to scanner
+      const trimmed = rawPattern.trim();
+      if (trimmed.length === 0) {
+        throw new Error(
+          'memory_aob_scan: missing or invalid required argument "pattern" (expected non-empty AOB pattern like "48 8B ?? ??")',
+        );
+      }
+
+      const tokens = trimmed.split(/\s+/);
+      for (const token of tokens) {
+        if (token === '??' || token === '?') {
+          // wildcards are valid
+          continue;
+        }
+        const hex = token.startsWith('0x') || token.startsWith('0X') ? token.slice(2) : token;
+        if (hex.length !== 2 || !/^[0-9a-fA-F]{2}$/.test(hex)) {
+          throw new Error(
+            `Invalid AOB pattern: each token must be 2 hex chars (00-FF, optional "0x" prefix) or "??" for wildcard, got: "${token}"`,
+          );
+        }
+      }
+
+      if (tokens.length === 0) {
+        throw new Error('Invalid AOB pattern: pattern must contain at least one byte or wildcard');
+      }
+
+      const result = await this.scanner.aobScan(pid, trimmed, { maxResults, moduleName });
+      return {
+        ...result,
+        hint:
+          result.totalMatches > 0
+            ? `Found ${result.totalMatches} matches.`
+            : 'No matches found. Try a shorter pattern or fewer wildcards.',
+      };
     });
   }
 }
