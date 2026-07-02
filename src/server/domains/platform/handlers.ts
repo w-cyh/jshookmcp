@@ -15,6 +15,8 @@ import {
 } from '@server/domains/platform/handlers/electron-dual-cdp';
 import { handleElectronIPCSniff } from '@server/domains/platform/handlers/electron-ipc-sniffer';
 import { handlePlatformCapabilities } from '@server/domains/platform/handlers/capabilities';
+import { handleElectronVerifyIntegrity } from '@server/domains/platform/handlers/electron-integrity-handler';
+import { handleAsarDeobfuscate } from '@server/domains/platform/handlers/asar-deobfuscate-handler';
 
 export class PlatformToolHandlers {
   private miniapp: MiniappHandlers;
@@ -83,5 +85,13 @@ export class PlatformToolHandlers {
 
   handleElectronIPCSniff(args: Record<string, unknown>) {
     return handleElectronIPCSniff(args);
+  }
+
+  handleElectronVerifyIntegrity(args: Record<string, unknown>) {
+    return handleElectronVerifyIntegrity(args);
+  }
+
+  handleAsarDeobfuscate(args: Record<string, unknown>) {
+    return handleAsarDeobfuscate(args);
   }
 }

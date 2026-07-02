@@ -26,6 +26,8 @@ const registrations = defineMethodRegistrations<H, (typeof platformTools)[number
     { tool: 'electron_launch_debug', method: 'handleElectronLaunchDebug' },
     { tool: 'electron_debug_status', method: 'handleElectronDebugStatus' },
     { tool: 'electron_ipc_sniff', method: 'handleElectronIPCSniff' },
+    { tool: 'electron_verify_integrity', method: 'handleElectronVerifyIntegrity' },
+    { tool: 'asar_deobfuscate', method: 'handleAsarDeobfuscate' },
   ],
 });
 

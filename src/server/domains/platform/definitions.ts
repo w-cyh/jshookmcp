@@ -155,4 +155,40 @@ export const platformTools: Tool[] = [
       .boolean('clear', 'Clear captured messages after dump.', { default: true })
       .openWorld(),
   ),
+  tool('electron_verify_integrity', (t) =>
+    t
+      .desc(
+        'Verify Electron ASAR integrity: parse the ElectronAsarIntegrity JSON embedded in the ' +
+          'main binary, locate each referenced ASAR, and compare the on-disk SHA256 against the ' +
+          'embedded hash. A mismatch means the ASAR was tampered with after build.',
+      )
+      .string('exePath', '必填。Electron 可执行文件路径（.exe / 主程序二进制）。')
+      .string('asarPath', '可选。显式指定 ASAR 文件路径；不提供时按 resources/app.asar 自动探测。')
+      .required('exePath')
+      .query(),
+  ),
+  tool('asar_deobfuscate', (t) =>
+    t
+      .desc(
+        'Scan every .js file inside an ASAR archive for obfuscation indicators (string-array ' +
+          'arrays, webpack bundles, control-flow flattening, dynamic code, minification) and ' +
+          'classify each file. Flagged files are optionally extracted to a directory for ' +
+          'downstream deobfuscation.',
+      )
+      .string('inputPath', '必填。ASAR 文件路径。')
+      .string('fileGlob', '可选。文件扩展名过滤。默认 *.js。', { default: '*.js' })
+      .boolean(
+        'extract',
+        '可选。默认 true；将评分超阈值的文件提取到 outputDir 以便后续深度去混淆。',
+        { default: true },
+      )
+      .string('outputDir', '可选。提取目录；不提供时自动生成 artifacts 临时目录。')
+      .number('maxFiles', '可选。最多扫描的文件数量。默认 500。', {
+        default: 500,
+        minimum: 1,
+        maximum: 10000,
+      })
+      .required('inputPath')
+      .query(),
+  ),
 ];
