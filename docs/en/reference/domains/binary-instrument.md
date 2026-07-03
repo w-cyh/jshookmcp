@@ -20,7 +20,7 @@ Binary instrumentation domain providing binary analysis, runtime instrumentation
 - binary-instrument + memory
 - binary-instrument + process
 
-## Full tool list (36)
+## Full tool list (37)
 
 | Tool | Description |
 | --- | --- |
@@ -49,6 +49,7 @@ Binary instrumentation domain providing binary analysis, runtime instrumentation
 | `apk_dex_intake` | Build a cohesive APK/DEX intake evidence packet: ZIP entries, manifest summary, DEX headers, native libraries, generic surface hints, caller-supplied hint matches, and next actions. |
 | `dex_scan_file` | Scan a binary/memory-dump file for DEX or CompactDex magic and optionally extract hits. |
 | `binary_strings_extract` | Extract printable ASCII/UTF-16LE strings from a binary file with regex filtering. |
+| `binary_entropy_profile` | Compute Shannon entropy across fixed-size chunks of a binary file to locate encrypted / packed / compressed sections. High-entropy regions (&gt;=7.0 bits/byte) are likely encrypted or compressed; low-entropy (&lt;4.0) are typically code or text. Pure-compute, no external tools. |
 | `apk_native_libs_list` | List packaged native shared libraries (.so) inside an APK. |
 | `unidbg_launch` | Emulate a native shared library in Unidbg. |
 | `unidbg_call` | Call a JNI function in a running Unidbg emulator session. |

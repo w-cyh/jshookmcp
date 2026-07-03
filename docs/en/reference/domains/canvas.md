@@ -22,7 +22,7 @@ Canvas game engine reverse analysis domain plus Skia rendering capture, supporti
 - browser + canvas + debugger
 - canvas + trace
 
-## Full tool list (7)
+## Full tool list (8)
 
 | Tool | Description |
 | --- | --- |
@@ -30,6 +30,7 @@ Canvas game engine reverse analysis domain plus Skia rendering capture, supporti
 | `canvas_scene_dump` | Extract the full scene tree / display list from a detected canvas engine. |
 | `canvas_pick_object_at_point` | Pick / hit-test the topmost object at a given screen coordinate using the engine's hit-test system |
 | `canvas_trace_click_handler` | Trace a click event from DOM to JS call stack. |
+| `canvas_scene_search` | Search a previously-dumped scene tree (canvas_scene_dump output) for nodes by name regex and/or type. Pure-compute — no browser session required. Returns matching nodes with their path from root, depth, and engine-specific properties. |
 | `skia_detect_renderer` | Detect the active Skia renderer backend from the current page context. |
 | `skia_extract_scene` | Extract a lightweight Skia scene tree from the selected canvas. |
 | `skia_correlate_objects` | Correlate requested Skia node identifiers with the extracted scene tree. |
