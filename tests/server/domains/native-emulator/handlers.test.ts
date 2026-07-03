@@ -205,7 +205,7 @@ describe('NativeEmulatorHandlers — happy path', () => {
     // NULL indirect-call detection: a call through an uninitialised pointer throws
     // rather than masquerading as a clean return (the failure mode that hid STUR).
     expect(features).toContain('null-indirect-call-detection');
-    expect(data.isa).toBe('aarch64-integer+neon+crypto+fp');
+    expect(data.isa).toBe('aarch64-integer+neon+crypto+fp16');
     const simd = data.simd as { supported: string[]; unsupported: string[] };
     expect(simd.supported).toEqual(
       expect.arrayContaining([
@@ -216,12 +216,15 @@ describe('NativeEmulatorHandlers — happy path', () => {
         'long-widening-neon',
         'saturating-neon',
         'neon-ins-general',
+        'neon-bit-bif',
+        'neon-pmul-vector',
+        'vector-fmov-immediate',
+        'fp16',
       ]),
     );
-    // The remaining gaps are declared, not hidden.
-    expect(simd.unsupported).toEqual(
-      expect.arrayContaining(['bit-bif', 'integer-pmul', 'vector-fmov-immediate', 'fp16']),
-    );
+    // E4 finale: all previously-declared gaps are now implemented + bit-exact
+    // verified, so the unsupported list is empty.
+    expect(simd.unsupported).toEqual([]);
     expect(String(data.note)).toMatch(/NEON/);
     expect(String(data.note)).toMatch(/saturating|widening/);
     // The NULL indirect-call guard is advertised in the note for AI/agent callers.

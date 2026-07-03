@@ -138,16 +138,16 @@ export const isPmull = (f: SimdFields): boolean => {
 
 /**
  * Scalar floating-point (ARM ARM C4.1.8/C4.1.9): M=0, bit30=0, S=0, [28:24]=11110,
- * bit21=1, ftype!=11 (11=half not yet emulated). Covers FADD/FSUB/FMUL/FDIV/FMAX/
- * FMIN/FCMP/FCSEL/FMOV/FCVT/SCVTF/UCVTF/FCVTZS/FCVTZU/FABS/FNEG/FSQRT/FRINT*.
+ * bit21=1. Covers FADD/FSUB/FMUL/FDIV/FMAX/FMIN/FCMP/FCSEL/FMOV/FCVT/SCVTF/
+ * UCVTF/FCVTZS/FCVTZU/FABS/FNEG/FSQRT/FRINT*. The `ftype` field (bits[23:22])
+ * selects precision: 00=single, 01=double, 11=half (FEAT_FP16).
  */
 export const isScalarFp = (f: SimdFields): boolean =>
   ((f.insn >>> 31) & 1) === 0 &&
   ((f.insn >>> 30) & 1) === 0 &&
   ((f.insn >>> 29) & 1) === 0 &&
   f.base28_24 === 0b11110 &&
-  f.bit21 === 1 &&
-  f.ftype !== 0b11; // half-precision not yet modelled
+  f.bit21 === 1;
 
 /**
  * NEON "three same" (ARM ARM C4.1.6): 0 Q U 01110 size 1 Rm opcode[15:11] 1 Rn Rd.

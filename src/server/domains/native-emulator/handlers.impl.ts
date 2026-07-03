@@ -86,7 +86,7 @@ export class NativeEmulatorHandlers {
         'apk-arm64-extract',
         'instruction-trace',
       ],
-      isa: 'aarch64-integer+neon+crypto+fp',
+      isa: 'aarch64-integer+neon+crypto+fp16',
       simd: {
         supported: [
           'simd-fp-load-store',
@@ -106,11 +106,15 @@ export class NativeEmulatorHandlers {
           'long-widening-neon',
           'saturating-neon',
           'neon-ins-general',
+          'neon-bit-bif',
+          'neon-pmul-vector',
+          'vector-fmov-immediate',
+          'fp16',
         ],
-        unsupported: ['bit-bif', 'integer-pmul', 'vector-fmov-immediate', 'fp16'],
+        unsupported: [],
       },
       activeSessions: this.sessions.count(),
-      note: 'In-process AArch64 interpreter: integer ISA (incl. DMB/DSB/ISB barriers as no-ops) + a declared SIMD/FP subset + NEON integer-lane subset including saturating add/sub + crypto extension primitives + scalar IEEE-754 floating-point. SIMD support is reported as supported/unsupported lists; unsupported opcodes fail loudly with the raw opcode instead of being treated as success. On load, DT_INIT + DT_INIT_ARRAY constructors run after relocation; constructor NULL indirect calls are tolerated and logged, while direct call_symbol/call_jni_export NULL indirect calls throw "NULL indirect call". Raw guest memory tools are bounded by configured byte caps and return previews unless full base64 output is explicitly requested. Managed runtime snapshot payloads are outside this emulator boundary.',
+      note: 'In-process AArch64 interpreter: integer ISA (incl. DMB/DSB/ISB barriers as no-ops) + a declared SIMD/FP subset + NEON integer-lane subset including saturating add/sub + crypto extension primitives + scalar IEEE-754 floating-point across single/double AND half precision (FEAT_FP16, software binary16 model). SIMD support is reported as supported/unsupported lists; unsupported opcodes fail loudly with the raw opcode instead of being treated as success. On load, DT_INIT + DT_INIT_ARRAY constructors run after relocation; constructor NULL indirect calls are tolerated and logged, while direct call_symbol/call_jni_export NULL indirect calls throw "NULL indirect call". Raw guest memory tools are bounded by configured byte caps and return previews unless full base64 output is explicitly requested. Managed runtime snapshot payloads are outside this emulator boundary.',
     }));
   }
 

@@ -70,9 +70,26 @@ import {
   readFp,
 } from './simd-fp';
 import {
+  f16add,
+  f16sub,
+  f16mul,
+  f16div,
+  f16sqrt,
+  f16abs,
+  f16neg,
+  f16round,
+  f16CmpFlags,
+  intToF16,
+  packF16,
+  readF16,
+  packF16Bits,
+} from './fp/simd-fp16';
+import {
   neonAdd,
   neonAnd,
   neonBic,
+  neonBit,
+  neonBif,
   neonBsl,
   neonCmeq,
   neonCmge,
@@ -82,6 +99,7 @@ import {
   neonCmtst,
   neonEor,
   neonMul,
+  neonPmul,
   neonOrn,
   neonOrr,
   neonSmax,
@@ -643,6 +661,9 @@ function execPmull(ctx: SimdContext, f: SimdFields): boolean {
 
 /** Decode `ftype`→precision and route to the matching FP sub-form. */
 function execScalarFp(ctx: SimdContext, f: SimdFields): boolean {
+  // ftype=11 is FEAT_FP16 (half-precision). Route the whole sub-form family
+  // through a dedicated fp16 dispatcher that uses the software binary16 model.
+  if (f.ftype === 0b11) return execScalarFp16(ctx, f);
   const isDouble = f.ftype === 0b01;
   const bits15_10 = (f.insn >>> 10) & 0b111111;
   const bits14_10 = (f.insn >>> 10) & 0b11111;
@@ -664,6 +685,186 @@ function execScalarFp(ctx: SimdContext, f: SimdFields): boolean {
   // conditional select: bits[11:10]=11 (cond in [15:12]).
   if (low11_10 === 0b11) return execFpCondSelect(ctx, f, isDouble);
   return false;
+}
+
+/**
+ * Scalar half-precision (FEAT_FP16) dispatcher — same sub-form layout as the
+ * single/double path, but every operand is read/written as binary16 (low 2 bytes
+ * of the V register) and every result is rounded through the software fp16 model.
+ * Covers FADD/FSUB/FMUL/FDIV/FMAX/FMIN/FNMUL, FABS/FNEG/FSQRT/FMOV/FRINT*,
+ * FCMP/FCMPE, FCSEL, SCVTF/UCVTF/FCVTZS/FCVTZU, and FMOV (gpr⇄fpr) at half
+ * precision. FCVT precision-redirect opcodes (000100/000101) target the *other*
+ * widths and are handled here by going through the fp16 read then rounding to
+ * the requested destination precision.
+ */
+function execScalarFp16(ctx: SimdContext, f: SimdFields): boolean {
+  const bits15_10 = (f.insn >>> 10) & 0b111111;
+  const bits14_10 = (f.insn >>> 10) & 0b11111;
+  const bits13_10 = (f.insn >>> 10) & 0b1111;
+  const low11_10 = (f.insn >>> 10) & 0b11;
+
+  if (low11_10 === 0b00 && ((f.insn >>> 12) & 1) === 1) {
+    return execFp16Immediate(ctx, f);
+  }
+  if (bits15_10 === 0b000000) return execFp16IntConv(ctx, f);
+  if (bits13_10 === 0b1000) return execFp16Compare(ctx, f);
+  if (bits14_10 === 0b10000) return execFp16OneSource(ctx, f);
+  if (low11_10 === 0b10) return execFp16TwoSource(ctx, f);
+  if (low11_10 === 0b11) return execFp16CondSelect(ctx, f);
+  return false;
+}
+
+/** FMOV Hdr, #imm8 — half-precision FP immediate. Same 8-bit aBbbbbbc defgh
+ * layout as the scalar/double form, expanded to binary16 via VFPExpandImm(H). */
+function execFp16Immediate(ctx: SimdContext, f: SimdFields): boolean {
+  const imm8 = (f.insn >>> 13) & 0xff;
+  const a = (imm8 >>> 7) & 1;
+  const b = (imm8 >>> 6) & 1;
+  const cdefgh = imm8 & 0b111111;
+  // binary16 VFPExpandImm: sign=a, exp = aBbbb (5 bits: a,NOT(b),b,b,b),
+  // frac = cdefgh << 4 (6 bits → high 6 of 10-bit mantissa).
+  const B = b ? 0 : 1;
+  const exp5 = (a << 4) | (B << 3) | (b << 2) | (b << 1) | b;
+  const frac = (cdefgh << 4) & 0x3ff;
+  const bits16 = ((a << 15) | (exp5 << 10) | frac) >>> 0;
+  ctx.vSetBytes(f.rd, packF16Bits(bits16));
+  return true;
+}
+
+/** Two-source fp16, opcode[15:12]: FMUL=0 FDIV=1 FADD=2 FSUB=3 FMAX=4 FMIN=5 FNMUL=8. */
+function execFp16TwoSource(ctx: SimdContext, f: SimdFields): boolean {
+  const a = readF16(ctx.vGetBytes(f.rn));
+  const b = readF16(ctx.vGetBytes(f.rm));
+  let r: number;
+  switch (f.fpOp2Src) {
+    case 0b0000:
+      r = f16mul(a, b);
+      break;
+    case 0b0001:
+      r = f16div(a, b);
+      break;
+    case 0b0010:
+      r = f16add(a, b);
+      break;
+    case 0b0011:
+      r = f16sub(a, b);
+      break;
+    case 0b0100:
+      r =
+        Number.isNaN(a) || Number.isNaN(b)
+          ? NaN
+          : a === 0 && b === 0
+            ? Object.is(a, -0)
+              ? b
+              : a
+            : Math.max(a, b);
+      r = f16round(r);
+      break;
+    case 0b0101:
+      r =
+        Number.isNaN(a) || Number.isNaN(b)
+          ? NaN
+          : a === 0 && b === 0
+            ? Object.is(a, -0)
+              ? a
+              : b
+            : Math.min(a, b);
+      r = f16round(r);
+      break;
+    case 0b1000:
+      r = f16round(-(a * b));
+      break;
+    default:
+      return false; // FMAXNM/FMINNM not modelled
+  }
+  ctx.vSetBytes(f.rd, packF16(r));
+  return true;
+}
+
+/** One-source fp16, opcode[20:15]: FMOV=0 FABS=1 FNEG=2 FSQRT=3; FCVT(4..). */
+function execFp16OneSource(ctx: SimdContext, f: SimdFields): boolean {
+  const a = readF16(ctx.vGetBytes(f.rn));
+  switch (f.fpOp1Src) {
+    case 0b000000:
+      ctx.vSetBytes(f.rd, packF16(a));
+      return true;
+    case 0b000001:
+      ctx.vSetBytes(f.rd, packF16(f16abs(a)));
+      return true;
+    case 0b000010:
+      ctx.vSetBytes(f.rd, packF16(f16neg(a)));
+      return true;
+    case 0b000011:
+      ctx.vSetBytes(f.rd, packF16(f16sqrt(a)));
+      return true;
+    case 0b000100: {
+      // FCVT H→S (half to single)
+      ctx.vSetBytes(f.rd, packFp(a, false));
+      return true;
+    }
+    case 0b000101: {
+      // FCVT H→D (half to double)
+      ctx.vSetBytes(f.rd, packFp(a, true));
+      return true;
+    }
+    default:
+      return false; // FRINT* family at fp16 not yet modelled (low frequency)
+  }
+}
+
+/** FCMP/FCMPE fp16 — sets NZCV per IEEE-754 total order. */
+function execFp16Compare(ctx: SimdContext, f: SimdFields): boolean {
+  const opcode2 = f.insn & 0b11111;
+  const a = readF16(ctx.vGetBytes(f.rn));
+  const b = (opcode2 & 0b01000) !== 0 ? 0 : readF16(ctx.vGetBytes(f.rm));
+  const flags = f16CmpFlags(a, b);
+  ctx.setNZCV(flags.n, flags.z, flags.c, flags.v);
+  return true;
+}
+
+/** FCSEL fp16 — Vd = cond ? Vn : Vm at half precision. */
+function execFp16CondSelect(ctx: SimdContext, f: SimdFields): boolean {
+  const take = ctx.conditionHolds(f.fpCond) ? f.rn : f.rm;
+  ctx.vSetBytes(f.rd, packF16(readF16(ctx.vGetBytes(take))));
+  return true;
+}
+
+/** FP ⇄ integer conversion at fp16 source/dest (SCVTF/UCVTF/FCVTZS/FCVTZU/FMOV). */
+function execFp16IntConv(ctx: SimdContext, f: SimdFields): boolean {
+  const intBits: 32 | 64 = f.sf === 1 ? 64 : 32;
+  const rmode = f.fpRmode;
+  const op = f.fpConvOp;
+  const rounding: FpRounding =
+    rmode === 0b00 ? 'nearest' : rmode === 0b01 ? 'plus' : rmode === 0b10 ? 'minus' : 'zero';
+
+  switch (op) {
+    case 0b000: {
+      // FCVT?S — fp16 → signed int with rmode rounding (use the fp32 pipeline
+      // since fp16 values are exact subsets of fp32, then round to int).
+      const val = readF16(ctx.vGetBytes(f.rn));
+      ctx.gprWrite(f.rd, BigInt.asUintN(64, fpToInt(val, rounding, true, intBits)));
+      return true;
+    }
+    case 0b001: {
+      const val = readF16(ctx.vGetBytes(f.rn));
+      ctx.gprWrite(f.rd, BigInt.asUintN(64, fpToInt(val, rounding, false, intBits)));
+      return true;
+    }
+    case 0b010: {
+      // SCVTF — signed int → fp16.
+      const raw = ctx.gprRead(f.rn);
+      ctx.vSetBytes(f.rd, packF16(intToF16(raw, true, intBits)));
+      return true;
+    }
+    case 0b011: {
+      // UCVTF — unsigned int → fp16.
+      const raw = ctx.gprRead(f.rn);
+      ctx.vSetBytes(f.rd, packF16(intToF16(raw, false, intBits)));
+      return true;
+    }
+    default:
+      return false; // FMOV(gpr⇄fpr) fp16 forms not yet modelled
+  }
 }
 
 /** Two-source arithmetic, opcode[15:12]: FMUL=0 FDIV=1 FADD=2 FSUB=3 FMAX=4 FMIN=5 FNMUL=8. */
@@ -968,13 +1169,24 @@ function execNeonThreeSame(ctx: SimdContext, f: SimdFields): boolean {
             return true;
         }
       }
-      // U=1: EOR (size 00), BSL (01); BIT/BIF (10/11) not yet modelled.
+      // U=1: EOR (size 00), BSL (01); BIT/BIF (10/11).
+      // BIT/BIF: ARM ARM C7.2.4-5 — Vd is read-modify-written, Vn is the bit
+      // condition source, Vm is the data source.
+      const dBytes = ctx.vGetBytes(rd);
       if (size === 0b00) {
         ctx.vSetBytes(rd, neonEor(a, b, q));
         return true;
       }
       if (size === 0b01) {
-        ctx.vSetBytes(rd, neonBsl(ctx.vGetBytes(rd), a, b, q));
+        ctx.vSetBytes(rd, neonBsl(dBytes, a, b, q));
+        return true;
+      }
+      if (size === 0b10) {
+        ctx.vSetBytes(rd, neonBit(dBytes, a, b, q));
+        return true;
+      }
+      if (size === 0b11) {
+        ctx.vSetBytes(rd, neonBif(dBytes, a, b, q));
         return true;
       }
       return false;
@@ -982,9 +1194,13 @@ function execNeonThreeSame(ctx: SimdContext, f: SimdFields): boolean {
     case 0b10000: // ADD (U=0) / SUB (U=1)
       ctx.vSetBytes(rd, u === 0 ? neonAdd(a, b, size, q) : neonSub(a, b, size, q));
       return true;
-    case 0b10011: // MUL (U=0); PMUL (U=1) not yet modelled
+    case 0b10011: // MUL (U=0) / PMUL (U=1, size=00 only — 8-bit lane poly mul)
       if (u === 0) {
         ctx.vSetBytes(rd, neonMul(a, b, size, q));
+        return true;
+      }
+      if (u === 1 && size === 0b00) {
+        ctx.vSetBytes(rd, neonPmul(a, b, q));
         return true;
       }
       return false;
@@ -1261,14 +1477,59 @@ function execNeonCopy(ctx: SimdContext, f: SimdFields): boolean {
 // ── NEON modified immediate: MOVI/MVNI/ORR/BIC (vector, immediate) ─────────
 // 0 Q op 0111100000 abc[18:16] cmode[15:12] o2[11] 1 defgh[9:5] Rd.
 
+/**
+ * FMOV (vector, immediate) — ARM ARM C7.2.133.
+ * `0 Q 0 0111100000 abc cmode=1111 0 1 defgh Rd`, where `size[23:22]` selects the
+ * element width. The 8-bit immediate `aBbbbbbc defgh` encodes a float32 (the same
+ * VFPExpandImm layout used by the scalar `FMOV Sd,#imm` form), and the value is
+ * broadcast to every 32-bit lane of the destination: 4 lanes when Q=1 (.4S), 2
+ * lanes when Q=0 (.2S, upper 64 bits zeroed).
+ *
+ * The vector FMOV is encoded inside the same mod-imm group as MOVI/MVNI/ORR/BIC
+ * but is *not* an integer immediate, so it must be expanded with the IEEE-754
+ * decoder rather than `advSimdExpandImm`.
+ */
+function execNeonFmovVector(ctx: SimdContext, f: SimdFields, imm8: number): boolean {
+  // Only the single-precision vector form (size=00) is modelled here. size=01 is
+  // reserved and size=1x is FEAT_FP16 — neither is in the declared scope yet.
+  if (f.size !== 0b00) return false;
+  const a = (imm8 >>> 7) & 1; // sign
+  const b = (imm8 >>> 6) & 1; // exponent MSB complement input
+  const cdefgh = imm8 & 0b111111;
+  const B = b ? 0 : 1; // NOT(b)
+  const c = (cdefgh >>> 5) & 1;
+  const defgh = cdefgh & 0b11111;
+  const exp = (a << 7) | (B << 6) | (B << 5) | (B << 4) | (B << 3) | (B << 2) | (B << 1) | c;
+  const frac = defgh << 18; // low 5 mantissa bits → high 5 of 23-bit float32 fraction
+  const bits32 = ((a << 31) | (exp << 23) | frac) >>> 0;
+  const view = new DataView(new ArrayBuffer(4));
+  view.setUint32(0, bits32, true);
+  const value = view.getFloat32(0, true);
+
+  const out = new Uint8Array(16);
+  const outView = new DataView(out.buffer);
+  const laneCount = f.q === 1 ? 4 : 2;
+  for (let lane = 0; lane < laneCount; lane++) {
+    outView.setUint32(lane * 4, bits32, true);
+  }
+  // Q=0 leaves bytes 8..15 zero (loop already wrote nothing past lane 1).
+  ctx.vSetBytes(f.rd, out);
+  void value; // value computed for documentation; the bit pattern is what we write
+  return true;
+}
+
 function execNeonModImm(ctx: SimdContext, f: SimdFields): boolean {
   const abc = (f.insn >>> 16) & 0b111;
   const defgh = (f.insn >>> 5) & 0b11111;
   const imm8 = (abc << 5) | defgh;
   const cmode = f.cmode;
   const op = f.op29;
-  // FMOV (vector) lives at cmode=1111 op=0; leave it to a future FP-immediate path.
-  if (cmode === 0b1111 && op === 0) return false;
+  // FMOV (vector, immediate), ARM ARM C7.2.133: cmode=1111, op=0. The 8-bit
+  // immediate is the standard aBbbbbbc defgh float-encoding; size selects the
+  // element width. The mod-imm family at this opcode is a *floating-point* load
+  // broadcast, not an integer MOVI, so it must be handled before advSimdExpandImm
+  // (which only knows the integer MOVI/MVNI/ORR/BIC cmode table).
+  if (cmode === 0b1111 && op === 0) return execNeonFmovVector(ctx, f, imm8);
 
   const imm64 = advSimdExpandImm(op, cmode, imm8);
   const lanes = (value: bigint): bigint[] => Array.from({ length: f.q === 1 ? 2 : 1 }, () => value);

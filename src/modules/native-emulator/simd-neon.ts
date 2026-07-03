@@ -112,6 +112,31 @@ export const neonMul = (
   q: number,
 ): Uint8Array<ArrayBuffer> => mapLanes2(a, b, size, q, (x, y) => x * y);
 
+/**
+ * PMUL (vector polynomial multiply, ARM ARM C7.2.189) — three-same, 8-bit lanes
+ * only (size must be 00). Each lane: `Vd = PolyMul_8(Vn, Vm)` = carry-less
+ * GF(2)[x] product of two 8-bit polynomials reduced to the low 8 bits (modulo x^8).
+ * Distinct from PMULL/PMULL2 (long 8→16, .8B→.8H/.1Q→.1Q) which live in the
+ * three-different family and are handled by `execPmull`.
+ */
+export const neonPmul = (a: Uint8Array, b: Uint8Array, q: number): Uint8Array<ArrayBuffer> => {
+  const la = readLanes(a, 0, q);
+  const lb = readLanes(b, 0, q);
+  const count = q === 1 ? 16 : 8;
+  const out: bigint[] = [];
+  for (let i = 0; i < count; i++) {
+    const x = Number(la[i] ?? 0n) & 0xff;
+    const y = Number(lb[i] ?? 0n) & 0xff;
+    // Carry-less multiply over GF(2)[x], then keep low 8 bits (mod x^8).
+    let acc = 0;
+    for (let bit = 0; bit < 8; bit++) {
+      if ((y >>> bit) & 1) acc ^= x << bit;
+    }
+    out.push(BigInt(acc & 0xff));
+  }
+  return packLanes(out, 0);
+};
+
 export const neonSqadd = (
   a: Uint8Array,
   b: Uint8Array,
@@ -192,6 +217,56 @@ export const neonBsl = (
   const mask = widthMask(8);
   return packLanes(
     d.map((dd, i) => ((dd & (n[i] ?? 0n)) | ((m[i] ?? 0n) & (~(n[i] ?? 0n) & mask))) & mask),
+    3,
+  );
+};
+
+/**
+ * BIT (Bitwise Insert if True): per bit `Vd = Vn ? Vm : Vd`.
+ * Identity (ARM ARM C7.2.4): `Vd = (Vd & ~Vn) | (Vm & Vn)`.
+ * Wherever the condition source Vn is 1, copy Vm into Vd; leave Vd where Vn=0.
+ * dst `vd` is both source and destination (read-modify-write).
+ */
+export const neonBit = (
+  vd: Uint8Array,
+  vn: Uint8Array,
+  vm: Uint8Array,
+  q: number,
+): Uint8Array<ArrayBuffer> => {
+  const d = readLanes(vd, 3, q);
+  const n = readLanes(vn, 3, q);
+  const m = readLanes(vm, 3, q);
+  const mask = widthMask(8);
+  return packLanes(
+    d.map((dd, i) => {
+      const ni = n[i] ?? 0n;
+      return ((dd & (~ni & mask)) | ((m[i] ?? 0n) & ni)) & mask;
+    }),
+    3,
+  );
+};
+
+/**
+ * BIF (Bitwise Insert if False): per bit `Vd = Vn ? Vd : Vm`.
+ * Identity (ARM ARM C7.2.5): `Vd = (Vd & Vn) | (Vm & ~Vn)`.
+ * Wherever the condition source Vn is 0, copy Vm into Vd; leave Vd where Vn=1.
+ * dst `vd` is both source and destination (read-modify-write).
+ */
+export const neonBif = (
+  vd: Uint8Array,
+  vn: Uint8Array,
+  vm: Uint8Array,
+  q: number,
+): Uint8Array<ArrayBuffer> => {
+  const d = readLanes(vd, 3, q);
+  const n = readLanes(vn, 3, q);
+  const m = readLanes(vm, 3, q);
+  const mask = widthMask(8);
+  return packLanes(
+    d.map((dd, i) => {
+      const ni = n[i] ?? 0n;
+      return ((dd & ni) | ((m[i] ?? 0n) & (~ni & mask))) & mask;
+    }),
     3,
   );
 };
