@@ -24,14 +24,7 @@ vi.mock('@native/AntiCheatDetector', () => ({ antiCheatDetector: {} }));
 const IS_WIN32 = process.platform === 'win32';
 
 // Win32-only tools that should be absent on macOS
-const WIN32_ONLY_TOOLS = new Set([
-  'memory_heap_enumerate',
-  'memory_heap_stats',
-  'memory_heap_anomalies',
-  'memory_breakpoint',
-  'memory_find_accesses',
-  'memory_speedhack',
-]);
+const WIN32_ONLY_TOOLS = new Set(['memory_breakpoint', 'memory_find_accesses', 'memory_speedhack']);
 
 // Cross-platform tools that should always be present
 const CROSS_PLATFORM_TOOLS = [
@@ -129,8 +122,7 @@ describe('memory manifest platform filtering', () => {
     const linuxManifest = await loadManifestWithPlatform('linux');
 
     expect(win32Manifest.registrations.length).toBe(34);
-    // E5-A: +3 (integrity/anticheat/guard). E5-B: +1 (inline_hook_detect).
-    // E5-C: +2 (pe_headers/pe_imports_exports). Total Linux: 22→26→28.
-    expect(linuxManifest.registrations.length).toBe(28);
+    // E5-A: +3, E5-B: +1, E5-C: +2, E5-D-heap: +3. Total Linux: 22→31.
+    expect(linuxManifest.registrations.length).toBe(31);
   });
 });

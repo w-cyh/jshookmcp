@@ -127,11 +127,8 @@ function toolByName(name: string) {
 
 // ── Win32-only tool names ──
 const WIN32_ONLY_TOOLS = new Set([
-  // Heap analysis (Toolhelp32 APIs — no Linux/macOS parity yet)
-  'memory_heap_enumerate',
-  'memory_heap_stats',
-  'memory_heap_anomalies',
-  // PE/ELF/Mach-O header + symbol parsing now has cross-platform fallback (E5-C).
+  // Heap analysis now cross-platform: HeapAnalyzer has a region-based fallback
+  // (readProcMapsRegions / /proc/pid/maps) and is always wired (E5-D-heap).
   // Hardware breakpoints (debug registers — ptrace/macOS thread_set_state pending — E5-D)
   'memory_breakpoint',
   'memory_find_accesses',
