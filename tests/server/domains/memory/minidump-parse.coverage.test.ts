@@ -17,8 +17,12 @@ vi.mock('@native/MinidumpParser', () => ({
 
 import { MinidumpHandlers } from '@server/domains/memory/handlers/minidump-parse';
 
-function body(r: { content?: Array<{ text?: string }> }): Record<string, unknown> {
-  return JSON.parse(r.content?.[0]?.text ?? '{}');
+function body(r: unknown) {
+  // Double-cast: the handler returns Promise<unknown>; the real ToolResponse
+  // content is a union (text/image/...) we don't need to model here. Return
+  // type inferred as any (from JSON.parse) so nested access works in tests.
+  const resp = r as unknown as { content?: Array<{ text?: string }> };
+  return JSON.parse(resp.content?.[0]?.text ?? '{}');
 }
 
 function okSummary(over: Record<string, unknown> = {}) {

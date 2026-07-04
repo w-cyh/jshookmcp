@@ -25,8 +25,9 @@ import {
   handleJsSymbolicExecuteJsvmp,
 } from '@server/domains/analysis/handlers/symbolic';
 
-function body(r: { content?: Array<{ text?: string }> }): Record<string, unknown> {
-  return JSON.parse(r.content?.[0]?.text ?? '{}');
+function body(r: unknown) {
+  const resp = r as unknown as { content?: Array<{ text?: string }> };
+  return JSON.parse(resp.content?.[0]?.text ?? '{}');
 }
 
 beforeEach(() => {

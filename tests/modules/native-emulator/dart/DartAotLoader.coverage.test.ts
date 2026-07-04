@@ -50,7 +50,7 @@ describe('DartAotLoader.getObjectPool', () => {
   it('returns the pool registered at a given address', () => {
     const pool = loader.getObjectPool(snapshot, 0x3000n);
     expect(pool).toBeDefined();
-    expect((pool as { entries: unknown[] }).entries.length).toBe(1);
+    expect((pool as unknown as { entries: unknown[] }).entries.length).toBe(1);
   });
 
   it('returns undefined when no pool is registered at the address', () => {

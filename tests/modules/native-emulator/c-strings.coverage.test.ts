@@ -88,7 +88,7 @@ describe('formatGuestCString', () => {
     const ctx = memCtx();
     // The format routine may interpret the format literally or read from memory;
     // we only assert it returns a string and doesn't throw.
-    const out = formatGuestCString({ x: ctx.x, read: ctx.read } as never, 0, 'literal');
+    const out = formatGuestCString({ x: ctx.x, read: ctx.read } as never, 0, 0);
     expect(typeof out).toBe('string');
   });
 });
