@@ -52,6 +52,9 @@ export async function discoverWasmScripts(page: unknown): Promise<WasmScript[]> 
     // Actually, we need to use Debugger.getScripts or Runtime.evaluate to
     // enumerate wasm scripts. CDP doesn't have a single "list wasm" API.
     // We use a JS expression to enumerate them.
+    // FIXME(D3): `scripts` destructuring above is a dead call — Debugger.getScriptSource
+    // requires a scriptId parameter, so {scripts} is always undefined. Actual
+    // wasm discovery happens via Runtime.evaluate+performance.getEntriesByType below.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-underscore-dangle
     void scripts;
 

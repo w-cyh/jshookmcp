@@ -202,9 +202,13 @@ export const v8InspectorTools: Tool[] = [
     t
       .desc(
         'Inspect WebAssembly modules and garbage-collected WASM objects in the page. ' +
-          'Discovers .wasm script resources, detects WASM GC (struct/array/ref-types) availability, ' +
-          'and enumerates feature flags (gc/threads/simd). Supports optional scriptId filter ' +
-          'to inspect a specific WASM module. Requires browser/page CDP context.',
+          'Discovers .wasm script resources via performance.getEntriesByType, detects WASM GC ' +
+          '(struct/array/ref-types) availability, and enumerates feature flags ' +
+          '(gc/threads/simd). Supports optional scriptId filter to inspect a specific ' +
+          'WASM module. Requires browser/page CDP context. ' +
+          'Note: structural type enumeration (includeStructs) requires Chrome ≥ M119 ' +
+          'with --enable-features=WebAssemblyGC; absent that, returns gcAvailable flag ' +
+          'and script-level summary only.',
       )
       .string(
         'scriptId',
