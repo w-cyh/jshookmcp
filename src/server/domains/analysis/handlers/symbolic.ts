@@ -3,9 +3,9 @@
  */
 
 import {
+  argArray,
   argBool,
   argNumber,
-  argObject,
   argString,
   argStringRequired,
 } from '@server/domains/shared/parse-args';
@@ -38,8 +38,8 @@ export async function handleJsSymbolicExecute(args: ToolArgs): Promise<ToolRespo
 }
 
 export async function handleJsSymbolicExecuteJsvmp(args: ToolArgs): Promise<ToolResponse> {
-  const instructions = argObject(args, 'instructions');
-  if (!instructions || !Array.isArray(instructions)) {
+  const instructions = argArray(args, 'instructions');
+  if (!instructions) {
     return asJsonResponse({
       success: false,
       error: 'instructions array is required (from js_analyze_vm output)',

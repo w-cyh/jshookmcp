@@ -41,15 +41,13 @@ describe('classifyHookPattern — all pattern types', () => {
   });
 
   it('mov_jmp (B8 imm32 FF E0)', () => {
-    // NOTE: classifyHookPattern checks bytes[6]===0xff, bytes[7] in E0-EF with
-    // length>=8 — construct the window to match (real x86 B8 imm32 FF E0 is 7
-    // bytes / FF at index 5, so the scanner's threshold looks off by one, but
-    // we cover the branches as written).
-    expect(classifyHookPattern(hexToBytes('b80000000000ffe0'))).toBe('mov_jmp');
+    // Real x86: B8 imm32(4) FF E0 = 7 bytes, FF at index 5, modrm E0 at index 6.
+    expect(classifyHookPattern(hexToBytes('b800000000ffe0'))).toBe('mov_jmp');
   });
 
   it('mov_call (B8 imm32 FF D0)', () => {
-    expect(classifyHookPattern(hexToBytes('b80000000000ffd0'))).toBe('mov_call');
+    // Real x86: B8 imm32(4) FF D0 = 7 bytes, FF at index 5, modrm D0 at index 6.
+    expect(classifyHookPattern(hexToBytes('b800000000ffd0'))).toBe('mov_call');
   });
 
   it('push_ret (68 imm32 C3)', () => {
@@ -64,7 +62,8 @@ describe('classifyHookPattern — all pattern types', () => {
     expect(classifyHookPattern(new Uint8Array([]))).toBe('unknown');
   });
 
-  it('does NOT classify B8 mov_jmp when 6th/7th bytes are not FF/E0', () => {
+  it('does NOT classify B8 mov_jmp when 5th/6th bytes are not FF/E0', () => {
+    // b8 ef be ad de 00 90 — index 5 = 0x00 (not FF), so not mov_jmp.
     expect(classifyHookPattern(hexToBytes('b8efbeadde0090'))).toBe('unknown');
   });
 });

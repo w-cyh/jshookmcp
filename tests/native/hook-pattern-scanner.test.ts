@@ -32,14 +32,10 @@ describe('HookPatternScanner: classifyHookPattern (8 pe-sieve patterns)', () => 
     );
   });
   it('mov_jmp: B8 imm32 FF E0', () => {
-    expect(classifyHookPattern(U([0xb8, 0x78, 0x56, 0x34, 0x12, 0x00, 0xff, 0xe0]))).toBe(
-      'mov_jmp',
-    );
+    expect(classifyHookPattern(U([0xb8, 0x78, 0x56, 0x34, 0x12, 0xff, 0xe0]))).toBe('mov_jmp');
   });
   it('mov_call: B8 imm32 FF D0', () => {
-    expect(classifyHookPattern(U([0xbf, 0x11, 0x22, 0x33, 0x44, 0x00, 0xff, 0xd5]))).toBe(
-      'mov_call',
-    );
+    expect(classifyHookPattern(U([0xbf, 0x11, 0x22, 0x33, 0x44, 0xff, 0xd5]))).toBe('mov_call');
   });
   it('push_ret: 68 imm32 C3', () => {
     expect(classifyHookPattern(U([0x68, 0xef, 0xbe, 0xad, 0xde, 0xc3]))).toBe('push_ret');
@@ -79,8 +75,8 @@ describe('HookPatternScanner: decodeHookTarget', () => {
     expect(decodeHookTarget(bytes, 0x400000n)).toBe('0xdeadbeefcafe');
   });
   it('mov_jmp: target is the MOV imm32', () => {
-    // B8 78 56 34 12 → imm32 = 0x12345678
-    const bytes = U([0xb8, 0x78, 0x56, 0x34, 0x12, 0x00, 0xff, 0xe0]);
+    // B8 78 56 34 12 FF E0 → imm32 = 0x12345678
+    const bytes = U([0xb8, 0x78, 0x56, 0x34, 0x12, 0xff, 0xe0]);
     expect(decodeHookTarget(bytes, 0x1000n)).toBe('0x12345678');
   });
   it('push_ret: target is the pushed imm32', () => {
@@ -110,9 +106,8 @@ describe('HookPatternScanner: scanRangeForHooks', () => {
     0x56,
     0x34,
     0x12,
-    0x00,
     0xff,
-    0xe0, // mov_jmp at offset 8
+    0xe0, // mov_jmp at offset 8 (B8 imm32 FF E0 = 7 bytes)
     0x90,
     0x90,
     0x90,
@@ -146,9 +141,8 @@ describe('HookPatternScanner: scanRangeForHooks', () => {
       0x56,
       0x34,
       0x12,
-      0x00,
       0xff,
-      0xe0, // mov_jmp at offset 5
+      0xe0, // mov_jmp at offset 5 (B8 imm32 FF E0 = 7 bytes)
     ]);
     const matches = scanRangeForHooks(bytes, 0n, { confidence: 'all' });
     const types = matches.map((m) => m.hookType).toSorted();

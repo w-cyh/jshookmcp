@@ -684,9 +684,9 @@ export class PEAnalyzer {
     if (b0 === 0xff && memBytes[1] === 0x25) return 'jmp_abs64';
     // MOV r32, imm32 (B8-BF) followed by FF E0-EF (JMP r32) or FF D0-DF (CALL r32).
     // Layout: [B8-BF][imm32 4 bytes][FF][E0-EF | D0-DF] = 7 bytes minimum.
-    if (b0 >= 0xb8 && b0 <= 0xbf && memBytes.length >= 8) {
-      if (memBytes[6] === 0xff) {
-        const reg = memBytes[7]!;
+    if (b0 >= 0xb8 && b0 <= 0xbf && memBytes.length >= 7) {
+      if (memBytes[5] === 0xff) {
+        const reg = memBytes[6]!;
         if (reg >= 0xe0 && reg <= 0xef) return 'mov_jmp';
         if (reg >= 0xd0 && reg <= 0xdf) return 'mov_call';
       }

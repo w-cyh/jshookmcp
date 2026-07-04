@@ -79,16 +79,16 @@ describe('handleJsSymbolicExecuteJsvmp', () => {
     expect(body(r2).error).toMatch(/instructions array is required/);
   });
 
-  it('BUG: rejects valid instruction arrays (argObject excludes arrays → delegation unreachable)', async () => {
-    // argObject() returns undefined for Array input (!Array.isArray check),
-    // so handleJsSymbolicExecuteJsvmp always hits the error branch even when
-    // a valid instructions array is supplied. The executeJSVMP delegation is
-    // therefore dead code via the handler. Documented here; not fixed in this
-    // coverage pass. Calling still returns the well-formed error response.
+  it('delegates to JSVMPSymbolicExecutor.executeJSVMP for valid instruction arrays', async () => {
+    // Fixed: argArray() accepts arrays (argObject rejected them), so a valid
+    // instructions array now reaches the executeJSVMP delegation instead of
+    // the error branch.
+    mockExecuteJsvmp.mockResolvedValue({ steps: [], opcodes: [] });
     const r = await handleJsSymbolicExecuteJsvmp({
       instructions: [{ op: 'PUSH', args: [1] }],
     } as never);
-    expect(body(r).error).toMatch(/instructions array is required/);
-    expect(mockExecuteJsvmp).not.toHaveBeenCalled();
+    expect(mockExecuteJsvmp).toHaveBeenCalled();
+    const parsed = body(r);
+    expect(parsed).not.toHaveProperty('error');
   });
 });

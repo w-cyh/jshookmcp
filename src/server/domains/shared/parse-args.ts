@@ -117,3 +117,9 @@ export function argObject(args: Args, key: string): Record<string, unknown> | un
   }
   return undefined;
 }
+
+/** Extract an array arg, returning `undefined` when absent or not an array. */
+export function argArray(args: Args, key: string): unknown[] | undefined {
+  const v = args[key];
+  return Array.isArray(v) ? v : undefined;
+}

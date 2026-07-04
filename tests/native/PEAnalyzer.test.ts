@@ -324,8 +324,8 @@ describe('PEAnalyzer', () => {
       const buf = Buffer.alloc(16, 0);
       buf[0] = 0xb8; // MOV EAX, imm32
       buf.writeUInt32LE(0x401000, 1);
-      buf[6] = 0xff; // JMP r/m32
-      buf[7] = 0xe0; // E0 = JMP EAX
+      buf[5] = 0xff; // JMP r/m32 (B8 imm32=4bytes → FF at index 5)
+      buf[6] = 0xe0; // E0 = JMP EAX (modrm at index 6)
       expect(p.classifyHook(buf)).toBe('mov_jmp');
     });
 
@@ -333,8 +333,8 @@ describe('PEAnalyzer', () => {
       const buf = Buffer.alloc(16, 0);
       buf[0] = 0xb9; // MOV ECX, imm32
       buf.writeUInt32LE(0x402000, 1);
-      buf[6] = 0xff;
-      buf[7] = 0xd1; // D1 = CALL ECX
+      buf[5] = 0xff;
+      buf[6] = 0xd1; // D1 = CALL ECX
       expect(p.classifyHook(buf)).toBe('mov_call');
     });
 
