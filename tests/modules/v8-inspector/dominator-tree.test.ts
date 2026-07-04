@@ -362,6 +362,46 @@ describe('DominatorTreeBuilder', () => {
     });
   });
 
+  describe('getRetainedByFunctionName minRetainedSize filter', () => {
+    // The v8_function_retained handler wires args.minRetainedSize (advertised
+    // in the tool schema) through to the 4th param of getRetainedByFunctionName.
+    // Pin the filter behavior here at the builder level so a regression that
+    // drops the arg reads as a red test, not a silently-wider result set.
+    it('returns all matching nodes when minRetainedSize is 0', () => {
+      const nodes: ParsedNode[] = [
+        { id: 1, name: 'Root', selfSize: 0, type: 'synthetic' },
+        { id: 2, name: 'FuncSmall', selfSize: 1_000, type: 'object' },
+        { id: 3, name: 'FuncLarge', selfSize: 5_000_000, type: 'object' },
+      ];
+      const edges: ParsedEdge[] = [
+        { fromId: 1, toId: 2, nameOrIndex: 'a', type: 'property' },
+        { fromId: 1, toId: 3, nameOrIndex: 'b', type: 'property' },
+      ];
+      const builder = new DominatorTreeBuilder();
+      const tree = builder.buildDominatorTree(nodes, edges);
+      const all = builder.getRetainedByFunctionName('Func', tree, 50, 0);
+      expect(all.length).toBe(2);
+    });
+
+    it('filters out nodes below the threshold and keeps larger ones', () => {
+      const nodes: ParsedNode[] = [
+        { id: 1, name: 'Root', selfSize: 0, type: 'synthetic' },
+        { id: 2, name: 'FuncSmall', selfSize: 1_000, type: 'object' },
+        { id: 3, name: 'FuncLarge', selfSize: 5_000_000, type: 'object' },
+      ];
+      const edges: ParsedEdge[] = [
+        { fromId: 1, toId: 2, nameOrIndex: 'a', type: 'property' },
+        { fromId: 1, toId: 3, nameOrIndex: 'b', type: 'property' },
+      ];
+      const builder = new DominatorTreeBuilder();
+      const tree = builder.buildDominatorTree(nodes, edges);
+      // Threshold just above the small node's retained (== self, leaf) size.
+      const filtered = builder.getRetainedByFunctionName('Func', tree, 50, 1_001);
+      expect(filtered.length).toBe(1);
+      expect(filtered[0]!.name).toBe('FuncLarge');
+    });
+  });
+
   describe('performance', () => {
     it('should handle 10k nodes within 2 seconds', () => {
       const nodeCount = 10000;

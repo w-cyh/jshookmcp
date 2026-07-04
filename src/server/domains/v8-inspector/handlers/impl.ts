@@ -120,6 +120,14 @@ export class V8InspectorHandlers {
     const snapshotId = requireStringArg(args, 'snapshotId');
     const pattern = requireStringArg(args, 'pattern');
     const maxResults = typeof args.maxResults === 'number' ? args.maxResults : 50;
+    // Schema (definitions.ts) advertises a minRetainedSize filter (default 0);
+    // previously the handler ignored it, so the tool filtered nothing even
+    // when the caller asked for "only objects ≥ N bytes". Pass it through to
+    // getRetainedByFunctionName, which already accepts it as its 4th param.
+    const minRetainedSize =
+      typeof args.minRetainedSize === 'number' && args.minRetainedSize >= 0
+        ? args.minRetainedSize
+        : 0;
     const snapshot = getSnapshot(snapshotId);
     if (!snapshot) {
       throw new Error(`Snapshot ${snapshotId} not found`);
@@ -130,7 +138,7 @@ export class V8InspectorHandlers {
     parser.feedChunk(snapshot.chunks);
     const builder = new DominatorTreeBuilder();
     const tree = builder.buildDominatorTree(parser.parseNodes(), parser.parseEdges());
-    const objects = builder.getRetainedByFunctionName(pattern, tree, maxResults);
+    const objects = builder.getRetainedByFunctionName(pattern, tree, maxResults, minRetainedSize);
     return {
       success: true,
       snapshotId,
@@ -637,8 +645,12 @@ export class V8InspectorHandlers {
         propertyCount: number;
       };
       delta: { shallowSize: number; retainedSize: number; propertyCount: number };
-      classMatch: boolean;
+      // sameClass is the canonical field; classMatch is a kept alias that
+      // always mirrors sameClass (formerly two always-equal fields written
+      // independently — collapsed to one source of truth). Preserved on the
+      // response so existing MCP consumers and tests keep resolving.
       sameClass: boolean;
+      classMatch: boolean;
       interesting: boolean;
     }>;
     skippedNodes?: number[];
@@ -692,6 +704,7 @@ export class V8InspectorHandlers {
 
     const { HeapSnapshotParser } = await import('@modules/v8-inspector/HeapSnapshotParser');
     const { DominatorTreeBuilder } = await import('@modules/v8-inspector/DominatorTreeBuilder');
+    type DominatorNode = import('@modules/v8-inspector/DominatorTreeBuilder').DominatorNode;
 
     // Parse primary
     const priParser = new HeapSnapshotParser();
@@ -708,9 +721,9 @@ export class V8InspectorHandlers {
     const priRetained = new Map<number, number>();
     try {
       const tree = new DominatorTreeBuilder().buildDominatorTree(priNodes, priEdges);
-      (function walk(n: any): void {
+      (function walk(n: DominatorNode): void {
         priRetained.set(n.nodeId, n.retainedSize);
-        if (n.children) for (const c of n.children) walk(c);
+        for (const c of n.children) walk(c);
       })(tree);
     } catch {
       for (const n of priNodes) priRetained.set(n.id, n.selfSize);
@@ -736,9 +749,9 @@ export class V8InspectorHandlers {
       secRetained = new Map<number, number>();
       try {
         const tree = new DominatorTreeBuilder().buildDominatorTree(secNodes, secEdges);
-        (function walk(n: any): void {
+        (function walk(n: DominatorNode): void {
           secRetained!.set(n.nodeId, n.retainedSize);
-          if (n.children) for (const c of n.children) walk(c);
+          for (const c of n.children) walk(c);
         })(tree);
       } catch {
         for (const n of secNodes) secRetained.set(n.id, n.selfSize);
@@ -785,8 +798,8 @@ export class V8InspectorHandlers {
       objectA: SnapObject;
       objectB: SnapObject;
       delta: { shallowSize: number; retainedSize: number; propertyCount: number };
-      classMatch: boolean;
       sameClass: boolean;
+      classMatch: boolean; // alias of sameClass (kept for response back-compat)
       interesting: boolean;
     }
     const pairs: Pair[] = [];

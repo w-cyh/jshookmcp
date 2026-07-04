@@ -111,4 +111,11 @@ describe('v8_function_retained (Route A prime)', () => {
     const schema = def.inputSchema as any;
     expect(schema.properties.maxResults).toBeTruthy();
   });
+
+  it('definition accepts minRetainedSize parameter', async () => {
+    const { v8InspectorTools } = await import('@server/domains/v8-inspector/definitions');
+    const def = v8InspectorTools.find((t) => t.name === 'v8_function_retained')!;
+    const schema = def.inputSchema as any;
+    expect(schema.properties.minRetainedSize).toBeTruthy();
+  });
 });
