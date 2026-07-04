@@ -79,3 +79,72 @@ describe('HeapSnapshotParser — malformed input', () => {
     expect(p.getAllNodes()).toEqual([]);
   });
 });
+
+describe('HeapSnapshotParser — real 2-node snapshot (deep parse)', () => {
+  // Standard V8 heap-snapshot shape: snapshot.meta carries node_fields/edge_fields;
+  // nodes/edges/strings are flat top-level arrays.
+  const TWO_NODES = JSON.stringify({
+    snapshot: {
+      meta: {
+        node_fields: ['type', 'name', 'id', 'self_size', 'edge_count'],
+        node_types: [['hidden', 'array', 'string', 'object']],
+        edge_fields: ['type', 'name_or_index', 'to_node'],
+        edge_types: [['context', 'element', 'property']],
+      },
+    },
+    nodes: [
+      0,
+      0,
+      1,
+      16,
+      1, // node 0 @ offset 0: hidden "Root", id 1, 1 edge
+      3,
+      1,
+      2,
+      32,
+      0, // node 1 @ offset 5: object "Obj",  id 2, 0 edges
+    ],
+    edges: [1, 0, 5], // element edge Root → Obj (offset 5)
+    strings: ['Root', 'Obj'],
+  });
+
+  it('parses both nodes with correct names/types/sizes', () => {
+    const p = new HeapSnapshotParser(TWO_NODES);
+    expect(p.nodeCount).toBe(2);
+    const nodes = p.getAllNodes();
+    expect(nodes[0]?.name).toBe('Root');
+    expect(nodes[1]?.name).toBe('Obj');
+  });
+
+  it('parses the edge', () => {
+    const p = new HeapSnapshotParser(TWO_NODES);
+    expect(p.parseEdges().length).toBe(1);
+  });
+
+  it('getNodesByClassName / getObjectsByType filter correctly', () => {
+    const p = new HeapSnapshotParser(TWO_NODES);
+    expect(p.getNodesByClassName('Obj')).toHaveLength(1);
+    expect(p.getObjectsByType('object')).toHaveLength(1);
+  });
+
+  it('computeRetainedSizes walks the dominator tree (Root retains Obj)', () => {
+    const p = new HeapSnapshotParser(TWO_NODES);
+    const sizes = p.getAllRetainedSizes();
+    const root = sizes.find((s) => s.id === 1);
+    const obj = sizes.find((s) => s.id === 2);
+    expect(root?.retainedSize).toBe(48); // 16 + 32
+    expect(obj?.retainedSize).toBe(32);
+  });
+
+  it('getTopRetainers returns sorted retainers', () => {
+    const p = new HeapSnapshotParser(TWO_NODES);
+    const top = p.getTopRetainers(5);
+    expect(top.length).toBeGreaterThan(0);
+  });
+
+  it('buildDominatorTree returns a node→dominator map', () => {
+    const p = new HeapSnapshotParser(TWO_NODES);
+    const dom = p.buildDominatorTree();
+    expect(dom.size).toBeGreaterThan(0);
+  });
+});
