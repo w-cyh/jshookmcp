@@ -74,10 +74,12 @@ export async function handleHeapSnapshotCapture(
   sizeBytes: number;
   chunks: string[];
   simulated: boolean;
+  warnings: string[];
 }> {
   const snapshotId = `snapshot_${Date.now().toString(36)}`;
   const capturedAt = new Date().toISOString();
   const chunks: string[] = [];
+  const warnings: string[] = [];
 
   if (options.client) {
     // Real CDP heap snapshot capture
@@ -99,9 +101,13 @@ export async function handleHeapSnapshotCapture(
         sizeBytes: stored.sizeBytes,
         chunks: [],
         simulated: false,
+        warnings,
       };
-    } catch {
+    } catch (e: unknown) {
       // Fall through to graceful degradation
+      warnings.push(
+        `Direct CDP snapshot capture failed: ${e instanceof Error ? e.message : String(e)}. Trying page-evaluate fallback...`,
+      );
     }
   }
 
@@ -166,10 +172,12 @@ export async function handleHeapSnapshotCapture(
         sizeBytes: stored.sizeBytes,
         chunks: [],
         simulated: true,
-      };
+        warnings,
+      }; // PageController fallback
     }
-  } catch {
+  } catch (e: unknown) {
     // Fall through to minimal fallback
+    warnings.push(`Page-evaluate fallback failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // Minimal fallback: attempt to get performance.memory via page.evaluate
@@ -192,8 +200,10 @@ export async function handleHeapSnapshotCapture(
         fallbackSizeBytes = memInfo.usedJSHeapSize;
       }
     }
-  } catch {
-    // Ignore fallback errors
+  } catch (e: unknown) {
+    warnings.push(
+      `performance.memory fallback failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 
   const stored = storeSnapshot({
@@ -213,7 +223,8 @@ export async function handleHeapSnapshotCapture(
     sizeBytes: stored.sizeBytes,
     chunks: [],
     simulated: true,
-  };
+    warnings,
+  }; // Minimal fallback
 }
 
 export async function handleHeapSearch(

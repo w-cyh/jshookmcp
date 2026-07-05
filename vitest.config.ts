@@ -116,15 +116,10 @@ const coverageExclude = [
   'src/server/domains/protocol-analysis/handlers.ts',
   'src/server/domains/protocol-analysis/handlers.impl.core.ts',
   // Pure composition facades delegating to focused sub-handlers; covered at the sub-handler layer.
-  // TODO(2026-07-04 B1): v8-inspector handlers.ts/handlers.impl.ts are now handleSafe-wrapped
-  // entry points whose actual logic lives in handlers/impl.ts (fully covered). These two files
-  // can be re-included in coverage once the barrel re-export + old facade are deleted;
-  // keep excluded for now.
   'src/server/domains/debugger/handlers.ts',
   'src/server/domains/memory/handlers.impl.ts',
   'src/server/domains/syscall-hook/handlers.ts',
   'src/server/domains/v8-inspector/handlers.ts',
-  'src/server/domains/v8-inspector/handlers.impl.ts',
   'src/server/domains/wasm/handlers.ts',
   'src/server/domains/wasm/handlers.impl.ts',
   // Stateful live-stream handler surfaces; underlying monitor/injection logic is already covered

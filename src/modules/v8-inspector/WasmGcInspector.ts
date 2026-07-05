@@ -45,18 +45,9 @@ export async function discoverWasmScripts(page: unknown): Promise<WasmScript[]> 
 
   const session = await page.createCDPSession();
   try {
-    const { scripts } = (await session.send('Debugger.getScriptSource', {
-      // The Debugger domain exposes scripts including wasm ones.
-    })) as { scripts?: Array<Record<string, unknown>> };
-
-    // Actually, we need to use Debugger.getScripts or Runtime.evaluate to
-    // enumerate wasm scripts. CDP doesn't have a single "list wasm" API.
-    // We use a JS expression to enumerate them.
-    // FIXME(D3): `scripts` destructuring above is a dead call — Debugger.getScriptSource
-    // requires a scriptId parameter, so {scripts} is always undefined. Actual
-    // wasm discovery happens via Runtime.evaluate+performance.getEntriesByType below.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-underscore-dangle
-    void scripts;
+    // Wasm script discovery happens via Runtime.evaluate + performance.getEntriesByType
+    // below. (The Debugger.getScriptSource call previously attempted here was dead:
+    // it requires a scriptId parameter, so {scripts} was always undefined.)
 
     // Use page.evaluate or Runtime.evaluate to query wasm internals
     const result = await session.send('Runtime.evaluate', {
